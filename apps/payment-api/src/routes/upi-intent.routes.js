@@ -83,14 +83,16 @@ export function registerUpiIntentRoutes(server, ctx) {
   // Persist a payment event and publish a status update via SSE + event emitter.
   async function persistAndPublishEvent(paymentId, event) {
     const { id, type, source, status, amountPaise, currency, reference, reportedStatus, evidenceLevel,
-      observedAt, processedAt, correlationId, rawPayload, appIdentity, platform } = event;
+      observedAt, processedAt, correlationId, rawPayload, appIdentity, platform, merchantId } = event;
 
     // Insert into callback_outbox as a durable event record so it survives restarts.
+    // merchant_id is NOT NULL in the schema; always pass the owning merchant's id.
+    const evtMerchantId = merchantId || null;
     try {
       if (callbackOutboxRepo) {
         callbackOutboxRepo.create({
           id: id || generateId('evt'),
-          merchantId: null, // filled by caller via transaction context when available
+          merchantId: evtMerchantId,
           paymentId,
           eventType: type,
           payload: JSON.stringify({ ...(rawPayload || {}), source, status, reportedStatus, evidenceLevel, reference, appIdentity, platform }),
@@ -187,13 +189,24 @@ export function registerUpiIntentRoutes(server, ctx) {
       const finalCurrency = 'INR';
       const finalAmountPaise = amountPaise;
 
-      // Resolve receiving VPA (merchant receiving VPA). Use provided merchantVpa or merchant's configured UPI.
-      let receivingVpa = merchantVpa || (merchant.upiId || merchant.metadata?.upiVpa || null);
+      // Resolve receiving VPA and receiving account for correlation with bank observations.
+      // The receiving account is needed so Gmail/SMS/Android bank observations can be matched
+      // to this payment (UTR + receiving account + amount). Never amount-only matching.
+      let receivingVpa = merchantVpa || null;
+      let receivingAccountId = null;
       if (!receivingVpa) {
-        // Fall back to the merchant's active receiving account.
         try {
           const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
-          if (acct && acct.upiId) receivingVpa = acct.upiId;
+          if (acct && acct.upiId) {
+            receivingVpa = acct.upiId;
+            receivingAccountId = acct.id;
+          }
+        } catch {}
+      }
+      if (receivingVpa && !receivingAccountId) {
+        try {
+          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
+          if (acct && acct.upiId === receivingVpa) receivingAccountId = acct.id;
         } catch {}
       }
       if (!receivingVpa || !isValidVpa(receivingVpa)) {
@@ -258,13 +271,13 @@ export function registerUpiIntentRoutes(server, ctx) {
         id: paymentId,
         merchantId: merchant.id,
         customerId: customerId || null,
-        receivingAccountId: null, // intent-based; receiving account resolved at confirmation
+        receivingAccountId, // resolved above; enables bank observation correlation
         orderId: generatedOrderId,
         amountPaise: finalAmountPaise,
         baseAmountPaise: finalAmountPaise,
         currency: finalCurrency,
         method: PaymentMethod.UPI,
-        status: PaymentStatus.CREATED,
+        status: PaymentStatus.INITIATED,
         returnUrl: returnUrl || null,
         idempotencyKey,
         deviceId: null,
@@ -405,11 +418,14 @@ export function registerUpiIntentRoutes(server, ctx) {
         internalStatus = PaymentStatus.INTENT_OPENED;
       }
 
-      // Enforce state machine transition.
+      // Enforce state machine transition. Track whether the transition is valid so we
+      // never persist an invalid state via direct SQL.
+      let transitionValid = true;
       try {
         assertValidTransition(session.status, internalStatus);
       } catch (err) {
-        // If transition not directly allowed, record the event but keep current status.
+        // Transition not allowed: record the event but do not change session status.
+        transitionValid = false;
         console.warn('[upi-intent] transition blocked:', err.message);
       }
 
@@ -457,7 +473,7 @@ export function registerUpiIntentRoutes(server, ctx) {
             id: generateId('obs'),
             receivingAccountId: session.receivingAccountId || null,
             source: ObserverSource.INTENT_RETURN,
-            amountPaise: session.amountPaise,
+            amountPaise: Number(session.amountPaise),
             observedAt,
             senderVpa: metadata.senderVpa || null,
             bankReferenceNumber: upiTransactionReference || null,
@@ -471,19 +487,18 @@ export function registerUpiIntentRoutes(server, ctx) {
         console.error('[upi-intent] observation persist warning:', err.message);
       }
 
-      // Transition session status if allowed.
-      if (internalStatus !== session.status) {
+      // Transition session status only if the state machine allows it.
+      if (transitionValid && internalStatus !== session.status) {
         try {
           if (internalStatus === PaymentStatus.FAILED || internalStatus === PaymentStatus.CANCELLED || internalStatus === PaymentStatus.EXPIRED) {
             sessionRepo.transitionToTerminal(paymentId, internalStatus, { reason: `client_return_${reportedStatus.toLowerCase()}` });
           } else if (internalStatus === PaymentStatus.VERIFICATION_PENDING) {
             sessionRepo.transitionToVerificationPending(paymentId);
           } else {
-            // For CLIENT_REPORTED_SUCCESS and INTENT_OPENED, update status directly.
-            const now = nowIso();
+            // For CLIENT_REPORTED_SUCCESS and INTENT_OPENED, transition through the repository.
             sessionRepo.db.execute(
               'UPDATE payment_sessions SET status = ?, verification_tag = ?, updated_at = ? WHERE id = ?',
-              [internalStatus, `Client-reported ${reportedStatus}`, now, paymentId]
+              [internalStatus, `Client-reported ${reportedStatus}`, nowIso(), paymentId]
             );
           }
         } catch (err) {

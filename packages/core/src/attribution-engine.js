@@ -669,29 +669,8 @@ export class AttributionEngine {
       return { attributed: false, paymentSessionId: undefined, outcomeStatus: 'PAYMENT_NOT_FOUND' };
     }
 
-    // Persist the intent return as a REPORTED-level observation (supplementary evidence).
-    const obsId = `obs_intent_${crypto.randomUUID()}`;
-    try {
-      this.obsRepo.create({
-        id: obsId,
-        receivingAccountId: session.receivingAccountId || null,
-        source: INTENT_SOURCE,
-        amountPaise: Number(amountPaise || session.amountPaise),
-        observedAt: eventTimestamp || new Date(),
-        senderVpa: metadata.senderVpa || null,
-        bankReferenceNumber: upiTransactionReference || null,
-        fingerprintHash: crypto.createHash('sha256')
-          .update(`INTENT:${paymentId}:${signal.idempotencyKey || paymentId}:${Date.now()}`).digest('hex'),
-        rawPayload: JSON.stringify({
-          source: INTENT_SOURCE, attemptId, correlationId, upiTransactionReference,
-          sourcePlatform, appIdentity, rawResult, metadata
-        }),
-        attributionStatus: ObservationAttributionStatus.UNATTRIBUTED,
-        attributedPaymentId: paymentId
-      });
-    } catch (e) {
-      // Observation already recorded by the intent route; continue to correlation.
-    }
+    // Note: The client-return route already persists a REPORTED-level observation.
+    // This method performs correlation only; it does not create a duplicate observation.
 
     // Correlate with any existing bank observation for this payment (UTR + account + amount).
     let matchedBankObservation = false;
