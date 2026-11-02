@@ -13,6 +13,9 @@ import { DynamoPayWebhooks } from '@youpi/common';
 import { DynamoPayGmailVerification } from '@youpi/common';
 import { DynamoPaySMSGateway } from '@youpi/common';
 
+// Increase libuv thread pool for higher concurrency under burst load
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '128';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '../../..');
@@ -104,6 +107,15 @@ import { registerUpiIntentRoutes } from './routes/upi-intent.routes.js';
 import { getWhatsAppBerryService, WhatsAppBerryService } from './services/whatsapp-berry.service.js';
 import { ReceiptNotificationService } from './services/receipt-notification.service.js';
 import { NotificationDeliveryService } from './services/notification-delivery.service.js';
+
+// New production features (disputes, event replay, circuit breaker, payer VPA, bank reconciliation, multi-operator, direct bank)
+import { registerDisputesRoutes } from './routes/disputes.routes.js';
+import { registerEventReplayRoutes } from './routes/event-replay.routes.js';
+import { registerCircuitBreakerRoutes } from './routes/circuit-breaker.routes.js';
+import { registerPayerVpaRoutes } from './routes/payer-vpa.routes.js';
+import { registerBankReconciliationRoutes } from './routes/bank-reconciliation.routes.js';
+import { registerMultiOperatorRoutes } from './routes/multi-operator.routes.js';
+import { registerDirectBankRoutes } from './routes/direct-bank.routes.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
   const db = customDb || getDatabase();
@@ -411,71 +423,57 @@ export function createPaymentApp(customDb = null, options = {}) {
     }
   });
 
-  // Active 30-Second Verification Polling Orchestrator (Triple Verification Standard):
-  // Concurrently sweeps Gmail, Google Messages SMS, and Android Observer every 1.5s
-  // Continues polling for remaining sources until Level 3 (Triple Verification) is reached or 30s window finishes!
-  const activeSweepTimers = new Set();
+  // Consolidated verification sweep: one timer processes all processing sessions,
+  // instead of one timer per session (which starved the event loop under load).
+  const sweepIntervalMs = Number(process.env.SWEEP_INTERVAL_MS || 2000);
+  const sweepBatchSize = Number(process.env.SWEEP_BATCH_SIZE || 50);
+  let sweepTimerActive = false;
 
   eventEmitter.on('SESSION.PROCESSING', (data) => {
-    const sessionId = data.sessionId;
-    let sweepCount = 0;
-    const maxSweeps = 20; // 20 sweeps * 1.5s = 30 seconds
-
-    const sweepTimer = setInterval(async () => {
-      try {
-        sweepCount++;
-        const current = sessionRepo.findById(sessionId);
-
-        // Stop polling if session is terminal failed/expired/cancelled, or reached full Triple Verification (level >= 3), or exceeded 30s
-        const isCompleteOrCancelled = !current ||
-          current.status === PaymentStatus.FAILED ||
-          current.status === PaymentStatus.EXPIRED ||
-          current.status === PaymentStatus.CANCELLED ||
-          (current.verificationLevel >= 3) ||
-          sweepCount >= maxSweeps;
-
-        if (isCompleteOrCancelled) {
-          clearInterval(sweepTimer);
-          activeSweepTimers.delete(sweepTimer);
-          return;
-        }
-
-        // Sweep 1: Google Messages Web SMS
+    if (!sweepTimerActive) {
+      sweepTimerActive = true;
+      const sweepTimer = setInterval(async () => {
         try {
-          const smsPort = Number(process.env.SMS_OBSERVER_PORT || 6002);
-          fetch(`http://localhost:${smsPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(1200) }).catch(() => {});
-        } catch {}
+          const sessions = db.query(`SELECT id, receiving_account_id FROM payment_sessions WHERE status = 'PROCESSING' LIMIT ?`, [sweepBatchSize]);
+          if (sessions.length === 0) return;
 
-        // Sweep 2: Gmail Inbox
-        try {
-          const gmailPort = Number(process.env.GMAIL_OBSERVER_PORT || 6003);
-          fetch(`http://localhost:${gmailPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(1200) }).catch(() => {});
-        } catch {}
+          // Sweep 1: Google Messages Web SMS (shared, single call per sweep)
+          try {
+            const smsPort = Number(process.env.SMS_OBSERVER_PORT || 6002);
+            fetch(`http://localhost:${smsPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(1200) }).catch(() => {});
+          } catch {}
 
-        // Sweep 3: Check pending/unattributed Android push notifications in DB
-        try {
-          const unattributed = obsRepo.findUnattributed(current.receivingAccountId);
-          for (const obs of unattributed) {
-            attributionEngine.processObservation({
-              source: obs.source,
-              receivingAccountId: obs.receivingAccountId,
-              amountPaise: obs.amountPaise,
-              observedAt: obs.observedAt,
-              bankReferenceNumber: obs.bankReferenceNumber,
-              senderVpa: obs.senderVpa,
-              rawPayload: obs.rawPayload,
-              fingerprintHash: obs.fingerprintHash
-            });
+          // Sweep 2: Gmail Inbox (shared, single call per sweep)
+          try {
+            const gmailPort = Number(process.env.GMAIL_OBSERVER_PORT || 6003);
+            fetch(`http://localhost:${gmailPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(1200) }).catch(() => {});
+          } catch {}
+
+          // Sweep 3: Process unattributed observations for each session
+          for (const session of sessions) {
+            try {
+              const current = sessionRepo.findById(session.id);
+              if (!current || current.status !== 'PROCESSING' || current.verificationLevel >= 3) continue;
+
+              const unattributed = obsRepo.findUnattributed(current.receivingAccountId);
+              for (const obs of unattributed) {
+                attributionEngine.processObservation({
+                  source: obs.source,
+                  receivingAccountId: current.receivingAccountId,
+                  amountPaise: obs.amountPaise,
+                  observedAt: obs.observedAt,
+                  bankReferenceNumber: obs.bankReferenceNumber,
+                  senderVpa: obs.senderVpa,
+                  rawPayload: obs.rawPayload,
+                  fingerprintHash: obs.fingerprintHash
+                });
+              }
+            } catch {}
           }
         } catch {}
-      } catch {
-        clearInterval(sweepTimer);
-        activeSweepTimers.delete(sweepTimer);
-      }
-    }, 1500);
-
-    if (sweepTimer.unref) sweepTimer.unref();
-    activeSweepTimers.add(sweepTimer);
+      }, sweepIntervalMs);
+      if (sweepTimer.unref) sweepTimer.unref();
+    }
   });
 
   // Continuous 1-second background queue sync and auto-expiry daemon
@@ -738,6 +736,15 @@ registerHyperswitchRoutes(server, context);
     flashMatchingEngine
   });
 
+  // New production features
+  registerDisputesRoutes(server, context);
+  registerEventReplayRoutes(server, context);
+  registerCircuitBreakerRoutes(server, context);
+  registerPayerVpaRoutes(server, context);
+  registerBankReconciliationRoutes(server, context);
+  registerMultiOperatorRoutes(server, context);
+  registerDirectBankRoutes(server, context);
+
 
 
   function destroy() {
@@ -746,10 +753,6 @@ registerHyperswitchRoutes(server, context);
     webhookEngine.stop();providerWebhookEngine.stop();
     clearInterval(queueSyncDaemon);
     clearInterval(aggressivePollerDaemon);
-    for (const timer of activeSweepTimers) {
-      clearInterval(timer);
-    }
-    activeSweepTimers.clear();
     timingEngine.destroy();
     if (typeof attributionEngine.destroy === 'function') {
       attributionEngine.destroy();
@@ -793,8 +796,9 @@ export function startServer(port = null, customDb = null) {
   return new Promise(resolve => {
     // Loopback by default; reach this service via the local Cloudflare Tunnel, not 0.0.0.0.
     const bindHost = process.env.YOUPI_BIND_HOST || '127.0.0.1';
-    const instance = app.rawServer.listen(finalPort, bindHost, () => {
-      console.log(`[Payment API] Server listening on port ${finalPort}`);
+    const backlog = Number(process.env.SERVER_BACKLOG || 4096);
+    const instance = app.rawServer.listen({ port: finalPort, host: bindHost, backlog }, () => {
+      console.log(`[Payment API] Server listening on port ${finalPort} (backlog ${backlog})`);
       resolve({
         app,
         port: finalPort,
@@ -804,6 +808,15 @@ export function startServer(port = null, customDb = null) {
           instance.close(cb);
         })
       });
+    });
+    instance.on('connection', (socket) => {
+      socket.setTimeout(30000);
+      socket.setKeepAlive(true, 5000);
+    });
+    instance.on('clientError', (err, socket) => {
+      if (socket && !socket.destroyed) {
+        socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+      }
     });
   });
 }

@@ -6,7 +6,7 @@ import vm from 'node:vm';
 function checkout(status='ACTIVE',overrides={}) {
   const html=fs.readFileSync(new URL('../views/checkout-premium.html',import.meta.url),'utf8');
   const elements=new Map();
-  function element(id) {if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,textContent:'',value:'',addEventListener(name,fn){this[name]=fn;},setAttribute(name,v){this[name]=v;},showModal(){this.open=true;},close(){this.open=false;}});return elements.get(id);}
+  function element(id) {if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,textContent:'',value:'',addEventListener(name,fn){this[name]=fn;},setAttribute(name,v){this[name]=v;},showModal(){this.open=true;},close(){this.open=false;},click(){}});return elements.get(id);}
   const apps=['gpay','phonepe','paytm','generic'].map(app=>({...element(app),dataset:{app}}));
   const state={paymentId:'payment-1',orderId:'ORDER-1',merchantName:'Merchant',amount:'123.45',status,payeeVpa:'merchant@upi',upiUri:'upi://pay?pa=merchant%40upi&pn=Merchant&am=123.45&tr=ORDER-1&cu=INR',enabledMethods:['UPI','COD'],timeRemainingSeconds:300};
   Object.assign(state,overrides);
