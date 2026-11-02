@@ -71,7 +71,7 @@ export function registerReceivingAccountRoutes(server, ctx) {
     const row = db.queryOne('SELECT * FROM payment_receiving_accounts WHERE id = $1', [params.id]);
     if (!row) return HttpServer.json(res, 404, { error: 'Receiving account not found' });
     if (isActive !== undefined) {
-      db.execute('UPDATE receiving_accounts SET is_active = $1, updated_at = $2 WHERE id = $3',
+      db.execute('UPDATE payment_receiving_accounts SET is_active = $1, updated_at = $2 WHERE id = $3',
         [isActive ? 1 : 0, new Date().toISOString(), params.id]);
     }
     return HttpServer.json(res, 200, { updated: true, accountId: params.id, isActive: isActive !== undefined ? Boolean(isActive) : null });
@@ -83,7 +83,7 @@ export function registerReceivingAccountRoutes(server, ctx) {
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     const row = db.queryOne('SELECT * FROM payment_receiving_accounts WHERE id = $1', [params.id]);
     if (!row) return HttpServer.json(res, 404, { error: 'Receiving account not found' });
-    db.execute('DELETE FROM receiving_accounts WHERE id = $1', [params.id]);
+    db.execute('DELETE FROM payment_receiving_accounts WHERE id = $1', [params.id]);
     return HttpServer.json(res, 200, { deleted: true, accountId: params.id });
   });
 }
