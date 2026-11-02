@@ -1,6 +1,7 @@
 import { HttpServer } from '../server.js';
 import {
   toPaise,
+  toRupeesString,
   buildUpiPaymentUri,
   PaymentStatus,
   PaymentMethod,
@@ -68,7 +69,7 @@ export function registerUpiIntentRoutes(server, ctx) {
 
   function isInternalRequest(req) {
     const token = req.headers['authorization'] || req.headers['x-internal-token'] || '';
-    const bare = token.startsWith('Bearer ') ? token.slice(7) : token;
+    const bare = token.toLowerCase().startsWith('bearer ') ? token.slice(7).trim() : token.trim();
     return INTERNAL_SERVICE_TOKEN && safeEqual(bare, INTERNAL_SERVICE_TOKEN);
   }
 
@@ -181,7 +182,7 @@ export function registerUpiIntentRoutes(server, ctx) {
       } catch (err) {
         return HttpServer.json(res, 400, { error: err.message });
       }
-      if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0) {
+      if (amountPaise <= 0n || amountPaise > 9007199254740991n) {
         return HttpServer.json(res, 400, { error: 'amount must be a positive integer in paise.' });
       }
 

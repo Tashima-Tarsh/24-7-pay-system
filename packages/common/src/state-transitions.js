@@ -21,6 +21,7 @@ export const VALID_TRANSITIONS = Object.freeze({
     PaymentStatus.ACTIVE,
     PaymentStatus.QUEUED,
     PaymentStatus.INTENT_OPENED,
+    PaymentStatus.CLIENT_REPORTED_SUCCESS,
     PaymentStatus.CANCELLED,
     PaymentStatus.EXPIRED
   ],
