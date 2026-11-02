@@ -432,6 +432,41 @@
       100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
     }
 
+    /* Gmail connect section */
+    .dp-gmail-section {
+      margin-top: 14px !important;
+    }
+
+    .dp-gmail-card {
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 20px !important;
+      padding: 18px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 12px !important;
+    }
+
+    .dp-gmail-hint {
+      color: var(--dp-text-muted) !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      text-align: center !important;
+      line-height: 1.4 !important;
+    }
+
+    .dp-gmail-status {
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      text-align: center !important;
+      margin-top: 4px !important;
+    }
+
+    .dp-gmail-status.connected { color: #10b981 !important; }
+    .dp-gmail-status.error { color: #ef4444 !important; }
+    .dp-gmail-status.info { color: #6366f1 !important; }
+
     /* Buttons */
     .dp-btn-primary {
       background: linear-gradient(135deg, var(--dp-primary), var(--dp-accent)) !important;
@@ -645,6 +680,21 @@
       <div class="dp-mfa-badge" id="dpMfaBadge" hidden>
         <span>✓</span>
         <span id="dpMfaText">MFA session active — no re-entry required</span>
+      </div>
+
+      <!-- GMAIL CONNECT SECTION (universal email adapter) -->
+      <div class="dp-gmail-section" id="dpGmailSection" hidden>
+        <div class="dp-section-header">
+          <span class="dp-section-title">Connect Gmail</span>
+          <span class="dp-section-sub">Universal email adapter — choose your email on mobile</span>
+        </div>
+        <div class="dp-gmail-card">
+          <div class="dp-gmail-hint">Connect your Gmail to receive UPI credit notifications directly. On mobile, Google will ask which email to connect.</div>
+          <button type="button" class="dp-btn-primary" id="dpBtnConnectGmail" onclick="connectGmail()">
+            Connect Gmail Account
+          </button>
+          <div class="dp-gmail-status" id="dpGmailStatus" hidden></div>
+        </div>
       </div>
 
       <!-- INTENT STATUS STRIP (hidden by default) -->
@@ -1105,6 +1155,82 @@
     // Init
     render(initialState);
     pollState();
+
+    // ---- WebSocket intent return (2-second push instead of 3s polling) ----
+    let wsSocket = null;
+    let wsReconnectTimer = null;
+
+    function connectWs() {
+      const wsUrl = `ws://${location.host}/ws/intent?paymentId=${encodeURIComponent(paymentId)}`;
+      try {
+        wsSocket = new WebSocket(wsUrl);
+        wsSocket.onopen = () => {
+          toast('Connected to real-time intent stream — updates within 2 seconds');
+          if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+        };
+        wsSocket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'intent_update') {
+              // Update status immediately without waiting for poll
+              state.status = data.status;
+              render(state);
+              if (terminal.includes(state.status)) {
+                showStatusView(state.status, state);
+                if (wsSocket) { wsSocket.close(); wsSocket = null; }
+              }
+            }
+          } catch {}
+        };
+        wsSocket.onclose = () => {
+          wsSocket = null;
+          // Reconnect after 3 seconds if session still active
+          if (!terminal.includes(state.status)) {
+            wsReconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+        wsSocket.onerror = () => {
+          wsSocket = null;
+        };
+      } catch (e) {
+        wsSocket = null;
+      }
+    }
+
+    // Connect WebSocket after initial render
+    setTimeout(connectWs, 500);
+
+    // ---- Gmail Universal Email Adapter ----
+    async function connectGmail() {
+      const btn = $('dpBtnConnectGmail');
+      const statusEl = $('dpGmailStatus');
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+      statusEl.hidden = true;
+
+      try {
+        const redirectUri = location.origin + '/api/v1/gmail/callback';
+        // merchantId from state or default
+        const merchantId = state.merchantId || 'default';
+        const res = await fetch('/api/v1/gmail/authorize?merchantId=' + encodeURIComponent(merchantId) + '&redirectUri=' + encodeURIComponent(redirectUri), {
+          headers: { Accept: 'application/json' }
+        });
+        if (!res.ok) throw new Error('Failed to start Gmail connection');
+        const data = await res.json();
+
+        // Open Google account chooser in same window (mobile-friendly)
+        location.href = data.authUrl;
+      } catch (e) {
+        statusEl.hidden = false;
+        statusEl.className = 'dp-gmail-status error';
+        statusEl.textContent = 'Error: ' + e.message;
+        btn.disabled = false;
+        btn.textContent = 'Connect Gmail Account';
+      }
+    }
+
+    // Expose connectGmail globally
+    if (typeof window !== 'undefined') window.connectGmail = connectGmail;
   </script>
 </body>
 </html>

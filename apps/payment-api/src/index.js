@@ -117,6 +117,8 @@ import { registerBankReconciliationRoutes } from './routes/bank-reconciliation.r
 import { registerMultiOperatorRoutes } from './routes/multi-operator.routes.js';
 import { registerDirectBankRoutes } from './routes/direct-bank.routes.js';
 import { registerCodeAttestationRoutes } from './routes/code-attestation.routes.js';
+import { registerGmailRoutes } from './routes/gmail.routes.js';
+import { GmailService } from '../../../packages/core/src/gmail-service.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
   const db = customDb || getDatabase();
@@ -747,6 +749,11 @@ registerHyperswitchRoutes(server, context);
   registerDirectBankRoutes(server, context);
   registerCodeAttestationRoutes(server, context);
 
+  // Gmail Universal Email Adapter — OAuth connect, callback, disconnect
+  const gmailService = new GmailService(db);
+  context.gmailService = gmailService;
+  registerGmailRoutes(server, context);
+
 
 
   function destroy() {
@@ -820,6 +827,91 @@ export function startServer(port = null, customDb = null) {
         socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
       }
     });
+
+    // WebSocket server for 2-second intent return (real-time push instead of polling)
+    let wss = null;
+    try {
+      const { WebSocketServer } = require('ws');
+      wss = new WebSocketServer({ server: instance, path: '/ws/intent' });
+    } catch (e) {
+      // WebSocket not available in this environment (e.g. test VM) — polling fallback
+    }
+    const paymentSubscribers = new Map(); // paymentId -> Set of WebSockets
+
+    if (wss) {
+      wss.on('connection', (ws, req) => {
+        const url = new URL(req.url || '', `http://${req.headers.host}`);
+        const paymentId = url.searchParams.get('paymentId');
+        const token = url.searchParams.get('token');
+
+        if (!paymentId) {
+          ws.close(4000, 'paymentId required');
+          return;
+        }
+
+        // Subscribe this WebSocket to payment status updates
+        if (!paymentSubscribers.has(paymentId)) {
+          paymentSubscribers.set(paymentId, new Set());
+        }
+        paymentSubscribers.get(paymentId).add(ws);
+
+        ws.send(JSON.stringify({
+          type: 'subscribed',
+          paymentId,
+          message: 'Connected to intent return stream — updates pushed within 2 seconds'
+        }));
+
+        ws.on('close', () => {
+          const subs = paymentSubscribers.get(paymentId);
+          if (subs) {
+            subs.delete(ws);
+            if (subs.size === 0) paymentSubscribers.delete(paymentId);
+          }
+        });
+
+        ws.on('error', () => {
+          const subs = paymentSubscribers.get(paymentId);
+          if (subs) {
+            subs.delete(ws);
+            if (subs.size === 0) paymentSubscribers.delete(paymentId);
+          }
+        });
+      });
+    }
+
+    // Function to push intent return update to all subscribers of a payment
+    const pushIntentUpdate = (paymentId, status, data = {}) => {
+      const subs = paymentSubscribers.get(paymentId);
+      if (!subs || subs.size === 0) return 0;
+      const msg = JSON.stringify({
+        type: 'intent_update',
+        paymentId,
+        status,
+        ...data,
+        timestamp: new Date().toISOString()
+      });
+      let sent = 0;
+      for (const ws of subs) {
+        if (ws.readyState === 1) { // WebSocket.OPEN
+          try { ws.send(msg); sent++; } catch {}
+        }
+      }
+      return sent;
+    };
+
+    // Expose pushIntentUpdate on context for route handlers to use
+    context.pushIntentUpdate = pushIntentUpdate;
+
+    return {
+      app,
+      port: finalPort,
+      close: () => new Promise(cb => {
+        if (wss) wss.close();
+        app.destroy();
+        instance.closeAllConnections?.();
+        instance.close(cb);
+      })
+    };
   });
 }
 
