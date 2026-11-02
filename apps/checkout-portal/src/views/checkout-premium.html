@@ -380,22 +380,6 @@
 
     .dp-btn-mini:hover { border-color: var(--dp-primary) !important; color: var(--dp-primary) !important; }
 
-    /* MFA session badge */
-    .dp-mfa-badge {
-      background: rgba(16, 185, 129, 0.10) !important;
-      border: 1px solid rgba(16, 185, 129, 0.30) !important;
-      border-radius: 8px !important;
-      padding: 6px 12px !important;
-      font-size: 11px !important;
-      font-weight: 700 !important;
-      color: #10b981 !important;
-      display: inline-flex !important;
-      align-items: center !important;
-      gap: 6px !important;
-    }
-
-    .dp-mfa-badge.is-unverified { background: rgba(245, 158, 11, 0.10) !important; border-color: rgba(245, 158, 11, 0.30) !important; color: #f59e0b !important; }
-
     /* Intent status strip */
     .dp-intent-strip {
       background: rgba(16, 185, 129, 0.10) !important;
@@ -676,12 +660,6 @@
         </button>
       </div>
 
-      <!-- MFA SESSION BADGE -->
-      <div class="dp-mfa-badge" id="dpMfaBadge" hidden>
-        <span>✓</span>
-        <span id="dpMfaText">MFA session active — no re-entry required</span>
-      </div>
-
       <!-- GMAIL CONNECT SECTION (universal email adapter) -->
       <div class="dp-gmail-section" id="dpGmailSection" hidden>
         <div class="dp-section-header">
@@ -834,23 +812,6 @@
       payeeVpa = s.payeeVpa || s.vpa || '{{VPA}}';
       upiUri = s.upiUri || null;
       $('dpVpaBadge').textContent = payeeVpa;
-
-      // MFA session persistence — check if merchant has MFA-verified session
-      const mfaBadge = $('dpMfaBadge');
-      const mfaText = $('dpMfaText');
-      if (mfaBadge && mfaText && typeof sessionStorage !== 'undefined') {
-        const mfaVerified = s.mfaVerified || sessionStorage.getItem('dp_mfa_verified') === '1';
-        if (mfaVerified) {
-          mfaBadge.hidden = false;
-          mfaBadge.className = 'dp-mfa-badge';
-          mfaText.textContent = 'MFA session active — no re-entry required';
-          sessionStorage.setItem('dp_mfa_verified', '1');
-        } else {
-          mfaBadge.hidden = false;
-          mfaBadge.className = 'dp-mfa-badge is-unverified';
-          mfaText.textContent = 'MFA verification required — scan QR after MFA';
-        }
-      }
 
       // Update QR
       if (canPay && lastQrKey !== upiUri) {
