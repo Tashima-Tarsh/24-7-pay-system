@@ -116,6 +116,7 @@ import { registerPayerVpaRoutes } from './routes/payer-vpa.routes.js';
 import { registerBankReconciliationRoutes } from './routes/bank-reconciliation.routes.js';
 import { registerMultiOperatorRoutes } from './routes/multi-operator.routes.js';
 import { registerDirectBankRoutes } from './routes/direct-bank.routes.js';
+import { registerCodeAttestationRoutes } from './routes/code-attestation.routes.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
   const db = customDb || getDatabase();
@@ -744,6 +745,7 @@ registerHyperswitchRoutes(server, context);
   registerBankReconciliationRoutes(server, context);
   registerMultiOperatorRoutes(server, context);
   registerDirectBankRoutes(server, context);
+  registerCodeAttestationRoutes(server, context);
 
 
 

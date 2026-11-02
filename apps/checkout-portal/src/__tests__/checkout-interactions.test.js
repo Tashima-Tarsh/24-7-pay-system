@@ -12,7 +12,7 @@ function checkout(status='ACTIVE',overrides={}) {
   Object.assign(state,overrides);
   const messages=[],requests=[];
   const window={parent:{postMessage:(...args)=>messages.push(args)},addEventListener(){}};
-  const context={window,document:{getElementById:element,querySelectorAll:()=>apps,referrer:'https://store.example/product',addEventListener(){}},navigator:{userAgent:'Android',clipboard:{writeText:async()=>{}}},location:{href:'',assign(){}},setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,URL,Intl,console,fetch:async(url,init)=>{requests.push({url,init});return {ok:true,json:async()=>state};}};
+  const context={window,document:{getElementById:element,querySelectorAll:()=>apps,referrer:'https://store.example/product',addEventListener(){}},navigator:{userAgent:'Android',clipboard:{writeText:async()=>{}}},location:{href:'',assign(){}},setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,URL,Intl,console,sessionStorage:{getItem:()=>null,setItem:()=>{},removeItem:()=>{}},fetch:async(url,init)=>{requests.push({url,init});return {ok:true,json:async()=>state};}};
   vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1].replace('{{INITIAL_STATE_JSON}}',JSON.stringify(state)),context);
   return {context,window,element,apps,messages,requests,state};
 }
