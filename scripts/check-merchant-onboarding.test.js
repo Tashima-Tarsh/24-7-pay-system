@@ -23,7 +23,7 @@ test('isolated merchant creation and login flow',async()=>{
  const admin={cookie:'dp_platform_session='+token,'x-csrf-token':'csrf'};
  async function call(endpoint,body,headers={}){const response=await fetch(base+endpoint,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,body:await response.json()};}
  try{
-  const made=await call(root+'/merchants',{businessName:'Example Games',contactName:'Synthetic Owner',email:'owner@example-games.test',mobile:'+919000000001',category:'Synthetic integration test'},admin);assert.equal(made.status,201,JSON.stringify(made.body));assert.equal(made.body.status,'ACTIVE');const mid=made.body.merchantId;
+  const made=await call(root+'/merchants',{businessName:'Example Games',contactName:'Synthetic Owner',email:'owner@example-games.test',mobile:'+919000000001',category:'Synthetic integration test',password:'owner-test-password'},admin);assert.equal(made.status,201,JSON.stringify(made.body));assert.equal(made.body.status,'ACTIVE');const mid=made.body.merchantId;
   const login=await call(root+'/login',{email:'owner@example-games.test',password:'owner-test-password',merchantId:mid});assert.equal(login.status,200);
- }finally{await new Promise(r=>app.rawServer.close());db.close();}
+ }finally{try{app.destroy();app.rawServer.closeAllConnections();}catch{}await new Promise(r=>app.rawServer.close(r));db.close();}
 });
