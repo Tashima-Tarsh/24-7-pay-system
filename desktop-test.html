@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sanbook Pay — Desktop Test Flow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f7; padding: 20px; color: #1a1a1a; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 6px; color: #0f172a; }
+  p.sub { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+  h2 { font-size: 17px; margin: 26px 0 10px; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+  .card { background: #fff; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .badge { display: inline-block; background: #2563eb; color: #fff; border-radius: 6px; padding: 1px 10px; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+  label { display: block; font-size: 12px; font-weight: 700; margin: 10px 0 5px; color: #475569; }
+  input, select { width: 100%; padding: 9px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 13px; margin-bottom: 10px; }
+  button { background: #2563eb; color: #fff; border: none; padding: 9px 16px; border-radius: 7px; font-size: 13px; font-weight: 700; cursor: pointer; margin: 6px 6px 6px 0; }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #f1f5f9; color: #475569; }
+  button.secondary:hover { background: #e2e8f0; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qr-box { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 18px; text-align: center; background: #fafbfc; margin: 12px 0; }
+  .qr-box img { max-width: 240px; border-radius: 7px; background: #fff; padding: 6px; }
+  .qr-note { font-size: 11px; color: #64748b; margin-top: 8px; line-height: 1.5; }
+  .status { margin-top: 10px; padding: 10px; border-radius: 7px; font-size: 12px; font-weight: 700; }
+  .status.ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+  .status.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .status.info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+  .json { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 7px; padding: 11px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, monospace; overflow-x: auto; margin-top: 8px; max-height: 250px; overflow-y: auto; }
+  .hidden { display: none !important; }
+  .cookie-info { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Sanbook Pay — Desktop Test Flow</h1>
+  <p class="sub">Admin login → Merchant → Pair mobile (QR scan) → Connect Gmail → Create payment → SMS+Gmail evidence → Wallet credit</p>
+
+  <!-- Step 1: Admin Login -->
+  <div class="card">
+    <div class="badge">Step 1 · Admin Login</div>
+    <h2>Super Admin Login</h2>
+    <label>Email</label><input type="email" id="adminEmail" value="kunal12@gmail.com">
+    <label>Password (12+ chars)</label><input type="password" id="adminPass" value="qwertyuiop90">
+    <button onclick="adminLogin()">Login as Admin</button>
+    <div id="adminResult" class="status hidden"></div>
+    <div class="json hidden" id="adminJson"></div>
+    <div class="cookie-info">Sets cookie + CSRF token. Save both for next steps.</div>
+  </div>
+
+  <!-- Step 2: Create Merchant -->
+  <div class="card hidden" id="step2">
+    <div class="badge">Step 2 · Onboard Merchant</div>
+    <h2>Create Merchant</h2>
+    <label>Business Name</label><input type="text" id="mBusinessName" value="Nitish Store">
+    <label>Contact Name</label><input type="text" id="mContactName" value="Nitish Kumar">
+    <label>Email</label><input type="email" id="mEmail" value="nitish@store.test">
+    <label>Mobile (+91xxxxxxxxxx)</label><input type="text" id="mMobile" value="+919082843142">
+    <label>Category</label><input type="text" id="mCategory" value="Retail">
+    <label>Password (12+ chars)</label><input type="password" id="mPassword" value="admin12345678">
+    <button onclick="createMerchant()">Create Merchant</button>
+    <div id="merchantResult" class="status hidden"></div>
+    <div class="json hidden" id="merchantJson"></div>
+  </div>
+
+  <!-- Step 3: Pair Mobile -->
+  <div class="card hidden" id="step3">
+    <div class="badge">Step 3 · Pair Mobile (QR Scanner)</div>
+    <h2>Bind Android Device</h2>
+    <p style="color:#64748b;font-size:12px;margin-bottom:10px">Install <strong>youpi-sms-gateway.apk</strong> on your Android phone. Scan the QR code below with your phone camera → tap the link → bind device.</p>
+    <div class="qr-box">
+      <img id="qrImage" src="" alt="Pairing QR Code">
+      <div class="qr-note">Phone camera → point at QR → tap pairing link → device binds to this merchant</div>
+    </div>
+    <label>Pairing URL (copy to phone browser)</label>
+    <input type="text" id="pairingUrl" readonly style="background:#f8fafc;">
+    <div class="row">
+      <button onclick="createPairing()">Generate Pairing QR</button>
+      <button class="secondary" onclick="checkPairing()">Check Pair Status</button>
+    </div>
+    <div id="pairResult" class="status hidden"></div>
+    <div class="json hidden" id="pairJson"></div>
+  </div>
+
+  <!-- Step 4: Connect Gmail -->
+  <div class="card hidden" id="step4">
+    <div class="badge">Step 4 · Connect Gmail</div>
+    <h2>Gmail OAuth</h2>
+    <p style="color:#64748b;font-size:12px;margin-bottom:10px">Connect Gmail to capture UPI credit payment notifications.</p>
+    <label>Redirect URI</label><input type="text" id="gmailRedirect" value="http://localhost:6100/api/v1/gmail/callback">
+    <button onclick="gmailConnect()">Connect Gmail (opens Google Auth)</button>
+    <div id="gmailResult" class="status hidden"></div>
+    <div class="json hidden" id="gmailJson"></div>
+  </div>
+
+  <!-- Step 5: Create Payment -->
+  <div class="card hidden" id="step5">
+    <div class="badge">Step 5 · Create Payment Link</div>
+    <h2>UPI Payment Intent</h2>
+    <label>Amount (₹)</label><input type="number" id="payAmount" value="100">
+    <label>Order ID</label><input type="text" id="payOrderId" value="ORDER-001">
+    <label>Customer ID</label><input type="text" id="payCustomerId" value="cust-1">
+    <label>Return URL</label><input type="text" id="payReturnUrl" value="http://localhost:7000/return">
+    <button onclick="createPayment()">Create Payment Link</button>
+    <div id="payResult" class="status hidden"></div>
+    <div class="json hidden" id="payJson"></div>
+  </div>
+
+  <!-- Step 6: Submit Evidence -->
+  <div class="card hidden" id="step6">
+    <div class="badge">Step 6 · Evidence Capture (SMS + Gmail)</div>
+    <h2>Submit Payment Evidence</h2>
+    <p style="color:#64748b;font-size:12px;margin-bottom:10px">Customer pays to 9082843142@slc. Your Android SMS observer + Gmail both capture it. Any TWO sources confirm → wallet credited.</p>
+    <label>Payment ID</label><input type="text" id="evPaymentId" readonly style="background:#f8fafc;">
+    <label>UTR</label><input type="text" id="evUtr" value="UTR123456789">
+    <label>Amount Paise</label><input type="number" id="evAmount" value="10000">
+    <label>Sender VPA</label><input type="text" id="evSenderVpa" value="customer@upi">
+    <label>Payee VPA</label><input type="text" id="evPayeeVpa" value="9082843142@slc">
+    <label>Device ID</label><input type="text" id="evDeviceId" readonly style="background:#f8fafc;">
+    <div class="row">
+      <button onclick="submitSms()">Submit SMS Evidence</button>
+      <button class="secondary" onclick="submitGmail()">Submit Gmail Evidence</button>
+    </div>
+    <div id="evResult" class="status hidden"></div>
+    <div class="json hidden" id="evJson"></div>
+  </div>
+
+  <!-- Step 7: Wallet -->
+  <div class="card hidden" id="step7">
+    <div class="badge">Step 7 · Wallet Credit</div>
+    <h2>Verify Wallet</h2>
+    <label>Player Reference</label><input type="text" id="walletPlayer" value="cust-1">
+    <button onclick="checkWallet()">Check Wallet Balance</button>
+    <div id="walletResult" class="status hidden"></div>
+    <div class="json hidden" id="walletJson"></div>
+  </div>
+</div>
+
+<script>
+const BASE = 'http://localhost:6100';
+let adminCookie = '', csrfToken = '', merchantId = '', deviceId = '', paymentId = '';
+
+async function req(path, o = {}) {
+  const h = { 'content-type': 'application/json', ...(o.headers||{}) };
+  if (adminCookie) h.cookie = 'dp_platform_session=' + adminCookie;
+  if (csrfToken && ['POST','PUT','DELETE'].includes(o.method||'GET')) h['x-csrf-token'] = csrfToken;
+  const r = await fetch(BASE + path, { ...o, headers: h });
+  let d; try { d = await r.json(); } catch { d = { raw: await r.text() }; }
+  return { ok: r.ok, status: r.status, data: d, headers: r.headers };
+}
+function set(elId, cls, txt) {
+  const el = document.getElementById(elId);
+  el.className = 'status ' + cls; el.textContent = txt; el.classList.remove('hidden');
+}
+function setJson(elId, obj) {
+  const el = document.getElementById(elId);
+  el.textContent = JSON.stringify(obj, null, 2); el.classList.remove('hidden');
+}
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+
+async function adminLogin() {
+  const r = await req('/api/v1/admin/platform-session', { method: 'POST', body: JSON.stringify({}) });
+  if (r.ok) {
+    csrfToken = r.data.csrfToken;
+    const sc = r.headers.get('set-cookie') || '';
+    adminCookie = (sc.match(/dp_platform_session=([^;]+)/) || [, ''])[1];
+    set('adminResult','ok','Admin logged in. Cookie + CSRF received.');
+    setJson('adminJson', { cookie: adminCookie.substring(0,16)+'...', csrf: csrfToken.substring(0,16)+'...' });
+    show('step2');
+  } else { set('adminResult','err','Login failed: ' + (r.data.error||r.status)); setJson('adminJson', r.data); }
+}
+async function createMerchant() {
+  const r = await req('/api/platform/v1/merchants', {
+    method:'POST',
+    body: JSON.stringify({
+      businessName: document.getElementById('mBusinessName').value,
+      contactName: document.getElementById('mContactName').value,
+      email: document.getElementById('mEmail').value,
+      mobile: document.getElementById('mMobile').value,
+      category: document.getElementById('mCategory').value,
+      password: document.getElementById('mPassword').value
+    })
+  });
+  if (r.ok) {
+    merchantId = r.data.merchantId;
+    set('merchantResult','ok','Merchant: ' + merchantId);
+    setJson('merchantJson', r.data);
+    show('step3');
+  } else { set('merchantResult','err','Failed: ' + (r.data.error||r.status)); setJson('merchantJson', r.data); }
+}
+async function createPairing() {
+  const r = await req('/api/v1/device/pairing/create', {
+    method:'POST',
+    headers: { 'authorization': 'Bearer ' + adminCookie },
+    body: JSON.stringify({ merchantId, deviceName: 'Nitish Android Phone' })
+  });
+  if (r.ok) {
+    deviceId = r.data.pairingId;
+    document.getElementById('qrImage').src = r.data.qrDataUrl;
+    document.getElementById('pairingUrl').value = r.data.pairingUrl;
+    document.getElementById('evDeviceId').value = r.data.pairingId;
+    set('pairResult','ok','QR code ready. Scan with Android phone.');
+    setJson('pairJson', { pairingId: r.data.pairingId, expiresAt: r.data.expiresAt });
+    show('step4');
+  } else { set('pairResult','err','Failed: ' + (r.data.error||r.status)); setJson('pairJson', r.data); }
+}
+async function checkPairing() {
+  const r = await req('/api/v1/device/pairing/status/' + deviceId, {
+    headers: { 'authorization': 'Bearer ' + adminCookie }
+  });
+  if (r.ok) { set('pairResult','ok','Status: ' + r.data.status); setJson('pairJson', r.data); }
+  else { set('pairResult','err', r.data.error||r.status); }
+}
+async function gmailConnect() {
+  const r = await req('/api/v1/gmail/authorize?merchantId=' + encodeURIComponent(merchantId) + '&redirectUri=' + encodeURIComponent(document.getElementById('gmailRedirect').value));
+  if (r.ok) {
+    window.open(r.data.authUrl, '_blank');
+    set('gmailResult','ok','Google Auth opened. Complete OAuth on phone/browser.');
+    setJson('gmailJson', { authUrl: r.data.authUrl.substring(0,80)+'...' });
+    show('step5');
+  } else { set('gmailResult','err', r.data.error||r.status); setJson('gmailJson', r.data); }
+}
+async function createPayment() {
+  const r = await req('/api/v1/payments/intents', {
+    method:'POST',
+    headers: { 'x-merchant-key': 'test-webhook-secret', 'idempotency-key': 'idem-' + Date.now() },
+    body: JSON.stringify({
+      merchantId, amount: Number(document.getElementById('payAmount').value),
+      orderId: document.getElementById('payOrderId').value,
+      customerId: document.getElementById('payCustomerId').value,
+      returnUrl: document.getElementById('payReturnUrl').value,
+      merchantVpa: '9082843142@slc'
+    })
+  });
+  if (r.ok) {
+    paymentId = r.data.paymentId;
+    document.getElementById('evPaymentId').value = paymentId;
+    set('payResult','ok','Payment: ' + paymentId + ' · Order: ' + r.data.orderId);
+    setJson('payJson', { paymentId, orderId: r.data.orderId, upiUri: r.data.upiUri, checkoutUrl: r.data.checkoutUrl });
+    show('step6');
+  } else { set('payResult','err','Failed: ' + (r.data.error||r.status)); setJson('payJson', r.data); }
+}
+async function submitSms() {
+  const r = await req('/api/v1/evidence/android-sms', {
+    method:'POST',
+    headers: { 'authorization': 'Bearer ' + adminCookie },
+    body: JSON.stringify({
+      paymentId, amountPaise: Number(document.getElementById('evAmount').value),
+      utr: document.getElementById('evUtr').value, senderVpa: document.getElementById('evSenderVpa').value,
+      payeeVpa: document.getElementById('evPayeeVpa').value, deviceId,
+      rawSms: 'Rs ' + document.getElementById('payAmount').value + ' credited to 9082843142@slc UTR ' + document.getElementById('evUtr').value,
+      observedAt: new Date().toISOString()
+    })
+  });
+  if (r.ok) { set('evResult','ok','SMS evidence: ' + (r.data.confirmed ? 'CONFIRMED' : 'recorded ('+r.data.matchCount+'/'+r.data.requiredMatches+')')); setJson('evJson', r.data); if (r.data.confirmed) show('step7'); }
+  else { set('evResult','err', r.data.error||r.status); setJson('evJson', r.data); }
+}
+async function submitGmail() {
+  const r = await req('/api/v1/evidence/gmail-email', {
+    method:'POST',
+    headers: { 'authorization': 'Bearer ' + adminCookie },
+    body: JSON.stringify({
+      paymentId, amountPaise: Number(document.getElementById('evAmount').value),
+      utr: document.getElementById('evUtr').value, senderVpa: document.getElementById('evSenderVpa').value,
+      payeeVpa: document.getElementById('evPayeeVpa').value,
+      emailSubject: 'UPI Payment Received', emailFrom: 'bank@bank.test', messageId: 'msg-' + Date.now(),
+      observedAt: new Date().toISOString()
+    })
+  });
+  if (r.ok) { set('evResult','ok','Gmail evidence: ' + (r.data.confirmed ? 'CONFIRMED' : 'recorded ('+r.data.matchCount+'/'+r.data.requiredMatches+')')); setJson('evJson', r.data); if (r.data.confirmed) show('step7'); }
+  else { set('evResult','err', r.data.error||r.status); setJson('evJson', r.data); }
+}
+async function checkWallet() {
+  const r = await req('/api/v1/callbacks/wallets/' + merchantId + '/' + document.getElementById('walletPlayer').value);
+  if (r.ok) { set('walletResult','ok','Wallet loaded.'); setJson('walletJson', r.data); }
+  else { set('walletResult','err', r.data.error||r.status); setJson('walletJson', r.data); }
+}
+</script>
+</body>
+</html>

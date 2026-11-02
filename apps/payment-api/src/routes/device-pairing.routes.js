@@ -1,4 +1,5 @@
 import { HttpServer } from '../server.js';
+import QRCode from 'qrcode';
 
 /**
  * Device Pairing & Binding — connects Android mobile app to merchant portal.
@@ -39,10 +40,17 @@ export function registerDevicePairingRoutes(server, ctx) {
     // Pairing URL that the Android app will open/scan
     const pairingUrl = `${process.env.BASE_PAYMENT_API_URL || 'http://localhost:6100'}/api/v1/device/pairing/join?token=${pairingToken}`;
 
+    // Generate QR code data URL for desktop users to scan with their phone camera
+    let qrDataUrl = null;
+    try {
+      qrDataUrl = await QRCode.toDataURL(pairingUrl, { width: 300, margin: 2 });
+    } catch {}
+
     return HttpServer.json(res, 201, {
       pairingId, pairingToken, pairingUrl, expiresAt,
       qrData: pairingUrl,
-      note: 'Android app scans this QR or opens this URL to bind the device to the merchant'
+      qrDataUrl,
+      note: 'Desktop: display qrDataUrl as an image. Android: scan this QR or open pairingUrl to bind the device to the merchant'
     });
   });
 

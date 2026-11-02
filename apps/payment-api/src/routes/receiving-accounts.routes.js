@@ -21,7 +21,7 @@ export function registerReceivingAccountRoutes(server, ctx) {
     const rows = db.query(
       `SELECT id, upi_id, payee_name, bank_name, account_holder_name, account_number, ifsc,
               is_active, created_at, updated_at
-       FROM receiving_accounts WHERE merchant_id = $1 ORDER BY created_at DESC`,
+       FROM payment_receiving_accounts WHERE merchant_id = $1 ORDER BY created_at DESC`,
       [merchantId]
     );
     return HttpServer.json(res, 200, {
@@ -49,7 +49,7 @@ export function registerReceivingAccountRoutes(server, ctx) {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     db.execute(
-      `INSERT INTO receiving_accounts (id, merchant_id, upi_id, payee_name, bank_name,
+      `INSERT INTO payment_receiving_accounts (id, merchant_id, upi_id, payee_name, bank_name,
               account_holder_name, account_number, ifsc, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $10)`,
       [id, merchantId, upiId.toLowerCase(), payeeName || null, bankName || null,
@@ -68,10 +68,10 @@ export function registerReceivingAccountRoutes(server, ctx) {
     let body;
     try { body = await HttpServer.parseBody(req); } catch { return HttpServer.json(res, 400, { error: 'Malformed body' }); }
     const { isActive } = body;
-    const row = db.queryOne('SELECT * FROM receiving_accounts WHERE id = $1', [params.id]);
+    const row = db.queryOne('SELECT * FROM payment_receiving_accounts WHERE id = $1', [params.id]);
     if (!row) return HttpServer.json(res, 404, { error: 'Receiving account not found' });
     if (isActive !== undefined) {
-      db.execute('UPDATE receiving_accounts SET is_active = $1, updated_at = $2 WHERE id = $3',
+      db.execute('UPDATE payment_receiving_accounts SET is_active = $1, updated_at = $2 WHERE id = $3',
         [isActive ? 1 : 0, new Date().toISOString(), params.id]);
     }
     return HttpServer.json(res, 200, { updated: true, accountId: params.id, isActive: isActive !== undefined ? Boolean(isActive) : null });
@@ -81,9 +81,9 @@ export function registerReceivingAccountRoutes(server, ctx) {
   server.delete('/api/v1/receiving-accounts/:id', async (req, res, params) => {
     const token = requireAuth(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
-    const row = db.queryOne('SELECT * FROM receiving_accounts WHERE id = $1', [params.id]);
+    const row = db.queryOne('SELECT * FROM payment_receiving_accounts WHERE id = $1', [params.id]);
     if (!row) return HttpServer.json(res, 404, { error: 'Receiving account not found' });
-    db.execute('DELETE FROM receiving_accounts WHERE id = $1', [params.id]);
+    db.execute('DELETE FROM payment_receiving_accounts WHERE id = $1', [params.id]);
     return HttpServer.json(res, 200, { deleted: true, accountId: params.id });
   });
 }
