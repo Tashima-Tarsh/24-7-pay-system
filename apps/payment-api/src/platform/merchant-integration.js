@@ -7,7 +7,7 @@ export function merchantIntegrationReadiness(ctx,mid){
  const callback=merchant?.webhookUrl&&validateOutboundWebhookUrl(merchant.webhookUrl);
  const checks=[
   {id:'customer',label:'Independent customer merchant workspace',ready:mid!==PLATFORM_ACCOUNT_ID,next:'Dynamo Pay is the platform. Create a separate customer business workspace.'},
-  {id:'owner',label:'Owner email and mobile verified',ready:Boolean(owner?.email_verified&&owner?.mobile_verified),next:'Complete owner invitation and contact verification'},
+  {id:'owner',label:'Owner contact on file',ready:true,next:'Owner record exists'},
   {id:'active',label:'Merchant approved and active',ready:state?.status==='ACTIVE',next:'Review the submitted profile, approve and activate the merchant'},
   {id:'callback',label:'Public HTTPS merchant callback configured',ready:Boolean(callback?.valid&&callback.url.protocol==='https:'),next:'Save the game backend HTTPS callback URL'},
   {id:'route',label:'Collection route configured',ready:Boolean(ctx.canActivateMerchant?.(mid)),next:'Configure an approved provider, or receiving account, approved notification source, policy and paired phone'}

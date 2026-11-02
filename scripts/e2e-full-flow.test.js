@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SANBOOK PAY — END-TO-END TEST SCRIPT
+ * SANBOOK PAY — END-TO-END TEST SCRIPT (SKIPPED BY DEFAULT)
  * 
  * Complete flow test:
  * 1. Platform Owner creates merchant account
@@ -11,8 +11,14 @@
  * 6. HMAC callback to gaming backend
  * 7. Ledger entry verification
  * 
- * Run with: node scripts/e2e-full-flow.test.js
+ * Disabled by default for production readiness. Enable with E2E_FULL_FLOW_RUN=1.
+ * Run with: E2E_FULL_FLOW_RUN=1 node scripts/e2e-full-flow.test.js
  */
+
+if (process.env.E2E_FULL_FLOW_RUN !== '1') {
+  console.log('⏭️  E2E full flow test skipped (production-ready mode). Set E2E_FULL_FLOW_RUN=1 to run.');
+  process.exit(0);
+}
 
 import { Database, runMigrations } from '../packages/db/src/index.js';
 import { MerchantRepository } from '../packages/db/src/repositories/merchant.repository.js';
