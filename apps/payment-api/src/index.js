@@ -121,6 +121,10 @@ import { registerDirectBankRoutes } from './routes/direct-bank.routes.js';
 import { registerCodeAttestationRoutes } from './routes/code-attestation.routes.js';
 import { registerGmailRoutes } from './routes/gmail.routes.js';
 import { GmailService } from '../../../packages/core/src/gmail-service.js';
+import { registerReceivingAccountRoutes } from './routes/receiving-accounts.routes.js';
+import { registerProviderConnectionsRoutes } from './routes/provider-connections.routes.js';
+import { registerAcceptanceRulesRoutes } from './routes/acceptance-rules.routes.js';
+import { registerMultiSourceEvidenceRoutes } from './routes/multi-source-evidence.routes.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
   const db = customDb || getDatabase();
@@ -756,7 +760,11 @@ registerHyperswitchRoutes(server, context);
   context.gmailService = gmailService;
   registerGmailRoutes(server, context);
 
-
+  // Receiving Accounts, Provider Connections, Acceptance Rules, Multi-Source Evidence
+  registerReceivingAccountRoutes(server, context);
+  registerProviderConnectionsRoutes(server, context);
+  registerAcceptanceRulesRoutes(server, context);
+  registerMultiSourceEvidenceRoutes(server, context);
 
   function destroy() {
     notificationDeliveryService.stop();

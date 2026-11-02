@@ -25,5 +25,6 @@ export { AndroidDiagnostics } from './android-diagnostics.js';
 export { PaiseOffsetAllocator } from './paise-offset-engine.js';
 export { VpaRotationGuard } from './vpa-rotation-guard.js';
 export { GmailService } from './gmail-service.js';
+export { MultiSourceMatchingEngine } from './multi-source-matching-engine.js';
 
 
