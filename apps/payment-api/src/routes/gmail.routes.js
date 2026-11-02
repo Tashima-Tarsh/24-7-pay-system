@@ -22,7 +22,7 @@ export function registerGmailRoutes(server, ctx) {
     if (!merchantId || !redirectUri) return HttpServer.json(res, 400, { error: 'merchantId and redirectUri required' });
 
     const clientId = process.env.GMAIL_OAUTH_CLIENT_ID;
-    if (!clientId) return HttpServer.json(res, 500, { error: 'GMAIL_OAUTH_CLIENT_ID not configured' });
+    if (!clientId) return HttpServer.json(res, 503, { error: 'Gmail OAuth not configured. Set GMAIL_OAUTH_CLIENT_ID and GMAIL_OAUTH_CLIENT_SECRET in environment variables.' });
 
     const state = crypto.randomUUID();
     const scope = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
@@ -67,7 +67,7 @@ export function registerGmailRoutes(server, ctx) {
 
     const clientId = process.env.GMAIL_OAUTH_CLIENT_ID;
     const clientSecret = process.env.GMAIL_OAUTH_CLIENT_SECRET;
-    if (!clientId || !clientSecret) return HttpServer.json(res, 500, { error: 'Gmail OAuth not configured' });
+    if (!clientId || !clientSecret) return HttpServer.json(res, 503, { error: 'Gmail OAuth not configured. Set GMAIL_OAUTH_CLIENT_ID and GMAIL_OAUTH_CLIENT_SECRET in environment variables.' });
 
     // Exchange code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
