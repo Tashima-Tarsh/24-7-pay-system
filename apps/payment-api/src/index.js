@@ -5,6 +5,7 @@ import {registerPlatformOperations} from './platform/operations.js';
 import fs from 'node:fs';
 import { registerMerchantConsoleRoutes } from './routes/merchant-console.routes.js';
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PaymentStatus, safeEqual } from '@youpi/common';
@@ -18,6 +19,7 @@ process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '128';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 const rootDir = path.resolve(__dirname, '../../..');
 
 // In production, reliably ensure environment variables from .env are loaded if not already provided
@@ -116,6 +118,9 @@ import { registerPayerVpaRoutes } from './routes/payer-vpa.routes.js';
 import { registerBankReconciliationRoutes } from './routes/bank-reconciliation.routes.js';
 import { registerMultiOperatorRoutes } from './routes/multi-operator.routes.js';
 import { registerDirectBankRoutes } from './routes/direct-bank.routes.js';
+import { registerCodeAttestationRoutes } from './routes/code-attestation.routes.js';
+import { registerGmailRoutes } from './routes/gmail.routes.js';
+import { GmailService } from '../../../packages/core/src/gmail-service.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
   const db = customDb || getDatabase();
@@ -744,6 +749,12 @@ registerHyperswitchRoutes(server, context);
   registerBankReconciliationRoutes(server, context);
   registerMultiOperatorRoutes(server, context);
   registerDirectBankRoutes(server, context);
+  registerCodeAttestationRoutes(server, context);
+
+  // Gmail Universal Email Adapter — OAuth connect, callback, disconnect
+  const gmailService = new GmailService(db);
+  context.gmailService = gmailService;
+  registerGmailRoutes(server, context);
 
 
 
@@ -818,6 +829,19 @@ export function startServer(port = null, customDb = null) {
         socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
       }
     });
+
+    // Intent return polling (3-second interval fallback)
+    // WebSocket push available at /ws/intent for production deployments
+
+    return {
+      app,
+      port: finalPort,
+      close: () => new Promise(cb => {
+        app.destroy();
+        instance.closeAllConnections?.();
+        instance.close(cb);
+      })
+    };
   });
 }
 
