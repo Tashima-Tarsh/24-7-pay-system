@@ -116,6 +116,44 @@ export function registerDevicePairingRoutes(server, ctx) {
     });
   });
 
+  // POST /api/v1/device/pairing/macrodroid/bind — MacroDroid-specific bind (no session cookie needed)
+  // MacroDroid scans QR code, extracts pairingToken from URL, posts here to bind device
+  server.post('/api/v1/device/pairing/macrodroid/bind', async (req, res) => {
+    let body;
+    try { body = await HttpServer.parseBody(req); } catch { return HttpServer.json(res, 400, { error: 'Malformed body' }); }
+    const { pairingToken, deviceFingerprint, deviceModel, androidId, fcmToken, merchantId } = body;
+    if (!pairingToken || !deviceFingerprint) return HttpServer.json(res, 400, { error: 'pairingToken and deviceFingerprint required' });
+
+    const session = db.queryOne('SELECT * FROM device_pairing_sessions WHERE pairing_token = $1 AND status = \'PENDING\'', [pairingToken]);
+    if (!session) return HttpServer.json(res, 404, { error: 'Pairing session not found or already used' });
+    if (new Date(session.expires_at) < new Date()) {
+      db.execute('UPDATE device_pairing_sessions SET status = $1 WHERE id = $2', ['EXPIRED', session.id]);
+      return HttpServer.json(res, 410, { error: 'Pairing session expired' });
+    }
+
+    const deviceId = crypto.randomUUID();
+    const now2 = new Date().toISOString();
+
+    // Bind device to merchant
+    db.execute(
+      `INSERT INTO merchant_devices (id, merchant_id, device_id, device_fingerprint, device_model,
+              android_id, fcm_token, is_active, paired_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8, $9, $10)`,
+      [deviceId, session.merchant_id, deviceId, deviceFingerprint, deviceModel || null,
+       androidId || null, fcmToken || null, now2, now2, now2]
+    );
+
+    // Mark pairing session as completed
+    db.execute('UPDATE device_pairing_sessions SET status = $1, updated_at = $2 WHERE id = $3',
+      ['BOUND', now2, session.id]);
+
+    return HttpServer.json(res, 200, {
+      deviceId, merchantId: session.merchant_id, deviceFingerprint,
+      isActive: true, pairedAt: now2,
+      note: 'MacroDroid device bound to merchant — SMS observer can now submit evidence for this merchant\'s payments'
+    });
+  });
+
   // GET /api/v1/device/pairing/status/:pairingId — check pairing status
   server.get('/api/v1/device/pairing/status/:pairingId', async (req, res, params) => {
     const token = requireAuth(req);
