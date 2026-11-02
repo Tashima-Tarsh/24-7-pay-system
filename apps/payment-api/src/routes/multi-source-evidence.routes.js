@@ -4,10 +4,12 @@ import { MultiSourceMatchingEngine } from '@youpi/core';
 /**
  * Multi-Source Evidence Routes — Android SMS, Gmail email, Direct Bank evidence submission.
  * Any TWO sources matching → payment confirmed → ledger → callback → mobile app update.
+ * Android SMS requires a bound device (device pairing via QR).
  */
 export function registerMultiSourceEvidenceRoutes(server, ctx) {
   const db = ctx.db;
   const engine = new MultiSourceMatchingEngine(db);
+  const deviceBindingService = ctx.deviceBindingService;
 
   function requireAuth(req) {
     const header = req.headers['authorization'] || '';
@@ -73,6 +75,22 @@ export function registerMultiSourceEvidenceRoutes(server, ctx) {
     try { body = await HttpServer.parseBody(req); } catch { return HttpServer.json(res, 400, { error: 'Malformed body' }); }
     const { paymentId, amountPaise, utr, senderVpa, payeeVpa, rawSms, deviceId, observedAt } = body;
     if (!paymentId) return HttpServer.json(res, 400, { error: 'paymentId required' });
+    if (!deviceId) return HttpServer.json(res, 400, { error: 'deviceId required — Android device must be bound to merchant first' });
+
+    // Verify device is bound and active for this merchant
+    const payment = db.queryOne('SELECT * FROM payment_orders WHERE id = $1', [paymentId]);
+    if (!payment) return HttpServer.json(res, 404, { error: 'Payment not found' });
+
+    const isBound = deviceBindingService.isDeviceBound(payment.merchant_id, deviceId);
+    if (!isBound) {
+      return HttpServer.json(res, 403, {
+        error: 'Android device not bound to this merchant',
+        note: 'Pair the Android device via /api/v1/device/pairing/create QR code first'
+      });
+    }
+
+    // Record device heartbeat
+    deviceBindingService.heartbeat(deviceId);
 
     const result = engine.submitEvidence({
       paymentId, source: 'ANDROID_OBSERVER', sourceId: deviceId || 'android_device',
