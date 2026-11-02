@@ -6,7 +6,7 @@
 -- 56. Merchant UPI Connections — claimed receiving VPAs per merchant
 CREATE TABLE IF NOT EXISTS merchant_upi_connections (
     id TEXT PRIMARY KEY,
-    merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id TEXT NOT NULL,
     vpa VARCHAR(255) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     bank_name VARCHAR(255),
@@ -23,10 +23,10 @@ CREATE TABLE IF NOT EXISTS merchant_upi_connections (
     last_health_at TEXT,
     health_status VARCHAR(50) DEFAULT 'UNKNOWN',
     feature_flags TEXT DEFAULT '{}',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CONSTRAINT uq_merchant_vpa UNIQUE(merchant_id, LOWER(vpa))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_merchant_vpa ON merchant_upi_connections (merchant_id, LOWER(vpa));
 CREATE INDEX IF NOT EXISTS idx_upi_connections_merchant ON merchant_upi_connections (merchant_id);
 CREATE INDEX IF NOT EXISTS idx_upi_connections_state ON merchant_upi_connections (connection_state);
 CREATE INDEX IF NOT EXISTS idx_upi_connections_vpa ON merchant_upi_connections (LOWER(vpa));
@@ -35,7 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_upi_connections_observer_device ON merchant_upi_c
 -- 57. Merchant Observer Devices — paired Android devices per merchant
 CREATE TABLE IF NOT EXISTS merchant_observer_devices (
     id TEXT PRIMARY KEY,
-    merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id TEXT NOT NULL,
     device_name VARCHAR(255) NOT NULL,
     device_model VARCHAR(255),
     android_version VARCHAR(50),
@@ -52,8 +52,8 @@ CREATE TABLE IF NOT EXISTS merchant_observer_devices (
     is_active INTEGER NOT NULL DEFAULT 1,
     revoked_at TEXT,
     revocation_reason TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_observer_devices_merchant ON merchant_observer_devices (merchant_id);
 CREATE INDEX IF NOT EXISTS idx_observer_devices_state ON merchant_observer_devices (pairing_state);
@@ -63,14 +63,14 @@ CREATE INDEX IF NOT EXISTS idx_observer_devices_fingerprint ON merchant_observer
 -- 58. Device Pairing Challenges — one-time QR pairing
 CREATE TABLE IF NOT EXISTS device_pairing_challenges (
     id TEXT PRIMARY KEY,
-    merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id TEXT NOT NULL,
     challenge TEXT NOT NULL,
     qr_payload TEXT NOT NULL,
     device_id TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
     expires_at TEXT NOT NULL,
     consumed_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pairing_challenges_merchant ON device_pairing_challenges (merchant_id, status);
 CREATE INDEX IF NOT EXISTS idx_pairing_challenges_expires ON device_pairing_challenges (expires_at);
@@ -87,16 +87,16 @@ CREATE TABLE IF NOT EXISTS observer_source_configs (
     last_event_at TEXT,
     event_count INTEGER NOT NULL DEFAULT 0,
     duplicate_count INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_observer_source_configs_connection ON observer_source_configs (upi_connection_id);
 
 -- 60. Subscription Entitlements — plan features per merchant
 CREATE TABLE IF NOT EXISTS subscription_entitlements (
     id TEXT PRIMARY KEY,
-    merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
-    plan_id TEXT NOT NULL REFERENCES pricing_plans(id),
+    merchant_id TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
     max_upi_connections INTEGER NOT NULL DEFAULT 1,
     max_observer_devices INTEGER NOT NULL DEFAULT 1,
     observation_sources_enabled INTEGER NOT NULL DEFAULT 1,
@@ -109,8 +109,8 @@ CREATE TABLE IF NOT EXISTS subscription_entitlements (
     current_period_start TEXT,
     current_period_end TEXT,
     grace_period_ends_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_subscription_entitlements_merchant ON subscription_entitlements (merchant_id);
 
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS connection_health_events (
     trigger VARCHAR(100),
     latency_ms INTEGER,
     error_message TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_connection_health_connection ON connection_health_events (upi_connection_id, created_at);
 
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_events (
     merchant_id TEXT,
     details TEXT DEFAULT '{}',
     ip_address TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit_events (admin_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_merchant ON admin_audit_events (merchant_id, created_at);
@@ -148,7 +148,7 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_events (action)
 -- 63. Callback Outbox — transactional outbox for webhook delivery
 CREATE TABLE IF NOT EXISTS callback_outbox (
     id TEXT PRIMARY KEY,
-    merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id TEXT NOT NULL,
     payment_id TEXT,
     event_type VARCHAR(50) NOT NULL,
     payload TEXT NOT NULL,
@@ -160,8 +160,8 @@ CREATE TABLE IF NOT EXISTS callback_outbox (
     next_retry_at TEXT,
     delivered_at TEXT,
     last_error TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_callback_outbox_status ON callback_outbox (status, next_retry_at);
 CREATE INDEX IF NOT EXISTS idx_callback_outbox_merchant ON callback_outbox (merchant_id, status);
@@ -176,14 +176,14 @@ CREATE TABLE IF NOT EXISTS callback_delivery_attempts (
     response_body TEXT,
     latency_ms INTEGER,
     error_message TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_callback_attempts_outbox ON callback_delivery_attempts (outbox_id);
 
 -- 65. Payment Observations (UPI Mirror extension) — durable observation store
 CREATE TABLE IF NOT EXISTS upi_mirror_observations (
     id TEXT PRIMARY KEY,
-    merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id TEXT NOT NULL,
     upi_connection_id TEXT REFERENCES merchant_upi_connections(id) ON DELETE SET NULL,
     observer_device_id TEXT REFERENCES merchant_observer_devices(id) ON DELETE SET NULL,
     event_id VARCHAR(255) NOT NULL,
@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS upi_mirror_observations (
     match_evidence TEXT DEFAULT '{}',
     raw_payload TEXT DEFAULT '{}',
     is_duplicate INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_upi_mirror_event_id ON upi_mirror_observations (event_id);
 CREATE INDEX IF NOT EXISTS idx_upi_mirror_merchant ON upi_mirror_observations (merchant_id, created_at);
