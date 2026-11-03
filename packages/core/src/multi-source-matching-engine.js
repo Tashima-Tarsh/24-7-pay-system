@@ -166,6 +166,10 @@ export class MultiSourceMatchingEngine {
       confirmedBy: 'MULTI_SOURCE_MATCH'
     });
 
+    if (callbackSent) {
+      console.log('callback sent to game wallet');
+    }
+
     // Update mobile app status
     const mobileUpdated = await this.updateMobileApp(paymentId, merchantId, 'SUCCESS');
 
@@ -208,6 +212,7 @@ export class MultiSourceMatchingEngine {
          VALUES ($1, $2, $3, 'PAYMENT_SUCCESS', 'DELIVERED', $4, $5)`,
         [crypto.randomUUID(), merchantId, paymentId, new Date().toISOString(), new Date().toISOString()]
       );
+      console.log('callback sent to game wallet');
       return true;
     } catch (e) {
       return false;
