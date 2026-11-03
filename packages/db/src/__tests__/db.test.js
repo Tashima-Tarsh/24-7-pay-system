@@ -182,6 +182,28 @@ describe('@youpi/db Unit & Integration Tests', () => {
       assert.equal(acct.isSlotBusy, false);
       assert.equal(acct.currentActiveSessionId, null);
     });
+
+    test('allows a configured bounded number of concurrent UPI sessions and retains occupancy until the last one ends', () => {
+      const originalCapacity = process.env.UPI_MAX_CONCURRENT_SESSIONS;
+      process.env.UPI_MAX_CONCURRENT_SESSIONS = '2';
+      try {
+        const first = sessionRepo.create({ merchantId: testMerchant.id, receivingAccountId: testAccount.id, orderId: 'ORDER-CONCURRENT-1', amountPaise: 200n });
+        const second = sessionRepo.create({ merchantId: testMerchant.id, receivingAccountId: testAccount.id, orderId: 'ORDER-CONCURRENT-2', amountPaise: 200n });
+        const third = sessionRepo.create({ merchantId: testMerchant.id, receivingAccountId: testAccount.id, orderId: 'ORDER-CONCURRENT-3', amountPaise: 200n });
+
+        assert.equal(sessionRepo.acquireSlotAtomic(first.id, testAccount.id).status, PaymentStatus.ACTIVE);
+        assert.equal(sessionRepo.acquireSlotAtomic(second.id, testAccount.id).status, PaymentStatus.ACTIVE);
+        assert.equal(sessionRepo.acquireSlotAtomic(third.id, testAccount.id).status, PaymentStatus.QUEUED);
+
+        sessionRepo.transitionToTerminal(first.id, PaymentStatus.CANCELLED);
+        assert.equal(accountRepo.findById(testAccount.id).isSlotBusy, true);
+        sessionRepo.transitionToTerminal(second.id, PaymentStatus.CANCELLED);
+        assert.equal(accountRepo.findById(testAccount.id).isSlotBusy, false);
+      } finally {
+        if (originalCapacity === undefined) delete process.env.UPI_MAX_CONCURRENT_SESSIONS;
+        else process.env.UPI_MAX_CONCURRENT_SESSIONS = originalCapacity;
+      }
+    });
   });
 
   describe('Observation Deduplication & Storage', () => {

@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 import { PaymentStatus, PaymentMethod, isValidTransition, TERMINAL_STATES } from '@youpi/common';
 
+function concurrentUpiCapacity() {
+  const configured = Number(process.env.UPI_MAX_CONCURRENT_SESSIONS || 1);
+  return Number.isInteger(configured) && configured >= 1 ? Math.min(configured, 1000) : 1;
+}
+
 export class PaymentSessionRepository {
   /**
    * @param {import('../database.js').Database} db
@@ -11,6 +16,9 @@ export class PaymentSessionRepository {
     this.db = db;
     this.paiseOffsetAllocator = paiseOffsetAllocator;
     this.vpaRotationGuard = vpaRotationGuard;
+    // Legacy SQLite databases may still carry the former one-slot partial
+    // unique index. Capacity is now enforced atomically below instead.
+    try { this.db.exec('DROP INDEX IF EXISTS idx_one_slot_per_receiving_account;'); } catch {}
   }
 
   create(data) {
@@ -87,24 +95,23 @@ export class PaymentSessionRepository {
 
   /**
    * Atomic slot acquisition transaction for UPI payments.
-   * Invariant: Only ONE active or processing session per receiving account.
-   * If slot is free, session transitions to ACTIVE with 5:00 window.
-   * If slot is occupied, session transitions to QUEUED with sequence position.
+   * A receiving account has a bounded number of simultaneous UPI sessions. The
+   * default is one; a deployment may explicitly raise it to at most 1,000 when
+   * it has an exact-reference confirmation route.
    */
   acquireSlotAtomic(sessionId, receivingAccountId, durationMs = 300000) {
     return this.db.transaction(() => {
       const now = new Date();
       const nowIso = now.toISOString();
 
-      // Check for current active or processing session on this receiving account
-      let activeRow = this.db.queryOne(`
+      // Reap every stale active/processing session before measuring capacity.
+      let activeRows = this.db.query(`
         SELECT id, status, expires_at, processing_expires_at
         FROM payment_sessions
         WHERE receiving_account_id = ? AND status IN (?, ?)
-        LIMIT 1
       `, [receivingAccountId, PaymentStatus.ACTIVE, PaymentStatus.PROCESSING]);
 
-      if (activeRow) {
+      for (const activeRow of activeRows) {
         const isStale = (activeRow.status === PaymentStatus.ACTIVE && activeRow.expires_at && new Date(activeRow.expires_at) <= now) ||
           (activeRow.status === PaymentStatus.PROCESSING && activeRow.processing_expires_at && new Date(activeRow.processing_expires_at) <= now);
         if (isStale) {
@@ -117,21 +124,26 @@ export class PaymentSessionRepository {
             SET status = ?, completed_at = ?, updated_at = ?
             WHERE id = ?
           `, [terminalStatus, terminalStatus === PaymentStatus.VERIFICATION_PENDING ? null : nowIso, nowIso, activeRow.id]);
-          activeRow = null;
         }
       }
+      activeRows = this.db.query(`
+        SELECT id, status, expires_at, processing_expires_at
+        FROM payment_sessions
+        WHERE receiving_account_id = ? AND status IN (?, ?)
+      `, [receivingAccountId, PaymentStatus.ACTIVE, PaymentStatus.PROCESSING]);
 
-      // CRITICAL GUARD: If activeRow is THIS session itself, it's ALREADY ACTIVE! Do not demote to QUEUED!
-      if (activeRow && activeRow.id === sessionId) {
+      // CRITICAL GUARD: an already active session must never be demoted.
+      const thisSession = activeRows.find(row => row.id === sessionId);
+      if (thisSession) {
         return {
           status: PaymentStatus.ACTIVE,
           queuePosition: 0,
-          expiresAt: activeRow.expires_at ? new Date(activeRow.expires_at) : new Date(now.getTime() + durationMs)
+          expiresAt: thisSession.expires_at ? new Date(thisSession.expires_at) : new Date(now.getTime() + durationMs)
         };
       }
 
-      if (!activeRow) {
-        // Slot is vacant! Grant ACTIVE slot.
+      if (activeRows.length < concurrentUpiCapacity()) {
+        // Capacity is available: grant an ACTIVE slot.
         // Enforce the transition graph: a terminal or PROCESSING session must never be
         // revived to ACTIVE by a concurrent queue tick.
         const currentStatus = this.findById(sessionId)?.status;
@@ -160,7 +172,7 @@ export class PaymentSessionRepository {
           expiresAt: new Date(expiresAt)
         };
       } else {
-        // Slot is busy! Place in QUEUED
+        // All configured slots are occupied: place in QUEUED.
         const existingSession = this.findById(sessionId);
         let queuePosition = existingSession?.queuePosition;
         if (!queuePosition || queuePosition <= 0) {
@@ -284,13 +296,18 @@ export class PaymentSessionRepository {
         WHERE id = ?
       `, [targetStatus, targetStatus === PaymentStatus.VERIFICATION_PENDING ? null : now, attributedObsId, JSON.stringify(metadata), now, sessionId]);
 
-      // Release slot on receiving account if this session owned it
+      // Keep account occupancy accurate when more than one session can be active.
       if (session.receivingAccountId) {
+        const remaining = this.db.queryOne(`
+          SELECT id FROM payment_sessions
+          WHERE receiving_account_id = ? AND status IN (?, ?)
+          ORDER BY slot_acquired_at ASC LIMIT 1
+        `, [session.receivingAccountId, PaymentStatus.ACTIVE, PaymentStatus.PROCESSING]);
         this.db.execute(`
           UPDATE payment_receiving_accounts
-          SET is_slot_busy = 0, current_active_session_id = NULL, updated_at = ?
-          WHERE id = ? AND (current_active_session_id = ? OR current_active_session_id IS NULL)
-        `, [now, session.receivingAccountId, sessionId]);
+          SET is_slot_busy = ?, current_active_session_id = ?, updated_at = ?
+          WHERE id = ?
+        `, [remaining ? 1 : 0, remaining?.id || null, now, session.receivingAccountId]);
 
         // Release paise offset back to the pool
         if (this.paiseOffsetAllocator && session.metadata) {

@@ -68,10 +68,14 @@ export class AttributionEngine {
    * }}
    */
   processObservation(normalizedObs) {
-    // Production: notifications are supplementary evidence unless a reportedUtr matches the bank UTR.
-    if(process.env.NODE_ENV==='production' && normalizedObs.bankReferenceNumber) {
-      const hasUtrMatch = this.sessionRepo.db.queryOne(`SELECT id FROM payment_sessions WHERE receiving_account_id=? AND amount_paise=? AND status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING') AND json_extract(metadata,'$.reportedUtr')=? LIMIT 1`,[normalizedObs.receivingAccountId,Number(normalizedObs.amountPaise),normalizedObs.bankReferenceNumber]);
-      if(!hasUtrMatch) {
+    // Production notifications remain supplementary unless an approved bank observer
+    // supplies a UTR that identifies exactly one live session.  In particular, do
+    // not let an observation without a UTR fall through to the amount-only matcher.
+    if(process.env.NODE_ENV==='production') {
+      const matchingSessions = BANK_SOURCES.includes(normalizedObs.source) && normalizedObs.bankReferenceNumber
+        ? this.sessionRepo.db.query(`SELECT id FROM payment_sessions WHERE receiving_account_id=? AND amount_paise=? AND status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING') AND json_extract(metadata,'$.reportedUtr')=?`,[normalizedObs.receivingAccountId,Number(normalizedObs.amountPaise),normalizedObs.bankReferenceNumber])
+        : [];
+      if(matchingSessions.length !== 1) {
         const prior=this.obsRepo.findByFingerprint(normalizedObs.fingerprintHash);
         const saved=prior||this.obsRepo.create(normalizedObs);
         if(!prior)this.auditRepo?.log({entityType:'PAYMENT_OBSERVATION',entityId:saved.id,action:'SUPPLEMENTARY_EVIDENCE_RECORDED',actorType:'OBSERVER',details:{source:normalizedObs.source,requires:'PROVIDER_OR_BANK_CONFIRMATION'}});
