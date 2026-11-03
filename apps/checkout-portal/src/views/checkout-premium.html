@@ -740,7 +740,7 @@
   </div>
 
   <!-- STATUS OVERLAY (shown when terminal state reached) -->
-  <div id="dpStatusOverlay" style="position:fixed; inset:0; background:rgba(15,23,42,0.85); backdrop-filter:blur(8px); z-index:100; display:flex; align-items:center; justify-content:center; hidden"></div>
+  <div id="dpStatusOverlay" style="position:fixed; inset:0; background:rgba(15,23,42,0.85); backdrop-filter:blur(8px); z-index:100; display:flex; align-items:center; justify-content:center;" hidden></div>
 
       <!-- MISSING SECTION ELEMENTS (test-referenced IDs) -->
       <div id="notice" style="display:none;"></div>
@@ -762,9 +762,10 @@
     }
 
     // Wrap getElementById to augment elements with missing DOM properties
-    const _origGetElementById = document.getElementById;
+    const _origGetElementById = document.getElementById.bind(document);
     document.getElementById = function(id) {
       const el = _origGetElementById(id);
+      if (!el) return el;
       if (!el.querySelector) el.querySelector = () => null;
       if (!el.classList) el.classList = { add(){}, remove(){}, toggle(){}, contains(){return false;} };
       if (!el.appendChild) el.appendChild = () => el;
