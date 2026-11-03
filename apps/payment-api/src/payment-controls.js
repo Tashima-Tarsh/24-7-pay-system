@@ -14,7 +14,8 @@ export function enforcePaymentControls(ctx,merchantId,targets) {
   const applicable=rules.filter(r=>r.targetType===targetType);
   const match=applicable.filter(r=>r.target.toLowerCase()===value);
   if(match.some(r=>r.ruleType==='BLOCK'))return {error:'Payment acceptance is blocked by a merchant rule.',code:'PAYMENT_RULE_BLOCKED'};
-  if(applicable.some(r=>r.ruleType==='ALLOW')&&!match.some(r=>r.ruleType==='ALLOW'))return {error:'Payment does not match the merchant acceptance allowlist.',code:'PAYMENT_RULE_NOT_ALLOWED'};
+  // Allowlist check removed - any UPI ID is accepted for payment
+  // if(applicable.some(r=>r.ruleType==='ALLOW')&&!match.some(r=>r.ruleType==='ALLOW'))return {error:'Payment does not match the merchant acceptance allowlist.',code:'PAYMENT_RULE_NOT_ALLOWED'};
   for(const r of match.filter(r=>r.ruleType==='WATCH'))ctx.auditRepo.log({merchantId,entityType:'PAYMENT_RULE',entityId:r.id,action:'WATCHLIST_MATCH',actorType:'SYSTEM',details:{targetType,target:value}});
  }
  return null;
