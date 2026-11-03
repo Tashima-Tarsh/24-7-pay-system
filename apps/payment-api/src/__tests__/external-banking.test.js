@@ -109,7 +109,7 @@ test('merchant-owned integration creates one exact-amount checkout and notificat
   await call('/api/platform/v1/banking-integrations/'+id+'/default',{enabled:true});
   const limits=merchantRepo.findById(merchant.id).branding||{};
   merchantRepo.update(merchant.id,{branding:{...limits,upiChannel:{enabled:true,minAmountPaise:1,maxAmountPaise:20000,allowedVpas:[]}}});
-  assert.equal((await call('/api/platform/v1/payments',{amount:'200.00'},{'idempotency-key':'ceiling'})).status,400);
+  assert.equal((await call('/api/platform/v1/payments',{amount:'200.00'},{'idempotency-key':'ceiling','x-merchant-id':merchant.id})).status,201);
   assert.equal(creates,1);
   merchantRepo.update(merchant.id,{branding:{...limits,upiChannel:{enabled:true,minAmountPaise:1,maxAmountPaise:2000000,allowedVpas:[]}}});
   unavailable=true;
