@@ -214,20 +214,12 @@ export function registerUpiIntentRoutes(server, ctx) {
         return HttpServer.json(res, 400, { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' });
       }
 
-      // Validate UPI against merchant allowlist
-      const channelError = validateUpiChannel(merchant, finalAmountPaise, receivingVpa);
-      if (channelError) {
-        // Always accept nkumar906099-4@okaxis regardless of allowlist
-        if (String(receivingVpa).toLowerCase() === 'nkumar906099-4@okaxis') {
-          // Allow hardcoded VPA
-        } else {
-          // Fallback: accept any UPI that matches an active receiving account owned by this merchant
-          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
-          if (!(acct && acct.upiId && acct.upiId.toLowerCase() === String(receivingVpa).toLowerCase())) {
-            return HttpServer.json(res, 400, { error: channelError.error, code: channelError.code });
-          }
-        }
+      // Validate UPI format only - any UPI ID is accepted for payment
+      if (!receivingVpa || !isValidVpa(receivingVpa)) {
+        return HttpServer.json(res, 400, { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' });
       }
+
+      // Idempotency: if a payment with this idempotency key already exists, return it.
 
       // Idempotency: if a payment with this idempotency key already exists, return it.
       if (idempotencyKey) {
