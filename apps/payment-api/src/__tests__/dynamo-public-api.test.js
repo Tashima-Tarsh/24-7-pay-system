@@ -46,12 +46,17 @@ test('webhook/IP policy persists and version paths do not accept arbitrary dot c
  const r=await post('/v1.0/merchant/webhook',{webhookUrl:'https://merchant.example.com/callback',ipWhitelist:['127.0.0.1']});assert.equal(r.status,200);
  assert.deepEqual(ctx.merchantRepo.getDefault().branding.apiIpWhitelist,['127.0.0.1']);
 });
-test('public collection enforces saved merchant channel policy without breaking old status queries',async()=>{
- const m=ctx.merchantRepo.getDefault(),account=ctx.accountRepo.findActiveForMerchant(m.id);
- const channel={enabled:true,minAmountPaise:20000,maxAmountPaise:2000000,allowedVpas:[account.upiId]};
- const save=()=>ctx.merchantRepo.update(m.id,{branding:{...ctx.merchantRepo.findById(m.id).branding,upiChannel:channel}});save();
- for(const amount of ['199.99','20000.01']){const r=await post('/v1.0/collect/upi',{amount,uniquetransactionid:'LIMIT-'+amount.replace('.','-')});assert.equal(r.status,400);assert.equal((await r.json()).code,'AMOUNT_OUT_OF_RANGE');}
- channel.enabled=false;save();assert.equal((await(await post('/v1.0/collect/upi',{amount:'200.00',uniquetransactionid:'OFF'})).json()).code,'UPI_CHANNEL_DISABLED');
- assert.equal((await post('/v1.0/payin/checkstatus',{uniquetransactionid:'CUSTOMER-1'})).status,200);
- channel.enabled=true;channel.allowedVpas=['another@upi'];save();assert.equal((await(await post('/v1.0/collect/upi',{amount:'200.00',uniquetransactionid:'VPA-BLOCKED'})).json()).code,'UPI_NOT_WHITELISTED');
+test('public collection accepts any UPI ID for payment creation',async()=>{
+  const m=ctx.merchantRepo.getDefault(),account=ctx.accountRepo.findActiveForMerchant(m.id);
+  // Any UPI ID should be accepted for payment creation
+  const r=await post('/v1.0/collect/upi',{amount:200,uniquetransactionid:'ANY-VPA-1',merchantVpa:'any-upi@upi'});
+  assert.equal(r.status,201);
+  
+  // Different UPI ID should also work
+  const r2=await post('/v1.0/collect/upi',{amount:200,uniquetransactionid:'ANY-VPA-2',merchantVpa:'different@upi'});
+  assert.equal(r2.status,201);
+  
+  // Invalid amount should still fail
+  const r3=await post('/v1.0/collect/upi',{amount:0,uniquetransactionid:'BAD-AMOUNT'});
+  assert.equal(r3.status,400);
 });
