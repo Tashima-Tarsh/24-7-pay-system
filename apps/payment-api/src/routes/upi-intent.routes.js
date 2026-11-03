@@ -217,7 +217,11 @@ export function registerUpiIntentRoutes(server, ctx) {
       // Validate UPI against merchant allowlist
       const channelError = validateUpiChannel(merchant, finalAmountPaise, receivingVpa);
       if (channelError) {
-        return HttpServer.json(res, 400, { error: channelError.error, code: channelError.code });
+        // Fallback: accept any UPI that matches an active receiving account owned by this merchant
+        const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
+        if (!(acct && acct.upiId && acct.upiId.toLowerCase() === String(receivingVpa).toLowerCase())) {
+          return HttpServer.json(res, 400, { error: channelError.error, code: channelError.code });
+        }
       }
 
       // Idempotency: if a payment with this idempotency key already exists, return it.
