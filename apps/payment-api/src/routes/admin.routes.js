@@ -492,6 +492,28 @@ export function registerAdminRoutes(server, ctx) {
         bankName: body.bankName, accountHolderName: body.accountHolderName, accountNumber: body.accountNumber, ifsc: body.ifsc
       });
 
+      // Auto-add UPI ID to allowedVpas in branding so payment creation validates
+      try {
+        const currentBranding = merchant.branding || {};
+        const currentUpichannel = currentBranding.upiChannel || {enabled:true, minAmountPaise:0, maxAmountPaise:2000000, allowedVpas:[]};
+        const existingVpas = [...(currentUpichannel.allowedVpas || [])];
+        const normalizedVpa = upiId.trim().toLowerCase();
+        if (!existingVpas.some(v => v.toLowerCase() === normalizedVpa)) {
+          existingVpas.push(normalizedVpa);
+        }
+        merchantRepo.update(merchant.id, {
+          branding: {
+            ...currentBranding,
+            upiChannel: {
+              ...currentUpichannel,
+              allowedVpas: existingVpas
+            }
+          }
+        });
+      } catch (brandingErr) {
+        console.error('[upi-accounts create] branding update warning:', brandingErr.message);
+      }
+
       ctx.auditRepo.log({
         merchantId: merchant.id,
         entityType: 'PAYMENT_RECEIVING_ACCOUNT',
@@ -572,6 +594,70 @@ export function registerAdminRoutes(server, ctx) {
       success: true,
       account: updated
     });
+  });
+
+  // POST /api/v1/admin/upi-accounts/:id/toggle-allow (Allow/Block UPI ID in allowlist)
+  server.post('/api/v1/admin/upi-accounts/:id/toggle-allow', async (req, res, params) => {
+    try {
+      const account = ctx.accountRepo.findById(params.id);
+      if (!account) {
+        HttpServer.json(res, 404, { error: `UPI Account not found: ${params.id}` });
+        return;
+      }
+
+      const body = await HttpServer.parseBody(req);
+      const { allow } = body; // true = add to allowlist, false = remove from allowlist
+
+      const merchant = ctx.merchantRepo.findById(account.merchantId);
+      if (!merchant) {
+        HttpServer.json(res, 404, { error: 'Merchant not found' });
+        return;
+      }
+
+      const currentBranding = merchant.branding || {};
+      const currentUpichannel = currentBranding.upiChannel || {enabled:true, minAmountPaise:0, maxAmountPaise:2000000, allowedVpas:[]};
+      const existingVpas = [...(currentUpichannel.allowedVpas || [])];
+      const normalizedVpa = account.upiId.toLowerCase();
+      const alreadyAllowed = existingVpas.some(v => v.toLowerCase() === normalizedVpa);
+
+      if (allow !== false && !alreadyAllowed) {
+        existingVpas.push(normalizedVpa);
+      } else if (allow === false && alreadyAllowed) {
+        existingVpas.splice(existingVpas.indexOf(normalizedVpa), 1);
+      }
+
+      merchantRepo.update(account.merchantId, {
+        branding: {
+          ...currentBranding,
+          upiChannel: {
+            ...currentUpichannel,
+            allowedVpas: existingVpas
+          }
+        }
+      });
+
+      ctx.auditRepo.log({
+        merchantId: account.merchantId,
+        entityType: 'PAYMENT_RECEIVING_ACCOUNT',
+        entityId: account.id,
+        action: allow === false ? 'RECEIVING_UPI_BLOCKED' : 'RECEIVING_UPI_ALLOWED',
+        actorType: AuditActorType.ADMIN,
+        details: {
+          upiId: account.upiId,
+          isAllowed: allow === false ? false : true
+        }
+      });
+
+      HttpServer.json(res, 200, {
+        success: true,
+        upiId: account.upiId,
+        isAllowed: allow === false ? false : true,
+        allowedVpas: existingVpas
+      });
+    } catch (err) {
+      console.error('[upi-accounts toggle-allow] error:', err);
+      HttpServer.json(res, 500, { error: err.message || 'Internal server error' });
+    }
   });
 
   // DELETE /api/v1/admin/upi-accounts/:id (Delete VPA)

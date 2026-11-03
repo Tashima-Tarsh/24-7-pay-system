@@ -55,6 +55,32 @@ export function registerReceivingAccountRoutes(server, ctx) {
       [id, merchantId, upiId.toLowerCase(), payeeName || null, bankName || null,
        accountHolderName || null, accountNumber || null, ifsc || null, now, now]
     );
+
+    // Auto-add UPI ID to allowedVpas in branding so payment creation validates
+    try {
+      const m = ctx.merchantRepo?.findById ? ctx.merchantRepo.findById(merchantId) : null;
+      if (m) {
+        const currentBranding = m.branding || {};
+        const currentUpichannel = currentBranding.upiChannel || {enabled:true, minAmountPaise:0, maxAmountPaise:2000000, allowedVpas:[]};
+        const existingVpas = [...(currentUpichannel.allowedVpas || [])];
+        const normalizedVpa = upiId.trim().toLowerCase();
+        if (!existingVpas.some(v => v.toLowerCase() === normalizedVpa)) {
+          existingVpas.push(normalizedVpa);
+        }
+        ctx.merchantRepo.update(merchantId, {
+          branding: {
+            ...currentBranding,
+            upiChannel: {
+              ...currentUpichannel,
+              allowedVpas: existingVpas
+            }
+          }
+        });
+      }
+    } catch (brandingErr) {
+      console.error('[receiving-accounts create] branding update warning:', brandingErr.message);
+    }
+
     return HttpServer.json(res, 201, {
       accountId: id, upiId: upiId.toLowerCase(), isActive: true,
       note: 'Receiving account active — direct-UPI payments to this VPA will be accepted'
