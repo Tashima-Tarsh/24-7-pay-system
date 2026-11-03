@@ -60,7 +60,11 @@ export function createReceivingMirror(server,ctx){
   // Same reference across email/phone is one receipt; without one, only an exact source event is deduplicated.
   const id=hash(account.upiId.toLowerCase()+':'+amount+':'+(reference||source+':'+time.toISOString()+':'+hash(String(rawText))));
   const result=db.transaction(()=>{
-   const existing=db.queryOne('SELECT * FROM pp_receiver_events WHERE id=?',[id]);if(existing)return {duplicate:true,id,matchStatus:existing.match_status,paymentId:existing.payment_id,deliveryId:existing.delivery_id};
+   const existing=db.queryOne('SELECT * FROM pp_receiver_events WHERE id=?',[id]);if(existing){
+    const policy=existing.payment_id&&db.queryOne('SELECT p.auto_success FROM pp_receiver_policies p JOIN payment_sessions s ON s.merchant_id=p.merchant_id AND s.receiving_account_id=p.account_id WHERE s.id=?',[existing.payment_id]);
+    console.info('[Receiving observer replay]',JSON.stringify({matchStatus:existing.match_status,paymentId:existing.payment_id||null,notificationPolicyEnabled:Boolean(Number(policy?.auto_success)),hasValidReference:/^\d{12}$/.test(reference||''),hasCreditWording:/\b(credited|received|deposit|paid you)\b/i.test(String(rawText)),callbackQueued:Boolean(existing.delivery_id)}));
+    return {duplicate:true,id,matchStatus:existing.match_status,paymentId:existing.payment_id,deliveryId:existing.delivery_id};
+   }
    const candidates=db.query("SELECT s.* FROM payment_sessions s JOIN payment_receiving_accounts a ON a.id=s.receiving_account_id WHERE lower(a.upi_id)=? AND s.amount_paise=? AND s.status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING')",[account.upiId.toLowerCase(),amount]).filter(s=>{
     const snapshot=JSON.parse(s.metadata||'{}').receivingAccountSnapshot;
     if(snapshot?.upiId&&snapshot.upiId.toLowerCase()!==account.upiId.toLowerCase())return false;
