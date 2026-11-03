@@ -100,6 +100,19 @@ export function registerAdminRoutes(server, ctx) {
       const found = ctx.merchantRepo.findById(targetId);
       if (found) return found;
     }
+    // Resolve merchant from session cookie (merchant portal sends dp_platform_session cookie)
+    const cookie = req?.headers?.cookie || '';
+    const cookieMatch = /dp_platform_session=([^;]+)/.exec(cookie);
+    if (cookieMatch && ctx.sessionRepo) {
+      const session = ctx.sessionRepo.findById(cookieMatch[1]);
+      if (session) {
+        const merchantId = session.merchantId || session.userId;
+        if (merchantId) {
+          const found = ctx.merchantRepo.findById(merchantId);
+          if (found) return found;
+        }
+      }
+    }
     return ctx.merchantRepo.getDefault
       ? ctx.merchantRepo.getDefault()
       : (ctx.merchantRepo.findById('00000000-0000-0000-0000-000000000001') || ctx.merchantRepo.findAll()[0]);
@@ -447,54 +460,59 @@ export function registerAdminRoutes(server, ctx) {
 
   // POST /api/v1/admin/upi-accounts (Add a new VPA)
   server.post('/api/v1/admin/upi-accounts', async (req, res) => {
-    const body = await HttpServer.parseBody(req);
-    const { upiId, payeeName, isActive } = body;
-    let merchant = resolveMerchant(req, body.merchantId);
+    try {
+      const body = await HttpServer.parseBody(req);
+      const { upiId, payeeName, isActive } = body;
+      let merchant = resolveMerchant(req, body.merchantId);
 
-    if (!merchant) {
-      HttpServer.json(res, 404, { error: 'Merchant not found' });
-      return;
-    }
-
-    if (!upiId || !upiId.trim()) {
-      HttpServer.json(res, 400, { error: 'UPI ID (VPA) is required.' });
-      return;
-    }
-
-    if (!isValidVpa(upiId.trim())) {
-      HttpServer.json(res, 400, { error: `Invalid UPI VPA format: "${upiId}". Expected: username@bank` });
-      return;
-    }
-
-    const existingAccounts = ctx.accountRepo.findByMerchantId(merchant.id);
-    const shouldActivate = isActive !== undefined ? Boolean(isActive) : (existingAccounts.length === 0);
-
-    const account = ctx.accountRepo.create({
-      merchantId: merchant.id,
-      upiId: upiId.trim(),
-      payeeName: payeeName?.trim() || merchant.businessName,
-      isMerchantEnabled: true,
-      isActive: shouldActivate,
-      bankName:body.bankName,accountHolderName:body.accountHolderName,accountNumber:body.accountNumber,ifsc:body.ifsc
-    });
-
-    ctx.auditRepo.log({
-      merchantId: merchant.id,
-      entityType: 'PAYMENT_RECEIVING_ACCOUNT',
-      entityId: account.id,
-      action: 'RECEIVING_UPI_ADDED',
-      actorType: AuditActorType.ADMIN,
-      details: {
-        upiId: account.upiId,
-        payeeName: account.payeeName,
-        isActive: account.isActive
+      if (!merchant) {
+        HttpServer.json(res, 404, { error: 'Merchant not found' });
+        return;
       }
-    });
 
-    HttpServer.json(res, 201, {
-      success: true,
-      account
-    });
+      if (!upiId || !upiId.trim()) {
+        HttpServer.json(res, 400, { error: 'UPI ID (VPA) is required.' });
+        return;
+      }
+
+      if (!isValidVpa(upiId.trim())) {
+        HttpServer.json(res, 400, { error: `Invalid UPI VPA format: "${upiId}". Expected: username@bank` });
+        return;
+      }
+
+      const existingAccounts = ctx.accountRepo.findByMerchantId(merchant.id);
+      const shouldActivate = isActive !== undefined ? Boolean(isActive) : (existingAccounts.length === 0);
+
+      const account = ctx.accountRepo.create({
+        merchantId: merchant.id,
+        upiId: upiId.trim(),
+        payeeName: payeeName?.trim() || merchant.businessName,
+        isMerchantEnabled: true,
+        isActive: shouldActivate,
+        bankName: body.bankName, accountHolderName: body.accountHolderName, accountNumber: body.accountNumber, ifsc: body.ifsc
+      });
+
+      ctx.auditRepo.log({
+        merchantId: merchant.id,
+        entityType: 'PAYMENT_RECEIVING_ACCOUNT',
+        entityId: account.id,
+        action: 'RECEIVING_UPI_ADDED',
+        actorType: AuditActorType.ADMIN,
+        details: {
+          upiId: account.upiId,
+          payeeName: account.payeeName,
+          isActive: account.isActive
+        }
+      });
+
+      HttpServer.json(res, 201, {
+        success: true,
+        account
+      });
+    } catch (err) {
+      console.error('[upi-accounts create] error:', err);
+      HttpServer.json(res, 500, { error: err.message || 'Internal server error' });
+    }
   });
 
   // POST /api/v1/admin/upi-accounts/:id/activate (Atomically activate VPA, deactivating all others)
