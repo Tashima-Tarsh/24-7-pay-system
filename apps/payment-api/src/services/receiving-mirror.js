@@ -130,7 +130,7 @@ export function createReceivingMirror(server,ctx){
   });
   if(!result.duplicate){
    try{server.broadcastSse('platform:operations','invalidate',{changed:true});server.broadcastSse('platform:merchant:'+result.merchantId,'invalidate',{changed:true});}catch{}
-   if(result.deliveryId)webhookEngine.retryPending(result.deliveryId).catch(e=>console.error('[Detection callback]',e.message));
+   if(result.deliveryId)webhookEngine.retryPending(result.deliveryId).then(attempts=>{const attempt=attempts.find(a=>a.id===result.deliveryId);console.info('[Receiving callback]',JSON.stringify({paymentId:result.paymentId,deliveryId:result.deliveryId,attempted:Boolean(attempt),delivered:Boolean(attempt?.success),httpStatus:attempt?.status||null}));}).catch(e=>console.error('[Detection callback]',e.message));
    if(result.matchStatus==='NOTIFICATION_CONFIRMED'){
     try{ctx.eventEmitter?.emit('PAYMENT.SUCCESS',{paymentId:result.paymentId,webhookQueued:true,verificationLevel:0,verificationTag:'NOTIFICATION_CONFIRMED',confirmationSource:'NOTIFICATION'});}catch(e){console.error('[Notification confirmation publication]',e.message);}
    }

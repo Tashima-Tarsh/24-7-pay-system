@@ -94,7 +94,7 @@ export function registerPollerRoutes(server, ctx) {
           const paired=ctx.db.queryOne('SELECT b.device_id FROM pp_receiver_devices b JOIN android_devices d ON d.id=b.device_id WHERE b.account_id=? AND d.is_active=1',[body.receivingAccountId]);
           if(paired)return HttpServer.json(res,200,{accepted:true,status:detection.matchStatus==='NOTIFICATION_CONFIRMED'?'SUCCESS':'VERIFICATION_PENDING',detection});
         }
-      }catch(error){return HttpServer.json(res,error.statusCode||503,{error:'Email mirror could not persist this event; retry required'});}
+      }catch(error){console.error('[Email mirror persistence]',JSON.stringify({code:error.code||null,message:error.message}));return HttpServer.json(res,error.statusCode||503,{error:'Email mirror could not persist this event; retry required'});}
     }
 
     if (ctx.pipeline && rawText) {
