@@ -314,7 +314,7 @@ async function checkUpiServerHealth(ctx, enabledMethods = [], sellingMode = 'OFF
 }
 
 function publicCheckoutBranding(branding = {}) {
-  const fields = ["appName", "primaryColor", "headerTheme", "logoUrl", "trustBadgeText", "hideTrustBadge", "subbannerText", "hideSubbanner", "hidePoweredBy", "hideTimeSavingBanner", "sidebarNotice", "footerGuarantee", "counterInstructions", "cardCounterInstructions", "termsUrl", "privacyPolicyUrl", "supportEmail", "supportEmails", "supportMobile", "supportMobiles", "enabledPaymentMethods", "sellingMode"];
+  const fields = ["appName", "primaryColor", "headerTheme", "logoUrl", "trustBadgeText", "hideTrustBadge", "subbannerText", "hideSubbanner", "hidePoweredBy", "hideTimeSavingBanner", "sidebarNotice", "checkoutNotice", "footerGuarantee", "counterInstructions", "cardCounterInstructions", "termsUrl", "privacyPolicyUrl", "supportEmail", "supportEmails", "supportMobile", "supportMobiles", "enabledPaymentMethods", "sellingMode"];
   return Object.fromEntries(fields.filter(field => Object.hasOwn(branding, field)).map(field => [field, branding[field]]));
 }
 
