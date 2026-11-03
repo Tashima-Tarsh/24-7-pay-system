@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import {encrypt,decrypt,resolveSecret,safeEqual,toPaise,validateOutboundWebhookUrl} from '@youpi/common';
 import {HttpServer} from '../server.js';
 import {BankingConnector,BANKING_CONNECTOR_KINDS} from '../services/banking-connector.js';
-import {validateUpiChannel} from '../upi-channel.js';
 
 const now=()=>new Date().toISOString();
 const failure=(statusCode,message)=>Object.assign(Error(message),{statusCode});

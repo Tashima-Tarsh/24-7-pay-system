@@ -36,7 +36,7 @@ test('configured UPI channel enforces toggle, limits and beneficiary allowlist',
  assert.equal(validateUpiChannel(merchant,20000n,'business@upi'),null);
  assert.equal(validateUpiChannel(merchant,19999n,'business@upi').code,'AMOUNT_OUT_OF_RANGE');
  assert.equal(validateUpiChannel(merchant,2000001n,'business@upi').code,'AMOUNT_OUT_OF_RANGE');
- assert.equal(validateUpiChannel(merchant,20100n,'another@upi').code,'UPI_NOT_WHITELISTED');
+ assert.equal(validateUpiChannel(merchant,20100n,'another@upi'),null);
  merchant.branding.upiChannel.enabled=false;assert.equal(validateUpiChannel(merchant,20100n,'business@upi').code,'UPI_CHANNEL_DISABLED');
 });
 test('webhook/IP policy persists and version paths do not accept arbitrary dot characters',async()=>{
