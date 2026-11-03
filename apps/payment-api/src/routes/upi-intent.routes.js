@@ -214,6 +214,12 @@ export function registerUpiIntentRoutes(server, ctx) {
         return HttpServer.json(res, 400, { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' });
       }
 
+      // Validate UPI against merchant allowlist
+      const channelError = validateUpiChannel(merchant, finalAmountPaise, receivingVpa);
+      if (channelError) {
+        return HttpServer.json(res, 400, { error: channelError.error, code: channelError.code });
+      }
+
       // Idempotency: if a payment with this idempotency key already exists, return it.
       if (idempotencyKey) {
         try {
