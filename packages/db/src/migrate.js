@@ -66,6 +66,19 @@ export function runMigrations(targetDb) {
   // Execute schema DDL
   db.exec(db.dialect==='postgres'?db.prepareSchema(schemaSql):schemaSql);
 
+  // Existing databases predate the amount columns used by payment creation.
+  db.transaction(() => {
+    if (db.dialect === 'postgres') {
+      db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS paise_offset BIGINT NOT NULL DEFAULT 0 CHECK (paise_offset BETWEEN 0 AND 99)');
+      db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS base_amount_paise BIGINT NOT NULL DEFAULT 0 CHECK (base_amount_paise >= 0)');
+    } else {
+      const columns = db.query('PRAGMA table_info(payment_sessions)').map(column => column.name);
+      if (!columns.includes('paise_offset')) db.exec('ALTER TABLE payment_sessions ADD COLUMN paise_offset INTEGER NOT NULL DEFAULT 0 CHECK (paise_offset BETWEEN 0 AND 99)');
+      if (!columns.includes('base_amount_paise')) db.exec('ALTER TABLE payment_sessions ADD COLUMN base_amount_paise INTEGER NOT NULL DEFAULT 0 CHECK (base_amount_paise >= 0)');
+    }
+    db.execute('UPDATE payment_sessions SET base_amount_paise = amount_paise WHERE base_amount_paise = 0 AND amount_paise > 0');
+  });
+
   // Alter table columns if migrating existing databases
   try { db.exec("ALTER TABLE payment_sessions ADD COLUMN verification_level INTEGER DEFAULT 0;"); } catch {}
   try { db.exec("ALTER TABLE payment_sessions ADD COLUMN verification_sources TEXT DEFAULT '[]';"); } catch {}
