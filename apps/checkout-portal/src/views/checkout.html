@@ -7838,6 +7838,54 @@
       }
     } catch (e) { }
 
+    // --- AUTO-CAPTURE UTR FROM UPI APP RETURN (no customer input) ---
+    // When the customer returns from their UPI app, the app redirects back
+    // with the bank-generated UTR in the URL. Capture it automatically and
+    // send to the server so Gmail/SMS observation matching can confirm
+    // instantly — no "Done" click, no manual UTR entry.
+    (function autoCaptureUtrFromUpiReturn() {
+      if (window.__utrAutoCaptured) return;
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const utrCandidates = [];
+        // Common UPI app response parameter names
+        const paramNames = [
+          'upiTransactionReference','txnid','txnId','transactionId',
+          'transactionRef','utr','reference','referenceId','orderTransactionId',
+          'upi_transaction_id','transaction_id','paymentId','upiRef'
+        ];
+        for (const name of paramNames) {
+          const val = params.get(name);
+          if (val && /^\d{12}$/.test(String(val).trim())) {
+            utrCandidates.push(String(val).trim());
+          }
+        }
+        // Also scan rawResult-like text for a 12-digit UTR
+        const raw = params.get('rawResult') || params.get('response') || '';
+        if (raw) {
+          const m = raw.match(/\b(\d{12})\b/);
+          if (m) utrCandidates.push(m[1]);
+        }
+        const utr = utrCandidates[0];
+        if (utr && PAYMENT_ID && API_BASE) {
+          window.__utrAutoCaptured = true;
+          fetch(`${API_BASE}/api/v1/checkout/${PAYMENT_ID}/verify-utr`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ utr })
+          }).then(async (res) => {
+            if (res.ok) {
+              const data = await res.json();
+              if (data.verified) {
+                loadState();
+                connectSse();
+              }
+            }
+          }).catch(() => {});
+        }
+      } catch (e) { }
+    })();
+
     loadState();
     connectSse();
   </script>
