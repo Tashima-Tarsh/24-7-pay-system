@@ -212,7 +212,10 @@ export class GmailPoller {
       do {
         const url=`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100&q=${query}${pageToken?'&pageToken='+encodeURIComponent(pageToken):''}`;
         const listRes=await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`},signal:AbortSignal.timeout(8000)});
-        if(!listRes.ok){if(listRes.status===401)this.cachedAccessToken=null;return;}
+        if (!listRes.ok) {
+          if (listRes.status === 401) this.cachedAccessToken = null;
+          throw new Error(`Gmail message listing returned HTTP ${listRes.status}`);
+        }
         const listData=await listRes.json();if(generation!==this.credentialsGeneration)return;
         messages.push(...(listData.messages||[]));pageToken=listData.nextPageToken;
       }while(pageToken);
@@ -227,7 +230,10 @@ export class GmailPoller {
             headers: { 'Authorization': `Bearer ${accessToken}` },
             signal: AbortSignal.timeout(8000)
           });
-          if (!msgRes.ok) continue;
+          if (!msgRes.ok) {
+            if (msgRes.status === 401) this.cachedAccessToken = null;
+            throw new Error(`Gmail message fetch returned HTTP ${msgRes.status}`);
+          }
 
           const msgData = await msgRes.json();
           if(generation!==this.credentialsGeneration)return;
