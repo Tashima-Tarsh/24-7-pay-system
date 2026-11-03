@@ -6,7 +6,7 @@ import {toPaise,toRupeesString,buildUpiUri,isValidVpa,validateOutboundWebhookUrl
 import {LedgerRepository,PaymentOrderRepository,ProviderConnectionRepository} from '@youpi/db';
 import {ProviderRegistry} from '@youpi/core';
 import {enforcePaymentControls} from '../payment-controls.js';
-import {validateUpiChannel,upiChannelSettings} from '../upi-channel.js';
+import {upiChannelSettings} from '../upi-channel.js';
 import {registerBankingIntegrations} from './banking-integrations.js';
 import {registerReceivingMirror} from './receiving-mirror.js';
 import {merchantIntegrationReadiness,merchantIntegrationDetails} from './merchant-integration.js';
@@ -135,8 +135,7 @@ export function registerPlatformPayments(server,ctx,identity){
   if(mode==='UPI'){
    if(req.platform.environment==='SANDBOX')throw error(503,'Direct bank UPI is not a sandbox. Connect an approved sandbox provider.','SANDBOX_PROVIDER_REQUIRED');
    const account=accountRepo.findActiveForMerchant(mid);if(!account)throw error(503,'No active receiving account is configured.','NO_RECEIVING_ACCOUNT');
-   const denied=enforcePaymentControls(ctx,mid,{RECEIVING_VPA:account.upiId,CUSTOMER_VPA:b.payerVpa,CUSTOMER:b.customer?.id});if(denied)throw error(403,denied.error,denied.code);
-   const channel=validateUpiChannel(merchant,paise,account.upiId);if(channel)throw error(400,channel.error,channel.code);
+     const denied=enforcePaymentControls(ctx,mid,{RECEIVING_VPA:account.upiId,CUSTOMER_VPA:b.payerVpa,CUSTOMER:b.customer?.id});if(denied)throw error(403,denied.error,denied.code);
    if(integration)banking.prepare(integration,account,paise);
    const s=db.transaction(()=>{enforcePolicies(mid,{RECEIVING_VPA:account.upiId,CUSTOMER_VPA:b.payerVpa,CUSTOMER:b.customer?.id},Number(integration?paise+199n:paise));return sessionRepo.create({merchantId:mid,receivingAccountId:account.id,orderId:b.orderId,amountPaise:paise,currency:'INR',method:'UPI',status:'QUEUED',returnUrl:b.returnUrl||null,metadata:{...(integration?{externalCollection:{integrationId:integration.id,kind:integration.kind,stage:'SUBMITTING',requestedAmountPaise:String(paise)}}:{}),receivingAccountSnapshot:{id:account.id,upiId:account.upiId,payeeName:account.payeeName},platform:true,playerReference:b.playerReference||null}});});
    const queued=ctx.queueEngine.enqueueOrActivate(s.id,account.id);if(queued.expiresAt)ctx.timingEngine.startActiveTimer(s.id,queued.expiresAt);if(integration){const issued=await banking.issue(sessionRepo.findById(s.id),integration);ctx.timingEngine.startActiveTimer(issued.id,issued.expiresAt);}return HttpServer.json(res,201,response(sessionRepo.findById(s.id)));

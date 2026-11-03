@@ -71,10 +71,8 @@ export function registerBankingIntegrations(server,ctx,{get,post,tenant,identity
  function prepare(row,account,amount){
   if(amount>BigInt(Number.MAX_SAFE_INTEGER)-199n)throw failure(400,'Amount exceeds the supported range including adjustment headroom.');
   if(row.receiving_account_id!==account.id)throw failure(400,'Activate the receiving account assigned to the selected collection connector.');
-  if(row.kind==='PAYGATE'&&amount%100n!==0n)throw failure(400,'The connected PayGate service accepts whole INR amounts.');
-  const denied=validateUpiChannel(ctx.merchantRepo.findById(account.merchantId),amount+199n,account.upiId);
-  if(denied)throw failure(400,'Allow up to INR 1.99 of amount-adjustment headroom within your UPI payment limit.');
-  if(sessionRepo.findCurrentActiveOrProcessing(account.id))throw failure(409,'Another checkout is using this receiving account. Complete it before creating an external payment.');
+      if(row.kind==='PAYGATE'&&amount%100n!==0n)throw failure(400,'The connected PayGate service accepts whole INR amounts.');
+      if(sessionRepo.findCurrentActiveOrProcessing(account.id))throw failure(409,'Another checkout is using this receiving account. Complete it before creating an external payment.');
  }
  async function issue(session,row){
   const account=accountRepo.findById(session.receivingAccountId);

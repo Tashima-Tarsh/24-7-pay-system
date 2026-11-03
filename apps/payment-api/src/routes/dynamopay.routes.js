@@ -15,7 +15,6 @@ import {enforcePaymentControls} from '../payment-controls.js';
  */
 
 import { HttpServer, resolveClientIp } from '../server.js';
-import { validateUpiChannel } from '../upi-channel.js';
 import { PaymentStatus } from '@youpi/common';
 import crypto from 'node:crypto';
 import { resolveSecret, safeEqual, toPaise, toRupeesString, buildUpiUri, validateOutboundWebhookUrl } from '@youpi/common';
@@ -185,10 +184,8 @@ export function registerDynamoPayRoutes(server, ctx) {
       return HttpServer.json(res, 500, { error: 'No active UPI receiving account configured', code: 'NO_RECEIVING_ACCOUNT', platform: 'dynamo-pay' });
     }
 
-    const ruleError=enforcePaymentControls(ctx,merchant.merchantId,{RECEIVING_VPA:receivingAccount.upiId,CUSTOMER_VPA:body.payerVpa,CUSTOMER:body.customerId});
-    if(ruleError)return HttpServer.json(res,403,ruleError);
-    const channelError=validateUpiChannel(merchantRepo.findById(merchant.merchantId),amountPaise,receivingAccount.upiId);
-    if(channelError)return HttpServer.json(res,400,channelError);
+      const ruleError=enforcePaymentControls(ctx,merchant.merchantId,{RECEIVING_VPA:receivingAccount.upiId,CUSTOMER_VPA:body.payerVpa,CUSTOMER:body.customerId});
+      if(ruleError)return HttpServer.json(res,403,ruleError);
     const session = ctx.sessionRepo.create({
       // The settings apply only to new collections, preserving existing order status/reconciliation.
       merchantId: merchant.merchantId,

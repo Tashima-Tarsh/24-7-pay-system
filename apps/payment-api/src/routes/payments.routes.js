@@ -1,5 +1,4 @@
 import {enforcePaymentControls} from '../payment-controls.js';
-import { validateUpiChannel } from '../upi-channel.js';
 import { HttpServer } from '../server.js';
 import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, hasBearer, getObserverToken, maskPhone, maskEmail, generateCustomerId } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome, PaiseOffsetAllocator } from '@youpi/core';
@@ -192,14 +191,13 @@ export function registerPaymentRoutes(server, ctx) {
     if (!isCounterPayment) {
       // Resolve active receiving account for UPI
       const receivingAccount = ctx.accountRepo.findActiveForMerchant(merchant.id);
+      // UPI allowlist check removed - any UPI ID accepted
       if (!receivingAccount) {
         HttpServer.json(res, 500, { error: 'No active UPI receiving account configured for merchant.' });
         return;
       }
       const ruleError=enforcePaymentControls(ctx,merchant.id,{RECEIVING_VPA:receivingAccount.upiId,CUSTOMER_VPA:body.customer?.vpa,CUSTOMER:body.customerId});
       if(ruleError)return HttpServer.json(res,403,ruleError);
-      const channelError=validateUpiChannel(merchant,amountPaise,receivingAccount.upiId);
-      if(channelError)return HttpServer.json(res,400,channelError);
       receivingAccountId = receivingAccount.id;
       receivingAccountSnapshot = {
         id: receivingAccount.id,
@@ -225,8 +223,6 @@ export function registerPaymentRoutes(server, ctx) {
           };
           const denied=enforcePaymentControls(ctx,merchant.id,{RECEIVING_VPA:alternative.upiId});
           if(denied)return HttpServer.json(res,403,denied);
-          const channel=validateUpiChannel(merchant,amountPaise,alternative.upiId);
-          if(channel)return HttpServer.json(res,400,channel);
         } else {
           HttpServer.json(res, 409, {
             error: 'VPA_CAPACITY_EXCEEDED',
