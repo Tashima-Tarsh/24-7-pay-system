@@ -100,6 +100,19 @@ export function registerAdminRoutes(server, ctx) {
       const found = ctx.merchantRepo.findById(targetId);
       if (found) return found;
     }
+    // Resolve merchant from session cookie (merchant portal sends dp_platform_session cookie)
+    const cookie = req?.headers?.cookie || '';
+    const cookieMatch = /dp_platform_session=([^;]+)/.exec(cookie);
+    if (cookieMatch && ctx.sessionRepo) {
+      const session = ctx.sessionRepo.findById(cookieMatch[1]);
+      if (session) {
+        const merchantId = session.merchantId || session.userId;
+        if (merchantId) {
+          const found = ctx.merchantRepo.findById(merchantId);
+          if (found) return found;
+        }
+      }
+    }
     return ctx.merchantRepo.getDefault
       ? ctx.merchantRepo.getDefault()
       : (ctx.merchantRepo.findById('00000000-0000-0000-0000-000000000001') || ctx.merchantRepo.findAll()[0]);
