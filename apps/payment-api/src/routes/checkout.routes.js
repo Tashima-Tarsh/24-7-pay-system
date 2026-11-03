@@ -313,6 +313,11 @@ async function checkUpiServerHealth(ctx, enabledMethods = [], sellingMode = 'OFF
   };
 }
 
+function publicCheckoutBranding(branding = {}) {
+  const fields = ["appName", "primaryColor", "headerTheme", "logoUrl", "trustBadgeText", "hideTrustBadge", "subbannerText", "hideSubbanner", "hidePoweredBy", "hideTimeSavingBanner", "sidebarNotice", "footerGuarantee", "counterInstructions", "cardCounterInstructions", "termsUrl", "privacyPolicyUrl", "supportEmail", "supportEmails", "supportMobile", "supportMobiles", "enabledPaymentMethods", "sellingMode"];
+  return Object.fromEntries(fields.filter(field => Object.hasOwn(branding, field)).map(field => [field, branding[field]]));
+}
+
 export function registerCheckoutRoutes(server, ctx) {
   // GET /api/v1/checkout/:id/state
   server.get('/api/v1/checkout/:id/state', async (req, res, params) => {
@@ -375,7 +380,7 @@ export function registerCheckoutRoutes(server, ctx) {
     const branding = {
         appName: 'YOUPI PG',
         primaryColor: '#2563eb',
-        ...(merchant?.branding || {})
+        ...publicCheckoutBranding(merchant?.branding)
       };
 
       // Resolve UPI transaction details for SUCCESS (where payment was sent, UTR, payee VPA)
@@ -494,7 +499,7 @@ export function registerCheckoutRoutes(server, ctx) {
       logoUrl: null,
       counterInstructions: 'Please visit the billing counter and present this screen to the cashier.',
       cardCounterInstructions: 'Please swipe, insert, or tap your credit or debit card on the store POS terminal at the billing desk.',
-      ...(merchant?.branding || {})
+      ...publicCheckoutBranding(merchant?.branding)
     };
 
     const supportEmails = branding.supportEmails || (merchant?.contactEmail ? [merchant.contactEmail] : []);
