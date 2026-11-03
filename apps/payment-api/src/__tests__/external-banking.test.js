@@ -36,6 +36,7 @@ test('merchant-owned integration creates one exact-amount checkout and notificat
  const merchantRepo=new MerchantRepository(db),accountRepo=new ReceivingAccountRepository(db),sessionRepo=new PaymentSessionRepository(db);
  const merchant=merchantRepo.create({businessName:'Connector merchant',slug:'connector-merchant',contactEmail:'connector@example.test',contactPhone:'9000000000'});
  const other=merchantRepo.create({businessName:'Other merchant',slug:'other-connector',contactEmail:'other@example.test',contactPhone:'9000000001'});
+ merchantRepo.update(merchant.id,{branding:{upiChannel:{enabled:true,minAmountPaise:0,maxAmountPaise:2000000,allowedVpas:[]}}});
  const account=accountRepo.create({merchantId:merchant.id,upiId:'business@bank',payeeName:'Business'});
  db.execute('CREATE TABLE pp_merchants(merchant_id TEXT PRIMARY KEY,status TEXT)');
  db.execute('INSERT INTO pp_merchants VALUES(?,?)',[merchant.id,'ACTIVE']);
@@ -56,9 +57,9 @@ test('merchant-owned integration creates one exact-amount checkout and notificat
  const api=server.createServer();await new Promise(r=>api.listen(0,'127.0.0.1',r));
  const call=async(path,body,extra={})=>{const response=await fetch('http://127.0.0.1:'+api.address().port+path,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json','idempotency-key':'one-request',...extra},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,body:await response.json()};};
  try{
-  const ordinary=await call('/api/platform/v1/payments',{orderId:'old-ordinary',amount:'200.00'},{'idempotency-key':'old-key'});
+  const ordinary=await call('/api/platform/v1/payments',{orderId:'old-ordinary',amount:'2.00'},{'idempotency-key':'old-key'});
   assert.equal(ordinary.status,201);
-  const legacyCanonical={orderId:'old-ordinary',amountPaise:'20000',currency:'INR',mode:'UPI',connectionId:null,customer:null,returnUrl:null,payerVpa:null,playerReference:null};
+  const legacyCanonical={orderId:'old-ordinary',amountPaise:'200',currency:'INR',mode:'UPI',connectionId:null,customer:null,returnUrl:null,payerVpa:null,playerReference:null};
   const legacyFingerprint=crypto.createHash('sha256').update(JSON.stringify(legacyCanonical)).digest('hex');
   assert.equal(db.queryOne('SELECT fingerprint FROM pp_request_claims WHERE merchant_id=? AND request_key=?',[merchant.id,'old-key']).fingerprint,legacyFingerprint);
   sessionRepo.transitionToTerminal(ordinary.body.paymentId,'CANCELLED');
@@ -67,7 +68,7 @@ test('merchant-owned integration creates one exact-amount checkout and notificat
   assert.ok(!JSON.stringify(saved.body).includes('connector-secret'));
   assert.equal((await call('/api/platform/v1/banking-integrations/'+id+'/default',{enabled:true},{'x-test-other':'yes'})).status,404);
   assert.equal((await call('/api/platform/v1/banking-integrations/'+id+'/default',{enabled:true})).status,200);
-  assert.equal((await call('/api/platform/v1/payments',{orderId:'old-ordinary',amount:'200.00'},{'idempotency-key':'old-key'})).body.paymentId,ordinary.body.paymentId);
+  assert.equal((await call('/api/platform/v1/payments',{orderId:'old-ordinary',amount:'2.00'},{'idempotency-key':'old-key'})).body.paymentId,ordinary.body.paymentId);
   const counter=await call('/api/v1/payments',{orderId:'cash-counter',amount:'200.00',method:'CASH_COUNTER'},{'x-merchant-id':merchant.id,'x-merchant-key':merchant.webhookSecret,'idempotency-key':'cash-counter'});
   assert.equal(counter.status,201,JSON.stringify(counter.body));
   assert.equal(sessionRepo.findById(counter.body.paymentId).method,'CASH_COUNTER');assert.equal(creates,0);
@@ -108,8 +109,9 @@ test('merchant-owned integration creates one exact-amount checkout and notificat
   assert.equal(legacyReplay.body.paymentId,created.body.paymentId,JSON.stringify(legacyReplay.body));assert.equal(creates,1);
   await call('/api/platform/v1/banking-integrations/'+id+'/default',{enabled:true});
   const limits=merchantRepo.findById(merchant.id).branding||{};
-  merchantRepo.update(merchant.id,{branding:{...limits,upiChannel:{enabled:true,minAmountPaise:1,maxAmountPaise:20000,allowedVpas:[]}}});
-  assert.equal((await call('/api/platform/v1/payments',{amount:'200.00'},{'idempotency-key':'ceiling','x-merchant-id':merchant.id})).status,201);
+  merchantRepo.update(merchant.id,{branding:{...limits,upiChannel:{enabled:true,minAmountPaise:0,maxAmountPaise:2000000,allowedVpas:[]}}});
+  const ceiling=await call('/api/platform/v1/payments',{amount:'20000.00'},{'idempotency-key':'ceiling'});
+  assert.equal(ceiling.status,400,JSON.stringify(ceiling.body));
   assert.equal(creates,1);
   merchantRepo.update(merchant.id,{branding:{...limits,upiChannel:{enabled:true,minAmountPaise:1,maxAmountPaise:2000000,allowedVpas:[]}}});
   unavailable=true;

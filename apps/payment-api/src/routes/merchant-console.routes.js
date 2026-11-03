@@ -66,7 +66,7 @@ export function registerMerchantConsoleRoutes(server, ctx) {
   server.get(root+'/upi-channel',(req,res)=>HttpServer.json(res,200,upiChannelSettings(merchant(req))));
   server.post(root+'/upi-channel',async(req,res)=>{
     const body=await HttpServer.parseBody(req),m=merchant(req);
-    if(typeof body.enabled!=='boolean'||!Number.isSafeInteger(body.minAmountPaise)||!Number.isSafeInteger(body.maxAmountPaise)||body.minAmountPaise<1||body.maxAmountPaise<body.minAmountPaise||!Array.isArray(body.allowedVpas)||body.allowedVpas.length>100||body.allowedVpas.some(v=>typeof v!=='string'||!isValidVpa(v)))return HttpServer.json(res,400,{error:'Provide valid amount limits, channel state, and UPI IDs.'});
+    if(typeof body.enabled!=='boolean'||!Number.isSafeInteger(body.minAmountPaise)||!Number.isSafeInteger(body.maxAmountPaise)||body.minAmountPaise<0||body.maxAmountPaise<body.minAmountPaise||!Array.isArray(body.allowedVpas)||body.allowedVpas.length>100||body.allowedVpas.some(v=>typeof v!=='string'||!isValidVpa(v)))return HttpServer.json(res,400,{error:'Provide valid amount limits, channel state, and UPI IDs.'});
     const upiChannel={enabled:body.enabled,minAmountPaise:body.minAmountPaise,maxAmountPaise:body.maxAmountPaise,allowedVpas:[...new Set(body.allowedVpas.map(v=>v.trim().toLowerCase()))]};
     merchantRepo.update(m.id,{branding:{...m.branding,upiChannel}});HttpServer.json(res,200,upiChannel);
   });
