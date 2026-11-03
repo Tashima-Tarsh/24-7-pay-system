@@ -68,9 +68,17 @@ export class AttributionEngine {
    * }}
    */
   processObservation(normalizedObs) {
-    // Production: auto-confirm on UTR match (Tier 2 below); bank statement reconciled later.
+    // Production: notifications are supplementary evidence unless a reportedUtr matches the bank UTR.
+    if(process.env.NODE_ENV==='production' && normalizedObs.bankReferenceNumber) {
+      const hasUtrMatch = this.sessionRepo.db.queryOne(`SELECT id FROM payment_sessions WHERE receiving_account_id=? AND amount_paise=? AND status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING') AND json_extract(metadata,'$.reportedUtr')=? LIMIT 1`,[normalizedObs.receivingAccountId,Number(normalizedObs.amountPaise),normalizedObs.bankReferenceNumber]);
+      if(!hasUtrMatch) {
+        const prior=this.obsRepo.findByFingerprint(normalizedObs.fingerprintHash);
+        const saved=prior||this.obsRepo.create(normalizedObs);
+        if(!prior)this.auditRepo?.log({entityType:'PAYMENT_OBSERVATION',entityId:saved.id,action:'SUPPLEMENTARY_EVIDENCE_RECORDED',actorType:'OBSERVER',details:{source:normalizedObs.source,requires:'PROVIDER_OR_BANK_CONFIRMATION'}});
+        return {attributed:false,duplicate:Boolean(prior),lateMatch:false,observationId:saved.id,outcomeStatus:'VERIFICATION_PENDING'};
+      }
+    }
     // Tier 1: Check fingerprint for deduplication
-    const existing = this.obsRepo.findByFingerprint(normalizedObs.fingerprintHash);
     const retrySavedBankRecord=existing && !existing.attributedPaymentId && ['UNATTRIBUTED','LATE_UNMATCHED'].includes(existing.attributionStatus) && BANK_SOURCES.includes(existing.source) && normalizedObs.bankReferenceNumber && this.sessionRepo.db.queryOne(`SELECT COUNT(*) AS n FROM payment_sessions WHERE status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING') AND receiving_account_id=? AND amount_paise=? AND json_extract(metadata,'$.reportedUtr')=?`,[normalizedObs.receivingAccountId,Number(normalizedObs.amountPaise),normalizedObs.bankReferenceNumber]).n===1;
     if(retrySavedBankRecord)normalizedObs=existing;
     if (existing && !retrySavedBankRecord) {
