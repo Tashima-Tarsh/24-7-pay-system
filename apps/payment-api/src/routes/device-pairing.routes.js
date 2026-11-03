@@ -1,6 +1,5 @@
 import { HttpServer } from '../server.js';
 import QRCode from 'qrcode';
-import crypto from 'node:crypto';
 
 /**
  * Device Pairing & Binding — connects Android mobile app to merchant portal.
