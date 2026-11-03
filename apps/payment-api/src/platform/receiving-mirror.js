@@ -1,9 +1,10 @@
 import {HttpServer} from '../server.js';
 import {generateQrSvg} from '@youpi/core';
-import {createReceivingMirror} from '../services/receiving-mirror.js';
+import {createReceivingMirror,applyOwnerApprovedReceivingPolicy} from '../services/receiving-mirror.js';
 
 export function registerReceivingMirror(server,ctx,{get,post,tenant,identity}){
  const mirror=createReceivingMirror(server,ctx);ctx.receivingMirror=mirror;
+ applyOwnerApprovedReceivingPolicy(mirror,ctx);
  get('/receiving-mirror','transactions.read',(req,res)=>{
   const mid=tenant(req);
   const devices=ctx.db.query('SELECT d.id,d.device_name,d.device_model,d.is_active,d.last_heartbeat_at,d.last_observation_at,b.account_id,b.detected_callbacks FROM android_devices d JOIN pp_receiver_devices b ON b.device_id=d.id WHERE b.merchant_id=? ORDER BY d.created_at DESC',[mid]).map(d=>({...d,status:!Number(d.is_active)?'REVOKED':Date.now()-(d.last_heartbeat_at instanceof Date?d.last_heartbeat_at.getTime():Date.parse(/Z$|[+-]\d\d:\d\d$/.test(d.last_heartbeat_at)?d.last_heartbeat_at:d.last_heartbeat_at+'Z'))<90000?'CONNECTED':'OFFLINE'}));
