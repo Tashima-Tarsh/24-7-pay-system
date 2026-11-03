@@ -101,6 +101,7 @@ export function createReceivingMirror(server,ctx){
     if(!prior){const session=sessionRepo.findById(match.id);const queued=webhookEngine.enqueue('PAYMENT_DETECTED',{...session,bankReference:reference||null,confirmationSource:'OBSERVER_EVIDENCE'});deliveryId=queued.deliveryId||null;}
    }
    db.execute('INSERT INTO pp_receiver_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',[id,mid,accountId,device?.id||null,source,amount,reference||null,match?.id||null,status,time.toISOString(),new Date().toISOString(),deliveryId]);
+   console.info('[Receiving observer]', JSON.stringify({source,matchStatus:status,paymentId:match?.id||null,candidateCount:candidates.length,notificationPolicyEnabled:Boolean(policy),hasValidReference:/^\d{12}$/.test(reference||''),callbackQueued:Boolean(deliveryId)}));
    return {id,duplicate:false,matchStatus:status,paymentId:match?.id||null,deliveryId,merchantId:mid};
   });
   if(!result.duplicate){

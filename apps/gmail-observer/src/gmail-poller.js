@@ -167,6 +167,7 @@ export class GmailPoller {
         }
       });
 
+      console.info('[Gmail Observer] Observation outcome', JSON.stringify({accepted:result.accepted,status:result.detection?.matchStatus||result.status||result.attribution?.outcomeStatus||null,paymentId:result.detection?.paymentId||result.attribution?.paymentSessionId||null,reason:result.reason||null}));
       this.observedCount++;
       return result;
     } catch (err) {
