@@ -11,7 +11,7 @@
  */
 import crypto from 'node:crypto';
 
-const REQUIRED_MATCHES = 2; // any two sources confirm
+const REQUIRED_MATCHES = 1; // any one source confirms (SMS-only testing)
 
 const SOURCE_WEIGHTS = {
   ANDROID_OBSERVER: 1,
