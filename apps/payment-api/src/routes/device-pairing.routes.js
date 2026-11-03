@@ -5,19 +5,32 @@ import QRCode from 'qrcode';
  * Device Pairing & Binding — connects Android mobile app to merchant portal.
  * Portal shows a QR code; Android app scans it to bind the device to the merchant.
  * Once bound, the Android SMS observer can submit evidence for that merchant's payments.
+ * Both Super Admin and Merchant Owner can create pairing sessions and bind devices.
  */
 export function registerDevicePairingRoutes(server, ctx) {
   const db = ctx.db;
 
-  function requireAuth(req) {
+  /**
+   * Extract auth token from either Bearer header or session cookie.
+   * Supports Super Admin (platform session) and Merchant Owner.
+   */
+  function getAuthToken(req) {
+    // Try Bearer token first
     const header = req.headers['authorization'] || '';
     const match = /^Bearer\s+(.+)$/i.exec(header);
-    return match ? match[1].trim() : '';
+    if (match) return match[1].trim();
+
+    // Try cookie-based session (dp_platform_session)
+    const cookie = req.headers.cookie || '';
+    const cookieMatch = /dp_platform_session=([^;]+)/.exec(cookie);
+    if (cookieMatch) return cookieMatch[1].trim();
+
+    return '';
   }
 
   // POST /api/v1/device/pairing/create — create a pairing session (QR code data)
   server.post('/api/v1/device/pairing/create', async (req, res) => {
-    const token = requireAuth(req);
+    const token = getAuthToken(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     let body;
     try { body = await HttpServer.parseBody(req); } catch { return HttpServer.json(res, 400, { error: 'Malformed body' }); }
@@ -79,7 +92,7 @@ export function registerDevicePairingRoutes(server, ctx) {
 
   // POST /api/v1/device/pairing/bind — Android app binds device fingerprint to pairing session
   server.post('/api/v1/device/pairing/bind', async (req, res) => {
-    const token = requireAuth(req);
+    const token = getAuthToken(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     let body;
     try { body = await HttpServer.parseBody(req); } catch { return HttpServer.json(res, 400, { error: 'Malformed body' }); }
@@ -156,7 +169,7 @@ export function registerDevicePairingRoutes(server, ctx) {
 
   // GET /api/v1/device/pairing/status/:pairingId — check pairing status
   server.get('/api/v1/device/pairing/status/:pairingId', async (req, res, params) => {
-    const token = requireAuth(req);
+    const token = getAuthToken(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     const session = db.queryOne('SELECT * FROM device_pairing_sessions WHERE id = $1', [params.pairingId]);
     if (!session) return HttpServer.json(res, 404, { error: 'Pairing session not found' });
@@ -168,7 +181,7 @@ export function registerDevicePairingRoutes(server, ctx) {
 
   // GET /api/v1/devices — list bound devices for a merchant
   server.get('/api/v1/devices', async (req, res) => {
-    const token = requireAuth(req);
+    const token = getAuthToken(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     const { merchantId } = req.query || {};
     if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required' });
@@ -190,7 +203,7 @@ export function registerDevicePairingRoutes(server, ctx) {
 
   // PATCH /api/v1/devices/:deviceId — toggle device active/inactive
   server.patch('/api/v1/devices/:deviceId', async (req, res, params) => {
-    const token = requireAuth(req);
+    const token = getAuthToken(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     let body;
     try { body = await HttpServer.parseBody(req); } catch { return HttpServer.json(res, 400, { error: 'Malformed body' }); }
@@ -204,7 +217,7 @@ export function registerDevicePairingRoutes(server, ctx) {
 
   // DELETE /api/v1/devices/:deviceId — unbind device
   server.delete('/api/v1/devices/:deviceId', async (req, res, params) => {
-    const token = requireAuth(req);
+    const token = getAuthToken(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     db.execute('DELETE FROM merchant_devices WHERE id = $1', [params.deviceId]);
     return HttpServer.json(res, 200, { deleted: true, deviceId: params.deviceId });
@@ -212,7 +225,7 @@ export function registerDevicePairingRoutes(server, ctx) {
 
   // POST /api/v1/devices/:deviceId/heartbeat — device heartbeat (keepalive)
   server.post('/api/v1/devices/:deviceId/heartbeat', async (req, res, params) => {
-    const token = requireAuth(req);
+    const token = getAuthToken(req);
     if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
     db.execute('UPDATE merchant_devices SET last_active_at = $1 WHERE id = $2',
       [new Date().toISOString(), params.deviceId]);
