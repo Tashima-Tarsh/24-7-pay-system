@@ -79,6 +79,7 @@ export class AttributionEngine {
       }
     }
     // Tier 1: Check fingerprint for deduplication
+    const existing = this.obsRepo.findByFingerprint(normalizedObs.fingerprintHash);
     const retrySavedBankRecord=existing && !existing.attributedPaymentId && ['UNATTRIBUTED','LATE_UNMATCHED'].includes(existing.attributionStatus) && BANK_SOURCES.includes(existing.source) && normalizedObs.bankReferenceNumber && this.sessionRepo.db.queryOne(`SELECT COUNT(*) AS n FROM payment_sessions WHERE status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING') AND receiving_account_id=? AND amount_paise=? AND json_extract(metadata,'$.reportedUtr')=?`,[normalizedObs.receivingAccountId,Number(normalizedObs.amountPaise),normalizedObs.bankReferenceNumber]).n===1;
     if(retrySavedBankRecord)normalizedObs=existing;
     if (existing && !retrySavedBankRecord) {
