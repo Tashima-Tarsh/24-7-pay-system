@@ -950,8 +950,8 @@
 
       let title, message, iconClass, btnText, btnAction;
       if (status === 'SUCCESS') {
-        title = 'Payment Successful!';
-        message = 'Your payment was confirmed by YouPI PG.';
+        title = 'Payment received';
+        message = 'The merchant portal has confirmed your payment. This order is complete.';
         iconClass = 'dp-status-success';
         btnText = 'Return to Merchant';
         btnAction = () => {
@@ -1033,7 +1033,8 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Request failed.');
-        toast('Awaiting verified confirmation. Status updates automatically.');
+        btn.textContent = 'Waiting for payment confirmation';
+        toast('Waiting for the merchant portal to confirm your payment. This page updates automatically.');
         await pollState();
       } catch (e) {
         toast(e.message);
