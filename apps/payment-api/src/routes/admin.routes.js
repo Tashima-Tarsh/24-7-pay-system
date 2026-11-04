@@ -2506,5 +2506,120 @@ export function registerAdminRoutes(server, ctx) {
       }))
     });
   });
+
+  // ============================================================
+  // PART 1 — Merchant payment profile (payer-visible payee details)
+  // ============================================================
+
+  // GET /api/v1/admin/payment-profile/:merchantId
+  server.get('/api/v1/admin/payment-profile/:merchantId', async (req, res, params) => {
+    const { merchantId } = params;
+    const profile = ctx.ppMerchantPaymentProfileRepo?.findByMerchantId(merchantId);
+    if (!profile) {
+      HttpServer.json(res, 404, { error: 'Payment profile not found for merchant.', code: 'PAYMENT_PROFILE_NOT_FOUND' });
+      return;
+    }
+    // Never return the private signing key material to the caller.
+    const { intentSignKeyPem, ...safeProfile } = profile;
+    HttpServer.json(res, 200, { ...safeProfile, signingKeyConfigured: Boolean(profile.intentSignKeyPem) });
+  });
+
+  // PUT /api/v1/admin/payment-profile/:merchantId  (create / update)
+  server.put('/api/v1/admin/payment-profile/:merchantId', async (req, res, params) => {
+    const { merchantId } = params;
+    const merchant = ctx.merchantRepo.findById(merchantId);
+    if (!merchant) {
+      HttpServer.json(res, 404, { error: 'Merchant not found.', code: 'MERCHANT_NOT_FOUND' });
+      return;
+    }
+
+    const body = await HttpServer.parseBody(req);
+    const { payeeVpa, payeeName, payeeEmail, mcc, orgid, intentSignKeyPem, supportPhone } = body;
+
+    if (!payeeVpa || !payeeName || !payeeEmail) {
+      HttpServer.json(res, 400, { error: 'payeeVpa, payeeName and payeeEmail are required.', code: 'PROFILE_INCOMPLETE' });
+      return;
+    }
+    if (!isValidVpa(payeeVpa)) {
+      HttpServer.json(res, 400, { error: 'Invalid payee VPA format.', code: 'INVALID_VPA' });
+      return;
+    }
+
+    // Block PUT while any session for that merchant is ACTIVE or VERIFICATION_PENDING.
+    if (ctx.ppMerchantPaymentProfileRepo?.hasActiveSessions(merchantId)) {
+      HttpServer.json(res, 409, { error: 'Cannot update payment profile while an active or verification-pending session exists.', code: 'SESSION_ACTIVE' });
+      return;
+    }
+
+    // payee_vpa must be the merchant's own VPA already present in payment_receiving_accounts.upi_id.
+    const accounts = ctx.accountRepo.findByMerchantId ? ctx.accountRepo.findByMerchantId(merchantId) : [];
+    const ownsVpa = accounts.some(a => String(a.upiId || '').toLowerCase() === String(payeeVpa).toLowerCase());
+    if (!ownsVpa) {
+      HttpServer.json(res, 400, { error: 'payeeVpa must be the merchant\'s own receiving VPA.', code: 'FOREIGN_VPA' });
+      return;
+    }
+
+    const mccValue = String(mcc || '5411');
+    if (!/^\d{4}$/.test(mccValue)) {
+      HttpServer.json(res, 400, { error: 'mcc must be 4 digits.', code: 'INVALID_MCC' });
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payeeEmail)) {
+      HttpServer.json(res, 400, { error: 'Invalid payee email.', code: 'INVALID_EMAIL' });
+      return;
+    }
+
+    ctx.ppMerchantPaymentProfileRepo.upsert(merchantId, {
+      payeeVpa, payeeName, payeeEmail, mcc: mccValue, orgid: orgid || null,
+      intentSignKeyPem: intentSignKeyPem || null, supportPhone: supportPhone || null,
+      isActive: 0
+    });
+
+    ctx.auditRepo?.log({
+      merchantId,
+      entityType: 'PP_MERCHANT_PAYMENT_PROFILE',
+      entityId: merchantId,
+      action: 'PAYMENT_PROFILE_UPSERTED',
+      actorType: 'ADMIN',
+      details: { payeeVpa, payeeName, mcc: mccValue, orgid: orgid || null, supportPhone: supportPhone || null }
+    });
+
+    const updated = ctx.ppMerchantPaymentProfileRepo.findByMerchantId(merchantId);
+    const { intentSignKeyPem: _key, ...safeUpdated } = updated;
+    HttpServer.json(res, 200, { ...safeUpdated, signingKeyConfigured: Boolean(updated.intentSignKeyPem), message: 'Payment profile saved. Activate via /verify.' });
+  });
+
+  // POST /api/v1/admin/payment-profile/:merchantId/verify  -> validate VPA shape and activate
+  server.post('/api/v1/admin/payment-profile/:merchantId/verify', async (req, res, params) => {
+    const { merchantId } = params;
+    const profile = ctx.ppMerchantPaymentProfileRepo?.findByMerchantId(merchantId);
+    if (!profile) {
+      HttpServer.json(res, 404, { error: 'Payment profile not found for merchant.', code: 'PAYMENT_PROFILE_NOT_FOUND' });
+      return;
+    }
+
+    const vpaOk = isValidVpa(profile.payeeVpa);
+    const mccOk = /^\d{4}$/.test(String(profile.mcc || ''));
+    const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(profile.payeeEmail);
+    if (!(vpaOk && mccOk && emailOk)) {
+      HttpServer.json(res, 400, { error: 'Profile failed validation.', code: 'PROFILE_INVALID', details: { vpa: vpaOk, mcc: mccOk, email: emailOk } });
+      return;
+    }
+
+    ctx.ppMerchantPaymentProfileRepo.setActive(merchantId, 1);
+
+    ctx.auditRepo?.log({
+      merchantId,
+      entityType: 'PP_MERCHANT_PAYMENT_PROFILE',
+      entityId: merchantId,
+      action: 'PAYMENT_PROFILE_ACTIVATED',
+      actorType: 'ADMIN',
+      details: { payeeVpa: profile.payeeVpa, payeeEmail: profile.payeeEmail }
+    });
+
+    const updated = ctx.ppMerchantPaymentProfileRepo.findByMerchantId(merchantId);
+    const { intentSignKeyPem: __key, ...safeUpdated } = updated;
+    HttpServer.json(res, 200, { ...safeUpdated, signingKeyConfigured: Boolean(updated.intentSignKeyPem), message: 'Payment profile activated.' });
+  });
 }
 

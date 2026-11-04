@@ -45,6 +45,7 @@ import {
   CustomerSessionRepository,
   PaymentSessionRepository,
   ObservationRepository,
+  PpMerchantPaymentProfileRepository,
   SupportTicketRepository,
   AuditLogRepository,
   DeviceRepository,
@@ -159,6 +160,7 @@ export function createPaymentApp(customDb = null, options = {}) {
   const upiMirrorObservationRepository = new UpiMirrorObservationRepository(db);
   const ticketRepo = new SupportTicketRepository(db);
   const auditRepo = new AuditLogRepository(db);
+  const ppMerchantPaymentProfileRepo = new PpMerchantPaymentProfileRepository(db);
   const deviceRepo = new DeviceRepository(db);
   const notificationDeliveryService = new NotificationDeliveryService(db);
   const receiptService = new ReceiptNotificationService(db, auditRepo, notificationDeliveryService);
@@ -206,7 +208,8 @@ export function createPaymentApp(customDb = null, options = {}) {
     eventEmitter,
     auditRepo,
     activeDurationMs: Number(process.env.PAYMENT_ACTIVE_WINDOW_MS || 300000),
-    processingDurationMs: Number(process.env.PAYMENT_PROCESSING_WINDOW_MS || 30000)
+    processingDurationMs: Number(process.env.PAYMENT_PROCESSING_WINDOW_MS || 30000),
+    verificationDurationMs: Number(process.env.PAYMENT_VERIFICATION_WINDOW_MS || 1800000)
   });
 
   const attributionEngine = new AttributionEngine({
@@ -492,26 +495,47 @@ export function createPaymentApp(customDb = null, options = {}) {
     try {
       const nowIso = new Date().toISOString();
 
-      // Sweep expired ACTIVE sessions
+      // Sweep expired ACTIVE sessions. An ACTIVE session whose issue TTL elapsed must
+      // NOT auto-expire if a UTR was already reported: move it to VERIFICATION_PENDING
+      // and start the 30-minute verification window instead.
       const expiredActive = db.query(`
-        SELECT id, receiving_account_id FROM payment_sessions
+        SELECT id, receiving_account_id, metadata FROM payment_sessions
         WHERE status = 'ACTIVE' AND expires_at <= ?
       `, [nowIso]);
 
       for (const row of expiredActive) {
-        sessionRepo.transitionToTerminal(row.id, PaymentStatus.EXPIRED);
-        server.broadcastSse(row.id, 'status_change', { status: PaymentStatus.EXPIRED });
-        handleSlotFreedAndPromote(row.receiving_account_id);
+        let metadata = {};
+        try { metadata = JSON.parse(row.metadata || '{}'); } catch {}
+        if (metadata && metadata.reportedUtr) {
+          const session = sessionRepo.findById(row.id);
+          if (!session) continue;
+          const now = new Date();
+          const nowIso2 = now.toISOString();
+          const verificationExpiresAt = new Date(now.getTime() + timingEngine.verificationDurationMs).toISOString();
+          sessionRepo.db.execute(`
+            UPDATE payment_sessions
+            SET status = ?, verification_expires_at = ?, updated_at = ?
+            WHERE id = ? AND status = 'ACTIVE'
+          `, [PaymentStatus.VERIFICATION_PENDING, verificationExpiresAt, nowIso2, row.id]);
+          server.broadcastSse(row.id, 'status_change', { status: PaymentStatus.VERIFICATION_PENDING, verificationExpiresAt });
+          try { timingEngine.startVerificationTimer(row.id, new Date(verificationExpiresAt)); } catch {}
+          try { attributionEngine.reconcilePendingPayment(row.id); } catch {}
+        } else {
+          sessionRepo.transitionToTerminal(row.id, PaymentStatus.EXPIRED);
+          server.broadcastSse(row.id, 'status_change', { status: PaymentStatus.EXPIRED });
+          handleSlotFreedAndPromote(row.receiving_account_id);
+        }
       }
 
-      // Sweep failed PROCESSING sessions
-      const failedProc = db.query(`
+      // Expire VERIFICATION_PENDING sessions past their verification window, release the slot.
+      const expiredPending = db.query(`
         SELECT id, receiving_account_id FROM payment_sessions
-        WHERE status = 'PROCESSING' AND processing_expires_at <= ?
+        WHERE status = 'VERIFICATION_PENDING' AND verification_expires_at <= ?
       `, [nowIso]);
 
-      for (const row of failedProc) {
-        timingEngine.handleProcessingTimerExpiration(row.id);
+      for (const row of expiredPending) {
+        sessionRepo.transitionToTerminal(row.id, PaymentStatus.EXPIRED);
+        server.broadcastSse(row.id, 'status_change', { status: PaymentStatus.EXPIRED });
         handleSlotFreedAndPromote(row.receiving_account_id);
       }
 
@@ -617,6 +641,7 @@ export function createPaymentApp(customDb = null, options = {}) {
     obsRepo,
     ticketRepo,
     auditRepo,
+    ppMerchantPaymentProfileRepo,
     queueEngine,
     timingEngine,
     attributionEngine,

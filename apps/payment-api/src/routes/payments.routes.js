@@ -75,6 +75,13 @@ export function registerPaymentRoutes(server, ctx) {
         return;
       }
 
+      // PART 1: Reject payment creation when the merchant has no active payment profile.
+      const activeProfile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id);
+      if (!activeProfile) {
+        HttpServer.json(res, 503, { error: 'Merchant payment profile is incomplete. Activate it via the admin console before accepting payments.', code: 'PAYMENT_PROFILE_INCOMPLETE' });
+        return;
+      }
+
       if (!body.orderId || !body.amount) {
         HttpServer.json(res, 400, { error: 'Missing required fields: orderId and amount.' });
         return;

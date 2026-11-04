@@ -125,6 +125,76 @@ export function runMigrations(targetDb) {
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_sessions_device ON payment_sessions (device_id);"); } catch {}
 
   // ============================================================
+  // PART 1 & PART 4 — Merchant payment profile + UTR capture migration
+  // ============================================================
+  // payment_sessions: UTR capture and verification expiry columns
+  if (db.dialect === 'postgres') {
+    db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS reported_utr TEXT');
+    db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS reported_utr_source TEXT');
+    db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS payer_name TEXT');
+    db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS payer_vpa TEXT');
+    db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS payer_reported_at TEXT');
+    db.exec('ALTER TABLE payment_sessions ADD COLUMN IF NOT EXISTS verification_expires_at TEXT');
+  } else {
+    const psColumns = db.query('PRAGMA table_info(payment_sessions)').map(column => column.name);
+    if (!psColumns.includes('reported_utr')) db.exec('ALTER TABLE payment_sessions ADD COLUMN reported_utr TEXT');
+    if (!psColumns.includes('reported_utr_source')) db.exec('ALTER TABLE payment_sessions ADD COLUMN reported_utr_source TEXT');
+    if (!psColumns.includes('payer_name')) db.exec('ALTER TABLE payment_sessions ADD COLUMN payer_name TEXT');
+    if (!psColumns.includes('payer_vpa')) db.exec('ALTER TABLE payment_sessions ADD COLUMN payer_vpa TEXT');
+    if (!psColumns.includes('payer_reported_at')) db.exec('ALTER TABLE payment_sessions ADD COLUMN payer_reported_at TEXT');
+    if (!psColumns.includes('verification_expires_at')) db.exec('ALTER TABLE payment_sessions ADD COLUMN verification_expires_at TEXT');
+  }
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_sessions_utr ON payment_sessions(reported_utr) WHERE reported_utr IS NOT NULL;"); } catch {}
+
+  // pp_merchant_payment_profile — payer-visible payee details (the "connection")
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS pp_merchant_payment_profile (
+      merchant_id TEXT PRIMARY KEY,
+      payee_vpa TEXT NOT NULL,
+      payee_name TEXT NOT NULL,
+      payee_email TEXT NOT NULL,
+      mcc TEXT NOT NULL DEFAULT '5411',
+      orgid TEXT,
+      intent_sign_key_pem TEXT,
+      support_phone TEXT,
+      is_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_pp_merchant_payment_profile_merchant ON pp_merchant_payment_profile(merchant_id);"); } catch {}
+
+  // pp_bank_alert_senders — allowlist of bank email domains for Gmail observer
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS pp_bank_alert_senders (
+      domain TEXT PRIMARY KEY,
+      bank TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_pp_bank_alert_senders_domain ON pp_bank_alert_senders(domain);"); } catch {}
+
+  // Seed bank alert sender domains (idempotent)
+  const bankSenders = [
+    ['hdfcbank.net', 'HDFC Bank'],
+    ['icicibank.com', 'ICICI Bank'],
+    ['onlinesbi.sbi', 'State Bank of India'],
+    ['axisbank.com', 'Axis Bank'],
+    ['kotak.com', 'Kotak Mahindra Bank'],
+    ['yesbank.in', 'Yes Bank'],
+    ['idfcfirstbank.com', 'IDFC First Bank'],
+    ['federalbank.co.in', 'Federal Bank']
+  ];
+  for (const [domain, bank] of bankSenders) {
+    try {
+      db.execute(
+        'INSERT INTO pp_bank_alert_senders (domain, bank, created_at) VALUES (?, ?, ?) ON CONFLICT(domain) DO NOTHING',
+        [domain, bank, new Date().toISOString()]
+      );
+    } catch {}
+  }
+
+  // ============================================================
   // DYNAMO PAY UNIVERSAL UPI MIRROR — Phase 1 Migration
   // ============================================================
   try { db.exec(`CREATE TABLE IF NOT EXISTS merchant_upi_connections (
