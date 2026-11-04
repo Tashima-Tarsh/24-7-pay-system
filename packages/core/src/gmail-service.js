@@ -3,6 +3,7 @@
  * Requires an active Gmail OAuth connection (gmail.readonly scope).
  */
 import crypto from 'node:crypto';
+import { encryptAtRest } from '@youpi/common';
 
 const UPI_CREDIT_KEYWORDS = /(credited|credit|received|deposit|payment received|upi\/cr|transferred)/i;
 const UPI_DEBIT_KEYWORDS = /(debited|withdrawn|sent rs|paid rs)/i;
@@ -10,6 +11,23 @@ const UPI_DEBIT_KEYWORDS = /(debited|withdrawn|sent rs|paid rs)/i;
 export class GmailService {
   constructor(db) {
     this.db = db;
+    this.health = { lastPoll: null, lastParse: null, errorCount: 0 };
+  }
+
+  getHealth() {
+    return { ...this.health };
+  }
+
+  /**
+   * Build the Gmail search query restricted to the allowlisted bank alert sender
+   * domains. Never parses the whole inbox.
+   * @param {string[]} domains
+   * @returns {string}
+   */
+  buildBankAlertQuery(domains) {
+    if (!domains || domains.length === 0) return 'newer_than:1d';
+    const fromClause = domains.map(d => `from:${d}`).join(' OR ');
+    return `(${fromClause}) newer_than:1d`;
   }
 
   /**
@@ -58,15 +76,15 @@ export class GmailService {
   }
 
   /**
-   * List Gmail messages matching UPI credit keywords.
+   * List Gmail messages within an allowlisted sender scope. Never parses the whole inbox.
+   * @param {string} accessToken
+   * @param {string} [query] full Gmail search query
+   * @param {number} [maxResults=50]
    */
-  async listUpiCreditMessages(accessToken, maxResults = 50) {
-    const query = '(' + [
-      'credited', 'credit', 'received', 'deposit', 'payment received', 'upi/cr', 'transferred'
-    ].map(k => `subject:${k} OR from:${k} OR body:${k}`).join(' OR ') + ')';
-
+  async listUpiCreditMessages(accessToken, query = null, maxResults = 50) {
+    const gmailQuery = query || 'newer_than:1d';
     const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
-    url.searchParams.set('q', query);
+    url.searchParams.set('q', gmailQuery);
     url.searchParams.set('maxResults', String(maxResults));
 
     const res = await fetch(url.toString(), {
@@ -160,50 +178,68 @@ export class GmailService {
    * Returns matched observations ready for attribution engine.
    */
   async scanAllConnections() {
+    this.health.lastPoll = new Date().toISOString();
     const connections = this.db.query('SELECT * FROM gmail_connections WHERE is_active = 1') || [];
     const observations = [];
+    let errorCount = 0;
+
+    // Allowlist of bank alert sender domains; never parse the whole inbox.
+    let domains = [];
+    try {
+      const rows = this.db.query('SELECT domain FROM pp_bank_alert_senders') || [];
+      domains = rows.map(r => r.domain);
+    } catch {}
+    const query = this.buildBankAlertQuery(domains);
 
     for (const conn of connections) {
       try {
         const accessToken = await this.ensureValidToken(conn);
-        const messageIds = await this.listUpiCreditMessages(accessToken, 20);
+        const messageIds = await this.listUpiCreditMessages(accessToken, query, 20);
 
         for (const msgId of messageIds) {
-          const message = await this.getMessage(accessToken, msgId);
-          const headers = this.extractHeaders(message, ['Subject', 'From', 'Date']);
-          const text = this.extractTextBody(message) || headers.Subject || '';
-          const credit = this.extractUpiCredit(text);
+          try {
+            const message = await this.getMessage(accessToken, msgId);
+            const headers = this.extractHeaders(message, ['Subject', 'From', 'Date']);
+            const text = this.extractTextBody(message) || headers.Subject || '';
+            const credit = this.extractUpiCredit(text);
 
-          if (credit) {
-            observations.push({
-              id: crypto.randomUUID(),
-              source: 'GMAIL',
-              receivingAccountId: conn.email,
-              amountPaise: credit.amountPaise,
-              bankReferenceNumber: credit.utr,
-              observedAt: headers.date || new Date().toISOString(),
-              senderVpa: credit.senderVpa,
-              rawPayload: {
-                messageId: message.id,
-                subject: headers.Subject,
-                from: headers.From,
-                date: headers.Date,
-                rawText: credit.rawText,
-                extracted: credit
-              },
-              fingerprintHash: crypto
-                .createHash('sha256')
-                .update(`${conn.email}|${message.id}|${credit.utr || ''}|${credit.amountPaise || ''}`)
-                .digest('hex')
-            });
+            if (credit) {
+              this.health.lastParse = new Date().toISOString();
+              observations.push({
+                id: crypto.randomUUID(),
+                source: 'GMAIL',
+                receivingAccountId: conn.email,
+                amountPaise: credit.amountPaise,
+                bankReferenceNumber: credit.utr,
+                observedAt: headers.date || new Date().toISOString(),
+                senderVpa: credit.senderVpa,
+                rawPayload: {
+                  messageId: message.id,
+                  subject: headers.Subject,
+                  from: headers.From,
+                  date: headers.Date,
+                  rawBody: encryptAtRest(credit.rawText || text),
+                  rawText: credit.rawText,
+                  extracted: credit
+                },
+                fingerprintHash: crypto
+                  .createHash('sha256')
+                  .update(`${conn.email}|${message.id}|${credit.utr || ''}|${credit.amountPaise || ''}`)
+                  .digest('hex')
+              });
+            }
+          } catch (err) {
+            errorCount++;
+            console.error(`Gmail parse failed for message ${msgId}:`, err.message);
           }
         }
       } catch (err) {
-        // Log but continue with other connections
+        errorCount++;
         console.error(`Gmail scan failed for ${conn.email}:`, err.message);
       }
     }
 
+    this.health.errorCount += errorCount;
     return observations;
   }
 }

@@ -463,6 +463,16 @@ export function registerUpiMirrorRoutes(server, ctx) {
         return HttpServer.json(res, 404, { error: 'Merchant not found.' });
       }
 
+      // PART 6: Require merchant auth (bearer webhookSecret or admin token) BEFORE
+      // storing the device publicKey. Anyone must not be able to register a device
+      // and sign fake credits.
+      const presented = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+      const adminOk = Boolean(presented) && safeEqual(presented, getAdminToken());
+      const secretOk = Boolean(presented) && merchant.webhookSecret && safeEqual(presented, merchant.webhookSecret);
+      if (!adminOk && !secretOk) {
+        return HttpServer.json(res, 401, { error: 'Merchant authentication required.', code: 'AUTH_REQUIRED' });
+      }
+
       // Consume the pairing challenge
       ctx.pairingChallengeRepo.consume(pairingId, deviceId);
 

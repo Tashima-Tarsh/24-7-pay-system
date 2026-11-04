@@ -1,4 +1,5 @@
 import { HttpServer } from '../server.js';
+import { encryptAtRest, decryptAtRest } from '@youpi/common';
 
 /**
  * Gmail Universal Email Adapter — OAuth connect, callback, disconnect.
@@ -25,7 +26,7 @@ export function registerGmailRoutes(server, ctx) {
     if (!clientId) return HttpServer.json(res, 503, { error: 'Gmail OAuth not configured. Set GMAIL_OAUTH_CLIENT_ID and GMAIL_OAUTH_CLIENT_SECRET in environment variables.' });
 
     const state = crypto.randomUUID();
-    const scope = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
+    const scope = 'https://www.googleapis.com/auth/gmail.readonly';
 
     // Store state for CSRF protection
     db.execute(
@@ -97,8 +98,8 @@ export function registerGmailRoutes(server, ctx) {
       `INSERT INTO gmail_connections (id, merchant_id, email, access_token, refresh_token,
               expires_at, scope, connected_at, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1)`,
-      [id, oauthState.merchant_id, userInfo.email, tokenData.access_token,
-       tokenData.refresh_token || null, expiresAt, tokenData.scope || 'gmail.readonly', now]
+       [id, oauthState.merchant_id, userInfo.email, tokenData.access_token,
+        encryptAtRest(tokenData.refresh_token || null), expiresAt, 'https://www.googleapis.com/auth/gmail.readonly', now]
     );
 
     // Clean up state
@@ -169,11 +170,14 @@ export function registerGmailRoutes(server, ctx) {
     const clientSecret = process.env.GMAIL_OAUTH_CLIENT_SECRET;
     if (!clientId || !clientSecret) return HttpServer.json(res, 500, { error: 'Gmail OAuth not configured' });
 
+    const refreshToken = (row.refresh_token || '').startsWith('enc:v1:') ? decryptAtRest(row.refresh_token) : row.refresh_token;
+    if (!refreshToken) return HttpServer.json(res, 400, { error: 'No refresh token available' });
+
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        refresh_token: row.refresh_token, client_id: clientId, client_secret: clientSecret,
+        refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret,
         grant_type: 'refresh_token'
       })
     });
@@ -188,6 +192,11 @@ export function registerGmailRoutes(server, ctx) {
     );
 
     return HttpServer.json(res, 200, { refreshed: true, expiresAt });
+  });
+
+  // GET /api/v1/gmail/health — last poll, last parse, error count
+  server.get('/api/v1/gmail/health', async (req, res) => {
+    return HttpServer.json(res, 200, ctx.gmailService?.getHealth() || { lastPoll: null, lastParse: null, errorCount: 0 });
   });
 }
 
