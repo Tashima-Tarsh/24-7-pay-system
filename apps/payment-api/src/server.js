@@ -98,6 +98,10 @@ export class HttpServer {
     this.register('PATCH', pattern, handler);
   }
 
+  put(pattern, handler) {
+    this.register('PUT', pattern, handler);
+  }
+
   /**
    * Rate limit check for an IP address. Returns { allowed, remaining, resetAt }.
    */
