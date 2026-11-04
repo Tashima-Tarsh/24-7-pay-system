@@ -835,7 +835,7 @@
         { id: 'gpay', name: 'Google Pay', pkg: 'com.google.android.apps.nbu.paisa.user', icon: '/icons/gpay.png' },
         { id: 'phonepe', name: 'PhonePe', pkg: 'com.phonepe.app', icon: '/icons/phonepe.png' },
         { id: 'paytm', name: 'Paytm', pkg: 'net.one97.paytm', icon: '/icons/paytm.png' },
-        { id: 'navi', name: 'Navi', pkg: null, icon: null },
+        { id: 'navi', name: 'Navi', pkg: 'com.naviapp', icon: null },
         { id: 'generic', name: 'Generic UPI', pkg: null, icon: null }
       ];
       appDefs.forEach(app => {
@@ -848,20 +848,9 @@
           if (app.id === 'generic') { try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); } return; }
           try {
             const uriPart = upiUri.split('?')[1] || '';
-            // Use each PSP's UPI URI scheme. The QR/generic button remains on
-            // upi://pay; wrapping a direct PSP launch in an Android intent can
-            // make it behave differently from the same scanned QR.
-            const directSchemes = {
-              gpay: 'tez://upi/pay',
-              phonepe: 'phonepe://pay',
-              paytm: 'paytmmp://upi/pay',
-              navi: 'navi://upi/pay'
-            };
-            if (directSchemes[app.id]) {
-              location.href = `${directSchemes[app.id]}?${uriPart}`;
-              toast('Return to this page after paying.');
-              return;
-            }
+            // Keep the canonical UPI payload byte-for-byte compatible with the
+            // QR code. The Android package only selects the installed PSP; it
+            // must not change the payment scheme or parameters.
             location.href = `intent://pay?${uriPart}#Intent;scheme=upi;package=${app.pkg};end`;
             toast('Return to this page after paying.');
           } catch (e) { toast('Could not open ' + app.name); }
@@ -1101,16 +1090,15 @@
         throw new Error('Invalid UPI URI');
       }
       const isAndroid = /Android/i.test(String(platform));
-      const schemes = {
-        gpay: 'tez://upi/pay',
-        phonepe: 'phonepe://pay',
-        paytm: 'paytmmp://upi/pay',
-        navi: 'navi://upi/pay',
-        generic: null
+      const packages = {
+        gpay: 'com.google.android.apps.nbu.paisa.user',
+        phonepe: 'com.phonepe.app',
+        paytm: 'net.one97.paytm',
+        navi: 'com.naviapp'
       };
       if (isAndroid) {
         if (app === 'generic') return upiUriParam;
-        if (schemes[app]) return `${schemes[app]}?${upiUriParam.split('?')[1] || ''}`;
+        if (packages[app]) return `intent://pay?${upiUriParam.split('?')[1] || ''}#Intent;scheme=upi;package=${packages[app]};end`;
         return upiUriParam;
       }
       // iOS / other
