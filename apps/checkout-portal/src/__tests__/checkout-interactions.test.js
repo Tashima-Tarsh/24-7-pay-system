@@ -26,7 +26,7 @@ test('uncertain external collection hides payment actions and explains reconcili
 test('UPI app links preserve the exact session amount, payee and reference',()=>{
   const {window,state}=checkout();
   const gpay=window.dynamoUpiLink('gpay',state.upiUri,'Android');
-  assert.ok(gpay.includes('package=com.google.android.apps.nbu.paisa.user'));
+  assert.ok(gpay.startsWith('tez://upi/pay?'));
   assert.ok(gpay.includes('am=123.45&tr=ORDER-1'));
   assert.equal(window.dynamoUpiLink('generic',state.upiUri,'Android'),state.upiUri);
   assert.ok(window.dynamoUpiLink('gpay',state.upiUri,'iPhone').startsWith('gpay://upi/pay?'));

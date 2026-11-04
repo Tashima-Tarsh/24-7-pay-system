@@ -844,6 +844,15 @@
           if (app.id === 'generic') { try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); } return; }
           try {
             const uriPart = upiUri.split('?')[1] || '';
+            // Google Pay documents the tez URI scheme for direct launches. The
+            // generic UPI URI remains the QR/generic-button path; do not wrap
+            // Google Pay in an Android intent URI because it handles that path
+            // differently from a scanned UPI QR.
+            if (app.id === 'gpay') {
+              location.href = `tez://upi/pay?${uriPart}`;
+              toast('Return to this page after paying.');
+              return;
+            }
             location.href = `intent://pay?${uriPart}#Intent;scheme=upi;package=${app.pkg};end`;
             toast('Return to this page after paying.');
           } catch (e) { toast('Could not open ' + app.name); }
@@ -1092,6 +1101,7 @@
       const pkg = schemes[app];
       if (isAndroid) {
         if (app === 'generic') return upiUriParam;
+        if (app === 'gpay') return `tez://upi/pay?${upiUriParam.split('?')[1] || ''}`;
         if (pkg) return `upi://pay?${upiUriParam.split('?')[1] || ''}#Intent;scheme=upi;package=${pkg};end`;
         return upiUriParam;
       }
