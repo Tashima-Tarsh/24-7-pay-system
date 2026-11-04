@@ -27,5 +27,6 @@ export { VpaRotationGuard } from './vpa-rotation-guard.js';
 export { GmailService } from './gmail-service.js';
 export { MultiSourceMatchingEngine } from './multi-source-matching-engine.js';
 export { DeviceBindingService } from './device-binding.js';
+export { buildUpiUri, buildPackageIntent, buildPackageIntents, UPI_PACKAGES } from './upi-intent-builder.js';
 
 

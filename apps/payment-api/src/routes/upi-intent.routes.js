@@ -9,11 +9,14 @@ import {
   safeEqual,
   isValidVpa,
   ObserverSource,
-  PaymentEvidenceLevel
+  PaymentEvidenceLevel,
+  generateQrDataUri
 } from '@youpi/common';
 import {
   isValidTransition,
-  assertValidTransition
+  assertValidTransition,
+  buildUpiUri,
+  buildPackageIntents
 } from '@youpi/core';
 import { isAdminRequest } from '../auth-guard.js';
 import crypto from 'node:crypto';
@@ -236,6 +239,10 @@ export function registerUpiIntentRoutes(server, ctx) {
               currency: existing.currency,
               status: existing.status,
               upiUri: (existing.metadata && existing.metadata.upiUri) || null,
+              upiIntent: (existing.metadata && existing.metadata.upiIntent) || null,
+              upiQr: (existing.metadata && existing.metadata.upiQr) || null,
+              copyVpa: (existing.metadata && existing.metadata.copyVpa) || null,
+              signed: (existing.metadata && existing.metadata.signed) || false,
               checkoutUrl: `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${existing.id}`,
               expiresAt: existing.expiresAt ? existing.expiresAt.toISOString() : null,
               createdAt: existing.createdAt ? existing.createdAt.toISOString() : null
@@ -254,25 +261,51 @@ export function registerUpiIntentRoutes(server, ctx) {
       const expiryMs = expiryMinutes ? Number(expiryMinutes) * 60 * 1000 : 30 * 60 * 1000; // default 30 min
       const expiresAt = new Date(Date.now() + expiryMs);
 
-      // Build the UPI payment URI (generic upi://pay capability discovery).
-      const upiUri = buildUpiPaymentUri({
-        vpa: receivingVpa,
-        name: (merchant.businessName || merchant.name || 'Merchant'),
-        amount: Number(finalAmountPaise) / 100,
-        orderId: generatedOrderId,
-        transactionRef: attemptId,
-        note: `Sanbookpay ${generatedOrderId}`
-      });
+      // Build the UPI payment URI using the canonical builder + the merchant's
+      // active payment profile (payer-visible payee details). Fall back to the
+      // receiving VPA / merchant name when no profile is active yet.
+      let profile = null;
+      try {
+        profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id) || null;
+      } catch {}
+      const payeeVpa = profile ? profile.payeeVpa : receivingVpa;
+      const payeeName = profile ? profile.payeeName : (merchant.businessName || merchant.name || 'Merchant');
+      const note = `Sanbookpay ${generatedOrderId}`;
+
+      const checkoutUrl = `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${paymentId}`;
+
+      const built = buildUpiUri(
+        {
+          payeeVpa,
+          payeeName,
+          mcc: profile ? profile.mcc : '5411',
+          orgid: profile ? profile.orgid : undefined,
+          intentSignKeyPem: profile ? profile.intentSignKeyPem : undefined
+        },
+        finalAmountPaise,
+        attemptId,
+        note,
+        checkoutUrl
+      );
+      const upiUri = built.uri;
+
+      const upiIntent = buildPackageIntents(upiUri);
+      const upiQr = upiUri ? generateQrDataUri(upiUri) : null;
+      const copyVpa = payeeVpa;
 
       const sessionMetadata = {
         ...metadata,
         attemptId,
         correlationId,
         upiUri,
+        upiIntent,
+        upiQr,
+        copyVpa,
         receivingVpa,
         merchantId: merchant.id,
         sourcePlatform: 'UPI_INTENT',
-        createdVia: 'intents_api'
+        createdVia: 'intents_api',
+        signed: built.signed
       };
 
       const session = sessionRepo.create({
@@ -333,6 +366,10 @@ export function registerUpiIntentRoutes(server, ctx) {
         merchantId: session.merchantId,
         receivingVpa,
         upiUri,
+        upiIntent,
+        upiQr,
+        copyVpa,
+        signed: built.signed,
         checkoutUrl: `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${session.id}`,
         expiresAt: expiresAt.toISOString(),
         createdAt: session.createdAt ? session.createdAt.toISOString() : nowIso(),
