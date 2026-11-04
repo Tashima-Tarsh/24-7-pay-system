@@ -21,6 +21,7 @@ export const VALID_TRANSITIONS = Object.freeze({
     PaymentStatus.ACTIVE,
     PaymentStatus.QUEUED,
     PaymentStatus.INTENT_OPENED,
+    PaymentStatus.INTENT_ISSUED,
     PaymentStatus.CLIENT_REPORTED_SUCCESS,
     PaymentStatus.CANCELLED,
     PaymentStatus.EXPIRED
@@ -52,6 +53,12 @@ export const VALID_TRANSITIONS = Object.freeze({
     PaymentStatus.CANCELLED,
     PaymentStatus.RECONCILIATION_REQUIRED
   ],
+  [PaymentStatus.INTENT_ISSUED]: [
+    PaymentStatus.VERIFICATION_PENDING,
+    PaymentStatus.FAILED,
+    PaymentStatus.EXPIRED,
+    PaymentStatus.CANCELLED
+  ],
   [PaymentStatus.PROCESSING]: [
     PaymentStatus.VERIFICATION_PENDING,
     PaymentStatus.SUCCESS,
@@ -76,7 +83,7 @@ export const VALID_TRANSITIONS = Object.freeze({
     PaymentStatus.EXPIRED,
     PaymentStatus.RECONCILIATION_REQUIRED
   ],
-  [PaymentStatus.VERIFICATION_PENDING]: [PaymentStatus.SUCCESS, PaymentStatus.PAID_VERIFIED, PaymentStatus.FAILED],
+  [PaymentStatus.VERIFICATION_PENDING]: [PaymentStatus.SUCCESS, PaymentStatus.PAID_VERIFIED, PaymentStatus.FAILED, PaymentStatus.EXPIRED],
   [PaymentStatus.MULTI_SIGNAL_MATCHED]: [PaymentStatus.PAID_VERIFIED, PaymentStatus.SUCCESS, PaymentStatus.FAILED, PaymentStatus.RECONCILIATION_REQUIRED],
   [PaymentStatus.PAID_VERIFIED]: [PaymentStatus.SUCCESS],
   [PaymentStatus.RECONCILIATION_REQUIRED]: [PaymentStatus.VERIFICATION_PENDING, PaymentStatus.FAILED, PaymentStatus.PAID_VERIFIED],

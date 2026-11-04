@@ -18,11 +18,14 @@ export class TimingEngine {
     this.auditRepo = options.auditRepo;
     this.activeDurationMs = options.activeDurationMs || 300000; // 5 minutes
     this.processingDurationMs = options.processingDurationMs || 30000; // 30 seconds
+    this.verificationDurationMs = options.verificationDurationMs || 1800000; // 30 minutes
 
     /** @type {Map<string, NodeJS.Timeout>} */
     this.activeTimers = new Map();
     /** @type {Map<string, NodeJS.Timeout>} */
     this.processingTimers = new Map();
+    /** @type {Map<string, NodeJS.Timeout>} */
+    this.verificationTimers = new Map();
   }
 
   /**
@@ -58,6 +61,27 @@ export class TimingEngine {
 
     // Invariant: Only expire if still in ACTIVE status
     if (session.status !== PaymentStatus.ACTIVE) {
+      return;
+    }
+
+    // If a UTR was already reported, do NOT expire: move to VERIFICATION_PENDING
+    // and start the 30-minute verification window instead of releasing the slot.
+    const metadata = typeof session.metadata === 'string' ? JSON.parse(session.metadata || '{}') : (session.metadata || {});
+    if (metadata && metadata.reportedUtr) {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const verificationExpiresAt = new Date(now.getTime() + this.verificationDurationMs).toISOString();
+      this.sessionRepo.db.execute(`
+        UPDATE payment_sessions
+        SET status = ?, verification_expires_at = ?, updated_at = ?
+        WHERE id = ? AND status = ?
+      `, [PaymentStatus.VERIFICATION_PENDING, verificationExpiresAt, nowIso, sessionId, PaymentStatus.ACTIVE]);
+      this.eventEmitter.emit('PAYMENT.VERIFICATION_PENDING', {
+        paymentId: sessionId,
+        orderId: session.orderId,
+        merchantId: session.merchantId,
+        amountPaise: session.amountPaise
+      });
       return;
     }
 
@@ -239,6 +263,72 @@ export class TimingEngine {
   }
 
   /**
+   * Starts the verification-window timer for a VERIFICATION_PENDING session.
+   * Fires at verification_expires_at to transition to EXPIRED and release the slot.
+   * @param {string} sessionId
+   * @param {Date} verificationExpiresAt
+   */
+  startVerificationTimer(sessionId, verificationExpiresAt) {
+    this.clearVerificationTimer(sessionId);
+
+    const delayMs = Math.max(0, verificationExpiresAt.getTime() - Date.now());
+
+    const timer = setTimeout(() => {
+      this.handleVerificationTimerExpiration(sessionId);
+    }, delayMs);
+
+    if (timer.unref) timer.unref();
+    this.verificationTimers.set(sessionId, timer);
+  }
+
+  /**
+   * Executes when the verification window elapses without bank confirmation.
+   * Transitions to EXPIRED and releases the slot.
+   * @param {string} sessionId
+   */
+  handleVerificationTimerExpiration(sessionId) {
+    this.verificationTimers.delete(sessionId);
+
+    const session = this.sessionRepo.findById(sessionId);
+    if (!session) return;
+    if (session.status !== PaymentStatus.VERIFICATION_PENDING) return;
+
+    const now = new Date().toISOString();
+    this.sessionRepo.transitionToTerminal(sessionId, PaymentStatus.EXPIRED);
+
+    if (this.auditRepo) {
+      this.auditRepo.log({
+        merchantId: session.merchantId,
+        entityType: 'PAYMENT_SESSION',
+        entityId: sessionId,
+        action: 'PAYMENT_VERIFICATION_EXPIRED',
+        actorType: 'SYSTEM',
+        details: { reason: '30-minute verification window elapsed without bank confirmation' }
+      });
+    }
+
+    this.eventEmitter.emit('PAYMENT.EXPIRED', {
+      paymentId: sessionId,
+      orderId: session.orderId,
+      merchantId: session.merchantId,
+      amountPaise: session.amountPaise
+    });
+
+    if (session.receivingAccountId) {
+      this.queueEngine.promoteNext(session.receivingAccountId);
+    }
+  }
+
+  /** Cancel verification timer for session if running. */
+  cancelVerificationTimer(sessionId) {
+    const timer = this.verificationTimers.get(sessionId);
+    if (timer) {
+      clearTimeout(timer);
+      this.verificationTimers.delete(sessionId);
+    }
+  }
+
+  /**
    * Clears all in-memory timer handles for a session.
    * @param {string} sessionId
    */
@@ -254,19 +344,23 @@ export class TimingEngine {
       clearTimeout(prc);
       this.processingTimers.delete(sessionId);
     }
+
+    const ver = this.verificationTimers.get(sessionId);
+    if (ver) {
+      clearTimeout(ver);
+      this.verificationTimers.delete(sessionId);
+    }
   }
 
   /**
    * Clean up all timers across all sessions (for graceful shutdown).
    */
   destroy() {
-    for (const timer of this.activeTimers.values()) {
-      clearTimeout(timer);
-    }
-    for (const timer of this.processingTimers.values()) {
-      clearTimeout(timer);
-    }
+    for (const timer of this.activeTimers.values()) clearTimeout(timer);
+    for (const timer of this.processingTimers.values()) clearTimeout(timer);
+    for (const timer of this.verificationTimers.values()) clearTimeout(timer);
     this.activeTimers.clear();
     this.processingTimers.clear();
+    this.verificationTimers.clear();
   }
 }

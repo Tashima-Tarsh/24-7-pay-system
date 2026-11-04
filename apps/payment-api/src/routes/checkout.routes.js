@@ -458,8 +458,21 @@ export function registerCheckoutRoutes(server, ctx) {
       receivingAccount = ctx.accountRepo.findActiveForMerchant(session.merchantId);
     }
 
-    const payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
-    const payeeName = receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
+    // Payer-visible payee details come from the merchant's active payment profile
+    // (the "connection"); fall back to the receiving account snapshot otherwise.
+    let payeeVpa = null, payeeName = null, payeeEmail = null;
+    try {
+      const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
+      if (profile) {
+        payeeVpa = profile.payeeVpa;
+        payeeName = profile.payeeName;
+        payeeEmail = profile.payeeEmail;
+      }
+    } catch {}
+    if (!payeeVpa) {
+      payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
+      payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
+    }
     const isMerchantEnabled = receivingAccount
       ? Boolean(receivingAccount.isMerchantEnabled)
       : (snapshot?.isMerchantEnabled !== undefined ? Boolean(snapshot.isMerchantEnabled) : true);
@@ -655,6 +668,8 @@ export function registerCheckoutRoutes(server, ctx) {
       upiDeepLinks: upiUri ? buildUpiPaymentIntentLinks(upiUri) : null,
       payeeVpa,
       payeeName,
+      payeeEmail,
+      copyVpa: payeeVpa,
       isMerchantEnabled,
       upiMode,
       upiServerIndicator,
@@ -1018,6 +1033,9 @@ export function registerCheckoutRoutes(server, ctx) {
   });
 
   // POST /api/v1/checkout/:id/payment-done
+  // Customer reports the 12-digit UTR after paying. Allowed from ACTIVE or
+  // INTENT_ISSUED only. Device binding is intentionally OPTIONAL (a desktop payer
+  // with no deviceId must not be rejected).
   server.post('/api/v1/checkout/:id/payment-done', async (req, res, params) => {
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {
@@ -1025,67 +1043,105 @@ export function registerCheckoutRoutes(server, ctx) {
       return;
     }
 
-    const deviceAccess = checkSessionDeviceAccess(session, req, null, ctx);
-    if (!deviceAccess.allowed) {
-      HttpServer.json(res, deviceAccess.statusCode || 409, deviceAccess.body);
-      return;
-    }
-
-    if (session.status === PaymentStatus.PROCESSING) {
-      // Idempotent
-      HttpServer.json(res, 200, {
-        status: PaymentStatus.PROCESSING,
-        message: 'Already in verification processing.'
-      });
-      return;
-    }
-
-    const now = Date.now();
-    if (session.status === PaymentStatus.ACTIVE && session.expiresAt && session.expiresAt.getTime() <= now) {
-      ctx.sessionRepo.transitionToTerminal(session.id, PaymentStatus.EXPIRED);
-      if (session.receivingAccountId) {
-        ctx.queueEngine.promoteNext(session.receivingAccountId);
-      }
-      server.broadcastSse(session.id, 'status_change', { status: PaymentStatus.EXPIRED });
+    if (session.status !== PaymentStatus.ACTIVE && session.status !== PaymentStatus.INTENT_ISSUED) {
       HttpServer.json(res, 400, {
-        error: 'Cannot start verification: payment session has EXPIRED.'
-      });
-      return;
-    }
-
-    if (session.status !== PaymentStatus.ACTIVE) {
-      HttpServer.json(res, 400, {
-        error: `Cannot start verification: session is in status '${session.status}', must be 'ACTIVE'.`
+        error: `Cannot start verification: session is in status '${session.status}', must be 'ACTIVE' or 'INTENT_ISSUED'.`,
+        code: 'INVALID_SESSION_STATUS'
       });
       return;
     }
 
     const claim = await HttpServer.parseBody(req);
-    if(claim.reportedUtr !== undefined){
-      if(!/^\d{12}$/.test(String(claim.reportedUtr))) return HttpServer.json(res,400,{error:'Enter the 12-digit UPI reference from your payment receipt.'});
-      ctx.db.execute('UPDATE payment_sessions SET metadata=?,updated_at=? WHERE id=?',[JSON.stringify({...session.metadata,reportedUtr:String(claim.reportedUtr),reportedUtrSource:'CUSTOMER_REPORTED'}),new Date().toISOString(),session.id]);
+    const rawUtr = String(claim.utr || '');
+    // Normalize: strip whitespace and hyphens, require exactly 12 digits.
+    const utr = rawUtr.replace(/[\s-]/g, '');
+    if (!/^\d{12}$/.test(utr)) {
+      HttpServer.json(res, 400, { error: 'Invalid UTR: must be a 12-digit UPI reference.', code: 'INVALID_UTR' });
+      return;
     }
-    const updated = ctx.timingEngine.handlePaymentDone(params.id);
+
+    // UTR already claimed by another non-terminal session -> conflict.
+    const existing = ctx.db.queryOne(
+      `SELECT id, status FROM payment_sessions WHERE reported_utr = ? AND id != ? AND status NOT IN ('SUCCESS','FAILED','EXPIRED','CANCELLED')`,
+      [utr, session.id]
+    );
+    if (existing) {
+      HttpServer.json(res, 409, { error: 'UTR already claimed by another payment session.', code: 'UTR_ALREADY_CLAIMED', claimedSessionId: existing.id });
+      return;
+    }
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const verificationExpiresAt = new Date(now.getTime() + 30 * 60 * 1000).toISOString(); // 30 min
+
+    const payerName = claim.payerName || null;
+    const payerVpa = claim.payerVpa || null;
+
+    // Persist UTR + payer fields on the session (column + metadata for engine compatibility).
+    const metadata = { ...(session.metadata || {}) };
+    if (typeof metadata === 'string') {
+      try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+    }
+    metadata.reportedUtr = utr;
+    metadata.reportedUtrSource = 'CUSTOMER_REPORTED';
+    metadata.payerName = payerName;
+    metadata.payerVpa = payerVpa;
+
+    ctx.db.execute(`
+      UPDATE payment_sessions
+      SET status = ?, reported_utr = ?, reported_utr_source = ?, payer_name = ?, payer_vpa = ?,
+          payer_reported_at = ?, verification_expires_at = ?, metadata = ?, updated_at = ?
+      WHERE id = ?
+    `, [
+      PaymentStatus.VERIFICATION_PENDING,
+      utr,
+      'CUSTOMER_REPORTED',
+      payerName,
+      payerVpa,
+      nowIso,
+      verificationExpiresAt,
+      JSON.stringify(metadata),
+      nowIso,
+      session.id
+    ]);
+
     ctx.attributionEngine?.reconcilePendingPayment(session.id);
 
-    // Resolve payee VPA (where the payment will be sent) for instant gaming confirmation
-    const snapshot = session.metadata?.receivingAccountSnapshot;
-    let receivingAccount = session.receivingAccountId
-      ? ctx.accountRepo.findById(session.receivingAccountId)
-      : null;
-    if (!receivingAccount && snapshot?.id) {
-      receivingAccount = ctx.accountRepo.findById(snapshot.id);
-    }
-    const payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
-    const payeeName = receivingAccount?.payeeName || null;
+    const updated = ctx.sessionRepo.findById(session.id);
 
-    // Broadcast SSE update
-    server.broadcastSse(params.id, 'status_change', {
-      status: PaymentStatus.PROCESSING,
-      processingExpiresAt: updated.processingExpiresAt
+    // Resolve payer-visible payee details from the merchant's active payment profile.
+    let payeeVpa = null, payeeName = null, payeeEmail = null;
+    try {
+      const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
+      if (profile) {
+        payeeVpa = profile.payeeVpa;
+        payeeName = profile.payeeName;
+        payeeEmail = profile.payeeEmail;
+      }
+    } catch {}
+    if (!payeeVpa) {
+      const snapshot = session.metadata?.receivingAccountSnapshot;
+      let receivingAccount = session.receivingAccountId
+        ? ctx.accountRepo.findById(session.receivingAccountId)
+        : null;
+      if (!receivingAccount && snapshot?.id) {
+        receivingAccount = ctx.accountRepo.findById(snapshot.id);
+      }
+      payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
+      payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || null;
+    }
+
+    // Broadcast SSE status_change.
+    server.broadcastSse(session.id, 'status_change', {
+      status: PaymentStatus.VERIFICATION_PENDING,
+      verificationExpiresAt,
+      utr,
+      payeeVpa,
+      payeeName,
+      payeeEmail
     });
     server.broadcastSse('admin_counter_events', 'status_change', {
-      status: PaymentStatus.PROCESSING,
+      status: PaymentStatus.VERIFICATION_PENDING,
       sessionId: updated.id,
       orderId: updated.orderId,
       amountPaise: updated.amountPaise ? updated.amountPaise.toString() : '0'
@@ -1093,16 +1149,12 @@ export function registerCheckoutRoutes(server, ctx) {
 
     HttpServer.json(res, 200, {
       paymentId: updated.id,
-      orderId: updated.orderId,
-      amount: toRupeesString(updated.amountPaise),
-      amountPaise: updated.amountPaise.toString(),
-      status: PaymentStatus.PROCESSING,
-      processingExpiresAt: updated.processingExpiresAt,
-      // Where payment should be sent (UPI details for instant display)
+      status: PaymentStatus.VERIFICATION_PENDING,
+      utr,
       payeeVpa,
       payeeName,
-      method: updated.method,
-      message: 'Payment verification started. Scan the UPI QR and pay to the payee VPA shown above.'
+      payeeEmail,
+      message: 'Reference saved — waiting for bank confirmation.'
     });
   });
 

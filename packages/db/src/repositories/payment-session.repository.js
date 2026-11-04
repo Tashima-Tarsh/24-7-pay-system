@@ -662,6 +662,12 @@ export class PaymentSessionRepository {
       verificationLevel: row.verification_level !== undefined && row.verification_level !== null ? Number(row.verification_level) : 0,
       verificationSources: JSON.parse(row.verification_sources || '[]'),
       verificationTag: row.verification_tag || 'UNVERIFIED',
+      reportedUtr: row.reported_utr || null,
+      reportedUtrSource: row.reported_utr_source || null,
+      payerName: row.payer_name || null,
+      payerVpa: row.payer_vpa || null,
+      payerReportedAt: row.payer_reported_at || null,
+      verificationExpiresAt: row.verification_expires_at || null,
       metadata: JSON.parse(row.metadata || '{}'),
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at)

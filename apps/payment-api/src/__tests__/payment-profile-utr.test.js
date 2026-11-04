@@ -1,0 +1,111 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { Database, runMigrations, MerchantRepository, ReceivingAccountRepository, PpMerchantPaymentProfileRepository, PaymentSessionRepository } from '@youpi/db';
+import { startServer } from '../index.js';
+import { PaymentStatus } from '@youpi/common';
+
+function request(baseUrl, path, options = {}) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(path, baseUrl);
+    const reqOpts = {
+      method: options.method || 'GET',
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+    };
+    const req = http.request(url, reqOpts, res => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        let body;
+        try { body = JSON.parse(data); } catch { body = data; }
+        resolve({ status: res.statusCode, headers: res.headers, body });
+      });
+    });
+    req.on('error', reject);
+    if (options.body) req.write(JSON.stringify(options.body));
+    req.end();
+  });
+}
+
+test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, state payload', async () => {
+  const testDb = new Database({ inMemory: true });
+  runMigrations(testDb);
+  const merchantRepo = new MerchantRepository(testDb);
+  const accountRepo = new ReceivingAccountRepository(testDb);
+  const ppRepo = new PpMerchantPaymentProfileRepository(testDb);
+  const sessionRepo = new PaymentSessionRepository(testDb);
+
+  const merchant = merchantRepo.findAll()[0];
+  assert.ok(merchant, 'seeded demo merchant');
+  const accounts = accountRepo.findByMerchantId(merchant.id);
+  assert.ok(accounts.length > 0, 'demo receiving account');
+  const vpa = accounts[0].upiId;
+
+  // PART 1: activate a payment profile pointing at the merchant's own VPA
+  ppRepo.upsert(merchant.id, {
+    payeeVpa: vpa,
+    payeeName: 'Test Merchant',
+    payeeEmail: 'billing@test.example',
+    mcc: '5411',
+    orgid: null,
+    intentSignKeyPem: null,
+    supportPhone: null,
+    isActive: 1
+  });
+
+  const server = await startServer(6197, testDb);
+  const baseUrl = `http://localhost:${server.port}`;
+  try {
+    // AC-6: payment creation works with no deviceId / no customer; 503 only when no profile
+    const created = await request(baseUrl, '/api/v1/payments', {
+      method: 'POST', body: { orderId: 'UTR-ORD-1', amount: '100.00', autoActivate: true }
+    });
+    assert.equal(created.status, 201, 'payment creation must succeed with active profile');
+    assert.equal(created.body.status, PaymentStatus.ACTIVE);
+    const paymentId = created.body.paymentId;
+
+    // AC-13: state payload exposes payer-visible payee details
+    const state = await request(baseUrl, `/api/v1/checkout/${paymentId}/state`);
+    assert.equal(state.status, 200);
+    assert.equal(state.body.payeeVpa, vpa);
+    assert.equal(state.body.payeeName, 'Test Merchant');
+    assert.equal(state.body.payeeEmail, 'billing@test.example');
+    assert.equal(state.body.copyVpa, vpa);
+    assert.ok(state.body.upiUri, 'upiUri present');
+    assert.ok(state.body.upiQr, 'upiQr present');
+
+    // AC-4: 11-digit UTR -> 400 INVALID_UTR
+    const bad = await request(baseUrl, `/api/v1/checkout/${paymentId}/payment-done`, {
+      method: 'POST', body: { utr: '12345678901' }
+    });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.body.code, 'INVALID_UTR');
+
+    // AC-4 / AC-6: 12-digit UTR, no deviceId -> 200 VERIFICATION_PENDING
+    const done = await request(baseUrl, `/api/v1/checkout/${paymentId}/payment-done`, {
+      method: 'POST', body: { utr: '630414503470' }
+    });
+    assert.equal(done.status, 200);
+    assert.equal(done.body.status, PaymentStatus.VERIFICATION_PENDING);
+    assert.equal(done.body.utr, '630414503470');
+    assert.equal(done.body.payeeVpa, vpa);
+    assert.equal(done.body.payeeName, 'Test Merchant');
+    assert.equal(done.body.payeeEmail, 'billing@test.example');
+    assert.equal(sessionRepo.findById(paymentId).status, PaymentStatus.VERIFICATION_PENDING);
+
+    // AC-5: same UTR on a second session -> 409 UTR_ALREADY_CLAIMED
+    const created2 = await request(baseUrl, '/api/v1/payments', {
+      method: 'POST', body: { orderId: 'UTR-ORD-2', amount: '100.00', autoActivate: true }
+    });
+    assert.equal(created2.status, 201);
+    const conflict = await request(baseUrl, `/api/v1/checkout/${created2.body.paymentId}/payment-done`, {
+      method: 'POST', body: { utr: '630414503470' }
+    });
+    assert.equal(conflict.status, 409);
+    assert.equal(conflict.body.code, 'UTR_ALREADY_CLAIMED');
+
+  } finally {
+    await server.close();
+    testDb.close();
+  }
+});
