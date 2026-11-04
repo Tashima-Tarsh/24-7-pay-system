@@ -16,9 +16,11 @@ import java.util.*
  */
 class PendingPaymentStore(private val context: Context) {
 
-    private const val PREFS_NAME = "sanbookpay_upi_intent_pending"
-    private const val KEY_PREFIX = "pending_"
-    private const val SUBMITTED_PREFIX = "submitted_"
+    companion object {
+        private const val PREFS_NAME = "sanbookpay_upi_intent_pending"
+        private const val KEY_PREFIX = "pending_"
+        private const val SUBMITTED_PREFIX = "submitted_"
+    }
 
     private val masterKeyAlias: String by lazy {
         MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)

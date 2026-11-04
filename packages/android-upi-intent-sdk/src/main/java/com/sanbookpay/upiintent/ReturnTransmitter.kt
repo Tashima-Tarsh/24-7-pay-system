@@ -8,6 +8,7 @@ import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
@@ -69,7 +70,7 @@ class ReturnTransmitter(private val context: Context) {
             .url(url)
             .addHeader("Content-Type", "application/json")
             .addHeader("Idempotency-Key", paymentReturn.idempotencyKey)
-            .post(RequestBody.create(body.toString(), toMediaType("application/json")))
+            .post(RequestBody.create("application/json".toMediaType(), body.toString()))
             .build()
 
         client.newCall(request).enqueue(object : okhttp3.Callback {
@@ -206,9 +207,9 @@ class ReturnTransmitter(private val context: Context) {
     }
 
     companion object {
-        private const val KEY_PAYMENT_ID = "payment_id"
-        private const val KEY_IDEMPOTENCY_KEY = "idempotency_key"
-        private const val KEY_RETURN_JSON = "return_json"
+        const val KEY_PAYMENT_ID = "payment_id"
+        const val KEY_IDEMPOTENCY_KEY = "idempotency_key"
+        const val KEY_RETURN_JSON = "return_json"
     }
 }
 
@@ -243,7 +244,10 @@ class UpiRetryWorker(
                 upiTransactionReference = o.optString("upiTransactionReference", null).takeIf { it.isNotEmpty() },
                 eventTimestamp = o.optLong("eventTimestamp", System.currentTimeMillis()),
                 idempotencyKey = idempotencyKey,
-                metadata = o.optJSONObject("metadata")?.toMap() ?: emptyMap()
+                metadata = o.optJSONObject("metadata")
+                    ?.toMap()
+                    ?.mapValues { (_, value) -> value?.toString() ?: "" }
+                    ?: emptyMap()
             )
         } catch (e: Exception) {
             return Result.failure()

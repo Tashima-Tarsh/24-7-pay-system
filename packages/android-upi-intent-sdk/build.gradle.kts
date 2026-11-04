@@ -46,5 +46,5 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.json:json:20231018")
+    implementation("org.json:json:20231013")
 }

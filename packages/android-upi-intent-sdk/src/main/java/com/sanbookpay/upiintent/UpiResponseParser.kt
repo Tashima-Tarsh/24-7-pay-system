@@ -134,7 +134,7 @@ object UpiResponseParser {
                 appIdentity = appIdentity,
                 rawResult = rawResult.takeIf { it.isNotEmpty() } ?: null,
                 parsedStatus = normalized.name,
-                upiTransactionReference = reference.takeIf { it.isNotBlank() },
+                upiTransactionReference = reference.takeIf { it?.isNotBlank() == true },
                 eventTimestamp = nowMillis,
                 idempotencyKey = idempotencyKey,
                 metadata = metadata

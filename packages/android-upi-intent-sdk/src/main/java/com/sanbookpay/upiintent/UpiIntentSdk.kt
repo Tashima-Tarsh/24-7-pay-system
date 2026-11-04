@@ -7,8 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
@@ -96,7 +96,7 @@ class UpiIntentSdk private constructor(
      * @param callback invoked with the launch result.
      */
     fun launchPayment(
-        activity: Activity,
+        activity: ComponentActivity,
         intent: Intent,
         pendingPayment: PendingPayment,
         callback: (UpiLaunchResult) -> Unit
@@ -123,7 +123,7 @@ class UpiIntentSdk private constructor(
      * Launches payment in a specific discovered compatible app by package name.
      */
     fun launchPaymentInApp(
-        activity: Activity,
+        activity: ComponentActivity,
         packageName: String,
         upiUri: Uri,
         pendingPayment: PendingPayment,
@@ -152,7 +152,7 @@ class UpiIntentSdk private constructor(
             return
         }
 
-        val captureResult = capturePaymentReturn(result.intent, pendingPayment)
+        val captureResult = capturePaymentReturn(result.data, pendingPayment)
         when (captureResult) {
             is UpiCaptureResult.Returned -> {
                 val paymentReturn = captureResult.paymentReturn
