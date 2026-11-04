@@ -1,12 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPaymentApp } from '../index.js';
-import { Database, runMigrations } from '@youpi/db';
+import { Database, runMigrations, PpMerchantPaymentProfileRepository } from '@youpi/db';
 import { PaymentStatus } from '@youpi/common';
 
 test('Sanbook Pay - Customer Auto-Provisioning, Multi-Method & Receipts Suite', async (t) => {
   const db = new Database({ inMemory: true });
   runMigrations(db);
+  // PART 1: demo merchant needs an active payment profile to accept payments.
+  const ppRepo = new PpMerchantPaymentProfileRepository(db);
+  ppRepo.upsert('00000000-0000-0000-0000-000000000001', {
+    payeeVpa: '9082843142@slc',
+    payeeName: 'Sanbook Pay Store',
+    payeeEmail: 'billing@sanbookpay.com',
+    mcc: '5411',
+    orgid: null,
+    intentSignKeyPem: null,
+    supportPhone: null,
+    isActive: 1
+  });
   const { server, context, destroy, rawServer } = createPaymentApp(db);
 
   await new Promise(resolve => rawServer.listen(0, '127.0.0.1', resolve));

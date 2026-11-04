@@ -9,6 +9,7 @@ import { CustomerSessionRepository } from '../repositories/customer-session.repo
 import { PaymentSessionRepository } from '../repositories/payment-session.repository.js';
 import { ObservationRepository } from '../repositories/observation.repository.js';
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
+import { PpMerchantPaymentProfileRepository } from '../repositories/pp-merchant-payment-profile.repository.js';
 import { QueueEngine } from '@youpi/core';
 import { TimingEngine } from '@youpi/core';
 import { AttributionEngine } from '@youpi/core';
@@ -69,6 +70,19 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
     payeeName: 'Nova Commerce India',
     isMerchantEnabled: true,
     isActive: true
+  });
+
+  // PART 1: merchant must have an active payment profile before payments can be created.
+  const ppRepo = new PpMerchantPaymentProfileRepository(testDb);
+  ppRepo.upsert(merchant.id, {
+    payeeVpa: receivingAccount.upiId,
+    payeeName: receivingAccount.payeeName,
+    payeeEmail: 'billing@novacommerce.com',
+    mcc: '5411',
+    orgid: null,
+    intentSignKeyPem: null,
+    supportPhone: null,
+    isActive: 1
   });
 
   const apiInstance = await startPaymentApi(6984, testDb);

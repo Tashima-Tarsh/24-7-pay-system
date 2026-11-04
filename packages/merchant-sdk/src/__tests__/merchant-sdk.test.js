@@ -1,6 +1,6 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { Database } from '@youpi/db';
+import { Database, PpMerchantPaymentProfileRepository } from '@youpi/db';
 import { startServer as startPaymentApi } from '../../../../apps/payment-api/src/index.js';
 import { YoupiPaymentClient } from '../index.js';
 import { generateHmac } from '@youpi/common';
@@ -21,6 +21,19 @@ describe('Merchant SDK Integration Tests', () => {
       merchantSecret,
       '00000000-0000-0000-0000-000000000001'
     ]);
+
+    // PART 1: demo merchant needs an active payment profile to accept payments.
+    const ppRepo = new PpMerchantPaymentProfileRepository(testDb);
+    ppRepo.upsert('00000000-0000-0000-0000-000000000001', {
+      payeeVpa: '9082843142@slc',
+      payeeName: 'Sanbook Pay Store',
+      payeeEmail: 'billing@sanbookpay.com',
+      mcc: '5411',
+      orgid: null,
+      intentSignKeyPem: null,
+      supportPhone: null,
+      isActive: 1
+    });
 
     client = new YoupiPaymentClient({
       apiUrl: `http://localhost:${apiInstance.port}`,

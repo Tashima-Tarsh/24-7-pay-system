@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { Database } from '@youpi/db';
+import { Database, PpMerchantPaymentProfileRepository } from '@youpi/db';
 import { startServer as startPaymentApi } from '../index.js';
 import { PaymentStatus, PaymentMethod } from '@youpi/common';
 import { authHeadersFor } from '../../../../scripts/test-support.js';
@@ -15,6 +15,19 @@ describe('Phase 15: Counter Payments (Cash & Card at Counter)', () => {
     testDb = new Database({ inMemory: true });
     apiInstance = await startPaymentApi(6194, testDb);
     baseUrl = `http://localhost:${apiInstance.port}`;
+
+    // PART 1: demo merchant needs an active payment profile to accept payments.
+    const ppRepo = new PpMerchantPaymentProfileRepository(testDb);
+    ppRepo.upsert('00000000-0000-0000-0000-000000000001', {
+      payeeVpa: '9082843142@slc',
+      payeeName: 'Sanbook Pay Store',
+      payeeEmail: 'billing@sanbookpay.com',
+      mcc: '5411',
+      orgid: null,
+      intentSignKeyPem: null,
+      supportPhone: null,
+      isActive: 1
+    });
   });
 
   after(async () => {
