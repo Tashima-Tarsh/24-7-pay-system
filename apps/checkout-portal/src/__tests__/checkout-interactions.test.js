@@ -26,12 +26,11 @@ test('uncertain external collection hides payment actions and explains reconcili
 test('UPI app links preserve the exact session amount, payee and reference',()=>{
   const {window,state}=checkout();
   const gpay=window.dynamoUpiLink('gpay',state.upiUri,'Android');
-  assert.ok(gpay.startsWith('intent://pay?'));
+  assert.equal(gpay,state.upiUri);
   assert.ok(gpay.includes('am=123.45&tr=ORDER-1'));
-  assert.ok(gpay.endsWith('#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end'));
-  assert.ok(window.dynamoUpiLink('phonepe',state.upiUri,'Android').endsWith('#Intent;scheme=upi;package=com.phonepe.app;end'));
-  assert.ok(window.dynamoUpiLink('paytm',state.upiUri,'Android').endsWith('#Intent;scheme=upi;package=net.one97.paytm;end'));
-  assert.ok(window.dynamoUpiLink('navi',state.upiUri,'Android').endsWith('#Intent;scheme=upi;package=com.naviapp;end'));
+  assert.equal(window.dynamoUpiLink('phonepe',state.upiUri,'Android'),state.upiUri);
+  assert.equal(window.dynamoUpiLink('paytm',state.upiUri,'Android'),state.upiUri);
+  assert.equal(window.dynamoUpiLink('navi',state.upiUri,'Android'),state.upiUri);
   assert.equal(window.dynamoUpiLink('generic',state.upiUri,'Android'),state.upiUri);
   assert.ok(window.dynamoUpiLink('gpay',state.upiUri,'iPhone').startsWith('gpay://upi/pay?'));
   assert.throws(()=>window.dynamoUpiLink('gpay','https://malicious.example','Android'));

@@ -832,10 +832,10 @@
       const appGrid = $('dpAppGrid');
       // Static app tiles are pre-declared in HTML; set up handlers via getElementById
       const appDefs = [
-        { id: 'gpay', name: 'Google Pay', pkg: 'com.google.android.apps.nbu.paisa.user', icon: '/icons/gpay.png' },
-        { id: 'phonepe', name: 'PhonePe', pkg: 'com.phonepe.app', icon: '/icons/phonepe.png' },
-        { id: 'paytm', name: 'Paytm', pkg: 'net.one97.paytm', icon: '/icons/paytm.png' },
-        { id: 'navi', name: 'Navi', pkg: 'com.naviapp', icon: null },
+        { id: 'gpay', name: 'Google Pay', icon: '/icons/gpay.png' },
+        { id: 'phonepe', name: 'PhonePe', icon: '/icons/phonepe.png' },
+        { id: 'paytm', name: 'Paytm', icon: '/icons/paytm.png' },
+        { id: 'navi', name: 'Navi', icon: null },
         { id: 'generic', name: 'Generic UPI', pkg: null, icon: null }
       ];
       appDefs.forEach(app => {
@@ -845,13 +845,11 @@
         el.onclick = () => {
           if (!isAndroid) { toast('Scan the QR code using the UPI app on your phone.'); return; }
           if (!canPay || !upiUri) { toast('Wait for this payment session to activate.'); return; }
-          if (app.id === 'generic') { try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); } return; }
           try {
-            const uriPart = upiUri.split('?')[1] || '';
-            // Keep the canonical UPI payload byte-for-byte compatible with the
-            // QR code. The Android package only selects the installed PSP; it
-            // must not change the payment scheme or parameters.
-            location.href = `intent://pay?${uriPart}#Intent;scheme=upi;package=${app.pkg};end`;
+            // A mobile browser must use the same generic UPI URI as the QR.
+            // PSP-specific schemes and package-forced intents can apply a
+            // different acceptance path even when the visible fields match.
+            location.href = upiUri;
             toast('Return to this page after paying.');
           } catch (e) { toast('Could not open ' + app.name); }
         };
@@ -1090,15 +1088,7 @@
         throw new Error('Invalid UPI URI');
       }
       const isAndroid = /Android/i.test(String(platform));
-      const packages = {
-        gpay: 'com.google.android.apps.nbu.paisa.user',
-        phonepe: 'com.phonepe.app',
-        paytm: 'net.one97.paytm',
-        navi: 'com.naviapp'
-      };
       if (isAndroid) {
-        if (app === 'generic') return upiUriParam;
-        if (packages[app]) return `intent://pay?${upiUriParam.split('?')[1] || ''}#Intent;scheme=upi;package=${packages[app]};end`;
         return upiUriParam;
       }
       // iOS / other
