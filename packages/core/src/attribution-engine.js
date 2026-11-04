@@ -40,16 +40,138 @@ export class AttributionEngine {
     this.pendingGraceTimers.clear();
   }
 
+  /**
+   * PART 5 — UTR-first, amount-second classification of an observation against a session.
+   * @param {{ bankReferenceNumber?: string, amountPaise?: number }} obs
+   * @param {{ reportedUtr?: string, amountPaise?: number }} session
+   * @returns {'EXACT'|'MISMATCH'|'PROBABLE'|'WEAK'}
+   */
+  classify(obs, session) {
+    const obsUtr = obs.bankReferenceNumber || obs.utr || null;
+    const reported = session.reportedUtr || session.metadata?.reportedUtr || null;
+    if (obsUtr && reported && obsUtr === reported) return 'EXACT';
+    if (obsUtr && reported && obsUtr !== reported) return 'MISMATCH';
+    if (!reported && Number(obs.amountPaise) === Number(session.amountPaise)) return 'PROBABLE';
+    return 'WEAK';
+  }
+
   reconcilePendingPayment(sessionId) {
     const session=this.sessionRepo.findById(sessionId);
     if(![PaymentStatus.ACTIVE,PaymentStatus.PROCESSING,PaymentStatus.VERIFICATION_PENDING].includes(session?.status) || !session.metadata?.reportedUtr) return null;
     const rows=this.sessionRepo.db.query(`SELECT * FROM payment_observations WHERE receiving_account_id=? AND amount_paise=? AND bank_reference_number=? AND attributed_payment_id IS NULL AND attribution_status IN ('UNATTRIBUTED','LATE_UNMATCHED') ORDER BY observed_at`,[session.receivingAccountId,Number(session.amountPaise),session.metadata.reportedUtr]);
     for(const row of rows){
       if(!BANK_SOURCES.includes(row.source)) continue;
-      const result=this.processObservation(this.obsRepo.mapRow(row));
-      if(result.attributed)return result;
+      const normalized=this.obsRepo.mapRow(row);
+      const classification=this.classify(normalized, session);
+      if (classification === 'EXACT') {
+        // UTR equality settles immediately at Level 3, one source is enough.
+        const result=this.finalizeExactUtrMatch(session, normalized.source, normalized.id);
+        if(result)return result;
+      } else if (classification === 'MISMATCH') {
+        // Different UTR reported: flag under review, never settle from this observation.
+        this.flagUtrMismatch(session, normalized.source, normalized.id);
+      } else if (classification === 'PROBABLE') {
+        // Amount match but no reported UTR: hold, notify merchant, settle on operator action only.
+        this.holdProbable(session, normalized.source, normalized.id);
+      } else {
+        // WEAK: store unattributed, keep waiting.
+        this.obsRepo.markAttributed(normalized.id, session.id);
+      }
     }
     return null;
+  }
+
+  /**
+   * Confirm a payment via exact UTR match: SUCCESS, verificationLevel 3,
+   * tag UTR_VERIFIED, one source enough.
+   */
+  finalizeExactUtrMatch(session, source, observationId) {
+    const now = new Date().toISOString();
+    const sources = [source];
+    const tag = 'UTR_VERIFIED';
+    this.sessionRepo.db.execute(`
+      UPDATE payment_sessions
+      SET status = ?, verification_level = 3, verification_sources = ?, verification_tag = ?,
+          attributed_observation_id = COALESCE(attributed_observation_id, ?),
+          completed_at = COALESCE(completed_at, ?), updated_at = ?
+      WHERE id = ?
+    `, [PaymentStatus.SUCCESS, JSON.stringify(sources), tag, observationId, now, now, session.id]);
+    this.obsRepo.markAttributed(observationId, session.id);
+
+    if (this.auditRepo) {
+      this.auditRepo.log({
+        merchantId: session.merchantId,
+        entityType: 'PAYMENT_SESSION',
+        entityId: session.id,
+        action: 'PAYMENT_UTR_VERIFIED_SUCCESS_L3',
+        actorType: 'SYSTEM',
+        details: { source, observationId, verificationLevel: 3, verificationTag: tag, sources }
+      });
+    }
+
+    this.eventEmitter.emit('PAYMENT.SUCCESS', {
+      paymentId: session.id,
+      orderId: session.orderId,
+      merchantId: session.merchantId,
+      amountPaise: session.amountPaise,
+      observationId,
+      verificationLevel: 3,
+      verificationTag: tag,
+      sources
+    });
+    this.eventEmitter.emit('PAYMENT.VERIFICATION_UPGRADED', {
+      paymentId: session.id,
+      verificationLevel: 3,
+      verificationTag: tag,
+      sources
+    });
+    return {
+      attributed: true,
+      duplicate: false,
+      lateMatch: false,
+      paymentSessionId: session.id,
+      observationId,
+      outcomeStatus: PaymentStatus.SUCCESS,
+      verificationLevel: 3,
+      verificationTag: tag,
+      verificationSources: sources
+    };
+  }
+
+  flagUtrMismatch(session, source, observationId) {
+    this.obsRepo.markAttributed(observationId, session.id);
+    if (this.auditRepo) {
+      this.auditRepo.log({
+        merchantId: session.merchantId,
+        entityType: 'PAYMENT_SESSION',
+        entityId: session.id,
+        action: 'PAYMENT_UTR_MISMATCH_UNDER_REVIEW',
+        actorType: 'SYSTEM',
+        details: { source, observationId, reportedUtr: session.metadata?.reportedUtr }
+      });
+    }
+    this.eventEmitter.emit('PAYMENT.VERIFICATION_UPGRADED', {
+      paymentId: session.id,
+      verificationLevel: session.verificationLevel || 0,
+      verificationTag: 'UTR_MISMATCH_UNDER_REVIEW',
+      sources: session.verificationSources || []
+    });
+    return { attributed: false, paymentSessionId: session.id, observationId, outcomeStatus: PaymentStatus.VERIFICATION_PENDING };
+  }
+
+  holdProbable(session, source, observationId) {
+    this.obsRepo.markAttributed(observationId, session.id);
+    if (this.auditRepo) {
+      this.auditRepo.log({
+        merchantId: session.merchantId,
+        entityType: 'PAYMENT_SESSION',
+        entityId: session.id,
+        action: 'PAYMENT_PROBABLE_AMOUNT_ONLY_HELD',
+        actorType: 'SYSTEM',
+        details: { source, observationId, amountPaise: session.amountPaise }
+      });
+    }
+    return { attributed: false, paymentSessionId: session.id, observationId, outcomeStatus: PaymentStatus.VERIFICATION_PENDING };
   }
 
   /**

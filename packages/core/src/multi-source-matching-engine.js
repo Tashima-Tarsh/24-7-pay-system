@@ -11,7 +11,7 @@
  */
 import crypto from 'node:crypto';
 
-const REQUIRED_MATCHES = 1; // any one source confirms (SMS-only testing)
+const REQUIRED_MATCHES = 2; // two independent sources, unless UTR equality settles alone
 
 const SOURCE_WEIGHTS = {
   ANDROID_OBSERVER: 1,
@@ -60,9 +60,12 @@ export class MultiSourceMatchingEngine {
     // Store evidence (dedupe by sourceId)
     sources.set(sourceId || source, entry);
 
-    // Count unique sources
     const matchCount = sources.size;
-    const confirmed = matchCount >= REQUIRED_MATCHES && !this.confirmedPayments.has(paymentId);
+    // UTR equality settles alone; otherwise two independent sources are required.
+    // One source alone never settles unless it carries a matching UTR.
+    const hasUtr = Boolean(utr);
+    const twoSources = matchCount >= REQUIRED_MATCHES;
+    const confirmed = (hasUtr || twoSources) && !this.confirmedPayments.has(paymentId);
 
     if (confirmed) {
       this.confirmedPayments.add(paymentId);
