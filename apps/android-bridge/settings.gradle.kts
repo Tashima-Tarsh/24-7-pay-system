@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "DynamoBridge"
 include(":app")
+include(":upi-intent-sdk")
+project(":upi-intent-sdk").projectDir = file("../../packages/android-upi-intent-sdk")

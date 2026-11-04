@@ -263,5 +263,32 @@ class ApiClient(
             false
         }
     }
+
+    /**
+     * Records that a native UPI app was opened/returned. This intentionally calls the
+     * checkout's verification workflow only; it does not report a client result as a
+     * settled payment. Authoritative settlement still comes from the bank observer/provider.
+     */
+    fun beginCheckoutVerification(paymentId: String, callback: (Boolean) -> Unit) {
+        if (!isPaired() || paymentId.isBlank()) {
+            handler.post { callback(false) }
+            return
+        }
+        val request = Request.Builder()
+            .url("${getBaseUrl()}/api/v1/checkout/$paymentId/payment-done")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-Device-Id", getDeviceId() ?: "")
+            .post("{}".toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) {
+                handler.post { callback(false) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use { handler.post { callback(it.isSuccessful) } }
+            }
+        })
+    }
 }
 

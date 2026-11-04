@@ -846,11 +846,14 @@
           if (!isAndroid) { toast('Scan the QR code using the UPI app on your phone.'); return; }
           if (!canPay || !upiUri) { toast('Wait for this payment session to activate.'); return; }
           try {
-            // A mobile browser must use the same generic UPI URI as the QR.
-            // PSP-specific schemes and package-forced intents can apply a
-            // different acceptance path even when the visible fields match.
-            location.href = upiUri;
-            toast('Return to this page after paying.');
+            // Prefer the installed Dynamo Bridge when available. It uses Android's
+            // installed-app discovery and Activity Result APIs, rather than asking
+            // Chrome to guess an app-specific URL scheme. The canonical UPI URI is
+            // unchanged from the QR code.
+            const handoff = 'dynamopay://pay?paymentId=' + encodeURIComponent(paymentId) +
+              '&upiUri=' + encodeURIComponent(upiUri);
+            location.href = handoff;
+            toast('Opening Dynamo Bridge. If it is not installed, scan the QR code.');
           } catch (e) { toast('Could not open ' + app.name); }
         };
       });

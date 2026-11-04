@@ -6,14 +6,18 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.*
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import androidx.work.*
 import com.dynamopay.bridge.workers.ForwardRetryWorker
+import com.sanbookpay.upiintent.UpiIntentEngine
+import com.sanbookpay.upiintent.UpiResponseParser
 
 class MainActivity : AppCompatActivity() {
     private lateinit var app: BridgeApp
@@ -31,6 +35,26 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSettings: Button
     private lateinit var btnExportLogs: Button
     private lateinit var btnRevoke: Button
+    private lateinit var upiLauncher: UpiIntentEngine
+    private lateinit var upiAppContainer: LinearLayout
+    private var activePaymentId: String? = null
+    private var activeAppName: String? = null
+
+    private val paymentResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val paymentId = activePaymentId
+        val parsed = UpiResponseParser.parseIntentReturn(
+            result.data, paymentId ?: "unknown", paymentId ?: "unknown", null,
+            "ANDROID", activeAppName, "native-return-${paymentId ?: System.currentTimeMillis()}", emptyMap()
+        )
+        val outcome = (parsed as? com.sanbookpay.upiintent.UpiCaptureResult.Returned)?.paymentReturn?.parsedStatus ?: "UNKNOWN"
+        Toast.makeText(this, "UPI app returned: $outcome. Waiting for bank confirmation.", Toast.LENGTH_LONG).show()
+        if (paymentId != null) {
+            apiClient.beginCheckoutVerification(paymentId) { accepted ->
+                if (!accepted) Toast.makeText(this, "Return recorded locally; verification will continue when the bridge is connected.", Toast.LENGTH_LONG).show()
+            }
+        }
+        clearUpiApps()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         eventForwarder = app.eventForwarder
         healthMonitor = app.healthMonitor
         apiClient = ApiClient(this, cryptoHelper, getSecurePrefs())
+        upiLauncher = UpiIntentEngine(this)
 
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -120,6 +145,13 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(btnRevoke)
 
+        upiAppContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = android.view.View.GONE
+            setPadding(0, 20, 0, 0)
+        }
+        layout.addView(upiAppContainer)
+
         val privacyNotice = TextView(this).apply {
             text = "Dynamo Bridge only observes payment credit notifications you explicitly authorize. " +
                 "It never collects UPI PINs, passwords, or OTPs."
@@ -137,6 +169,77 @@ class MainActivity : AppCompatActivity() {
             // Retain WorkManager-based durable retry + periodic reconciliation (not a 5s poll loop).
             scheduleDurableRetryAndReconciliation()
         }
+        handleUpiHandoff(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleUpiHandoff(intent)
+    }
+
+    /**
+     * Browser handoff is deliberately narrow: only a canonical upi://pay URI and a checkout
+     * identifier are accepted. We discover installed UPI handlers before package-specific
+     * launch, matching the native Android integration pattern used by established SDKs.
+     */
+    private fun handleUpiHandoff(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme != "dynamopay" || data.host != "pay") return
+        val paymentId = data.getQueryParameter("paymentId")?.trim().orEmpty()
+        val upiUriString = data.getQueryParameter("upiUri")?.trim().orEmpty()
+        val upiUri = try { Uri.parse(upiUriString) } catch (_: Exception) { null }
+        if (paymentId.isBlank() || !isCanonicalUpiUri(upiUri)) {
+            Toast.makeText(this, "Invalid checkout handoff.", Toast.LENGTH_LONG).show()
+            return
+        }
+        activePaymentId = paymentId
+        showCompatibleUpiApps(upiUri!!)
+    }
+
+    private fun isCanonicalUpiUri(uri: Uri?): Boolean {
+        if (uri?.scheme != "upi" || uri.host != "pay") return false
+        val amount = uri.getQueryParameter("am")?.toBigDecimalOrNull() ?: return false
+        return amount > java.math.BigDecimal.ZERO &&
+            !uri.getQueryParameter("pa").isNullOrBlank() &&
+            !uri.getQueryParameter("pn").isNullOrBlank() &&
+            !uri.getQueryParameter("tn").isNullOrBlank()
+    }
+
+    private fun showCompatibleUpiApps(upiUri: Uri) {
+        clearUpiApps()
+        val heading = TextView(this).apply {
+            text = "Choose your installed UPI app"
+            textSize = 18f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        upiAppContainer.addView(heading)
+        val apps = upiLauncher.discoverCompatibleUpiApps()
+        if (apps.isEmpty()) {
+            Toast.makeText(this, "No compatible UPI app is installed on this device.", Toast.LENGTH_LONG).show()
+            clearUpiApps()
+            return
+        }
+        apps.forEach { app ->
+            upiAppContainer.addView(Button(this).apply {
+                text = app.appName ?: app.packageName
+                setOnClickListener {
+                    activeAppName = app.appName ?: app.packageName
+                    try {
+                        paymentResult.launch(upiLauncher.createLaunchIntentForApp(upiUri, app.packageName))
+                    } catch (_: Exception) {
+                        Toast.makeText(this@MainActivity, "Could not open ${app.appName ?: "this UPI app"}.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            })
+        }
+        upiAppContainer.visibility = android.view.View.VISIBLE
+    }
+
+    private fun clearUpiApps() {
+        if (!::upiAppContainer.isInitialized) return
+        upiAppContainer.removeAllViews()
+        upiAppContainer.visibility = android.view.View.GONE
     }
 
     override fun onResume() {

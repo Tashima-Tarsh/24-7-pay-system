@@ -92,7 +92,9 @@ data class PendingPayment(
     val idempotencyKey: String,
     val status: String = "PENDING",
     val lastServerStatus: String? = null,
-    val retryCount: Int = 0
+    val retryCount: Int = 0,
+    /** Endpoint context is supplied by the host app; it is never inferred from a UPI app. */
+    val metadata: Map<String, String> = emptyMap()
 )
 
 /**
