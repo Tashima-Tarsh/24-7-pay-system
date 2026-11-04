@@ -701,6 +701,9 @@
             <img class="dp-app-tile-icon" src="/icons/paytm.png" alt="Paytm" />
             <span class="dp-app-tile-label">Paytm</span>
           </div>
+          <div class="dp-app-tile" id="navi" data-app="navi">
+            <span class="dp-app-tile-label">Navi</span>
+          </div>
           <div class="dp-app-tile" id="generic" data-app="generic">
             <span class="dp-app-tile-label">Generic UPI</span>
           </div>
@@ -832,6 +835,7 @@
         { id: 'gpay', name: 'Google Pay', pkg: 'com.google.android.apps.nbu.paisa.user', icon: '/icons/gpay.png' },
         { id: 'phonepe', name: 'PhonePe', pkg: 'com.phonepe.app', icon: '/icons/phonepe.png' },
         { id: 'paytm', name: 'Paytm', pkg: 'net.one97.paytm', icon: '/icons/paytm.png' },
+        { id: 'navi', name: 'Navi', pkg: null, icon: null },
         { id: 'generic', name: 'Generic UPI', pkg: null, icon: null }
       ];
       appDefs.forEach(app => {
@@ -844,12 +848,17 @@
           if (app.id === 'generic') { try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); } return; }
           try {
             const uriPart = upiUri.split('?')[1] || '';
-            // Google Pay documents the tez URI scheme for direct launches. The
-            // generic UPI URI remains the QR/generic-button path; do not wrap
-            // Google Pay in an Android intent URI because it handles that path
-            // differently from a scanned UPI QR.
-            if (app.id === 'gpay') {
-              location.href = `tez://upi/pay?${uriPart}`;
+            // Use each PSP's UPI URI scheme. The QR/generic button remains on
+            // upi://pay; wrapping a direct PSP launch in an Android intent can
+            // make it behave differently from the same scanned QR.
+            const directSchemes = {
+              gpay: 'tez://upi/pay',
+              phonepe: 'phonepe://pay',
+              paytm: 'paytmmp://upi/pay',
+              navi: 'navi://upi/pay'
+            };
+            if (directSchemes[app.id]) {
+              location.href = `${directSchemes[app.id]}?${uriPart}`;
               toast('Return to this page after paying.');
               return;
             }
@@ -1093,22 +1102,22 @@
       }
       const isAndroid = /Android/i.test(String(platform));
       const schemes = {
-        gpay: 'com.google.android.apps.nbu.paisa.user',
-        phonepe: 'com.phonepe.app',
-        paytm: 'net.one97.paytm',
+        gpay: 'tez://upi/pay',
+        phonepe: 'phonepe://pay',
+        paytm: 'paytmmp://upi/pay',
+        navi: 'navi://upi/pay',
         generic: null
       };
-      const pkg = schemes[app];
       if (isAndroid) {
         if (app === 'generic') return upiUriParam;
-        if (app === 'gpay') return `tez://upi/pay?${upiUriParam.split('?')[1] || ''}`;
-        if (pkg) return `upi://pay?${upiUriParam.split('?')[1] || ''}#Intent;scheme=upi;package=${pkg};end`;
+        if (schemes[app]) return `${schemes[app]}?${upiUriParam.split('?')[1] || ''}`;
         return upiUriParam;
       }
       // iOS / other
       if (app === 'gpay') return `gpay://upi/pay?${upiUriParam.split('?')[1] || ''}`;
       if (app === 'phonepe') return `phonepe://upi/pay?${upiUriParam.split('?')[1] || ''}`;
       if (app === 'paytm') return `paytm://upi/pay?${upiUriParam.split('?')[1] || ''}`;
+      if (app === 'navi') return `navi://upi/pay?${upiUriParam.split('?')[1] || ''}`;
       return upiUriParam;
     }
 
