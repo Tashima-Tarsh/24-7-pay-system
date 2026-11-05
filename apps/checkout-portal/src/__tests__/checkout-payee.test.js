@@ -39,11 +39,11 @@ function checkout(ua, overrides = {}) {
     payeeEmail: 'billing@merchant.example', copyVpa: 'merchant@upi',
     upiUri: 'upi://pay?pa=merchant%40upi&pn=Merchant+Store&am=123.45&tr=ORDER-1&cu=INR&mc=5411&mode=02',
     upiQr: 'data:image/svg+xml;base64,abc',
-    upiIntent: {
-      gpay: 'intent://pay?pa=merchant%40upi#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end',
-      phonepe: 'intent://pay?pa=merchant%40upi#Intent;scheme=upi;package=com.phonepe.app;end',
-      paytm: 'intent://pay?pa=merchant%40upi#Intent;scheme=upi;package=net.one97.paytm;end',
-      bhim: 'intent://pay?pa=merchant%40upi#Intent;scheme=upi;package=in.org.npci.upiapp;end'
+    upiDeepLinks: {
+      gpay: 'tez://upi/pay?pa=merchant%40upi',
+      phonepe: 'phonepe://pay?pa=merchant%40upi',
+      paytm: 'paytmmp://pay?pa=merchant%40upi',
+      bhim: 'upi://pay?pa=merchant%40upi'
     },
     enabledMethods: ['UPI', 'COD'], timeRemainingSeconds: 300, expiresAt: new Date(Date.now() + 100000).toISOString()
   };
@@ -90,6 +90,12 @@ test('AC-3: Android UA shows four package app tiles', () => {
   assert.ok(pkgs.includes('com.phonepe.app'));
   assert.ok(pkgs.includes('net.one97.paytm'));
   assert.ok(pkgs.includes('in.org.npci.upiapp'));
+});
+
+test('AC-3: Android app tiles use the server-issued PSP deep links', () => {
+  const { element, context } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
+  element('gpay').onclick();
+  assert.equal(context.location.href, 'tez://upi/pay?pa=merchant%40upi');
 });
 
 test('AC-13: payee block renders the payment identity without exposing merchant email', () => {

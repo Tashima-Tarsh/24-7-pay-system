@@ -939,19 +939,20 @@
 
       const tiles = appGrid ? appGrid.querySelectorAll('.dp-app-tile') : [];
       tiles.forEach(tile => {
-        const pkg = tile.getAttribute('data-pkg');
         const app = tile.getAttribute('data-app');
         tile.disabled = !(isAndroid && canPay && upiUri);
         tile.onclick = () => {
           if (!isAndroid) { toast('Scan the QR code using the UPI app on your phone.'); return; }
           if (!canPay || !upiUri) { toast('Wait for this payment session to activate.'); return; }
-          const query = upiUri.split('?')[1] || '';
-          const intentUri = 'intent://pay?' + query + '#Intent;scheme=upi;package=' + encodeURIComponent(pkg || '') + ';end';
+          // Use the app-specific link constructed by the API from the exact same
+          // server-issued UPI URI as the QR.  Do not synthesize a package-forced
+          // Android intent here: several PSPs validate their own URL scheme.
+          const appLink = (s.upiDeepLinks && s.upiDeepLinks[app]) || upiUri;
           let blurred = false;
           const handleBlur = () => { blurred = true; };
           window.addEventListener('blur', handleBlur, { once: true });
           try {
-            location.href = intentUri;
+            location.href = appLink;
             toast('Opening ' + (app || 'UPI app') + '…');
           } catch (e) { toast('Could not open ' + (app || 'UPI app')); }
           // Fall back to the bare upiUri after 800ms if the page did not blur (app did not open).
