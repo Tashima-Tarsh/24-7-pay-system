@@ -140,7 +140,7 @@ test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, 
     assert.ok(state.body.upiUri, 'upiUri present');
     assert.ok(state.body.upiQr, 'upiQr present');
     const upiQuery = new URL(state.body.upiUri).searchParams;
-    assert.equal(upiQuery.get('tr'), 'UTR-ORD-1');
+    assert.equal(upiQuery.get('tr'), 'UTRORD1');
     assert.equal(upiQuery.get('cu'), 'INR');
     assert.equal(upiQuery.get('mc'), '5411');
 

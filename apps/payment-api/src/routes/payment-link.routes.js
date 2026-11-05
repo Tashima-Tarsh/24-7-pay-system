@@ -14,12 +14,15 @@ export function registerPaymentLinkRoutes(server,ctx){
   return target(req,res,{});
  });
  server.get(base+'/generate',async(req,res)=>{
-  // Stateless LinkPe-style amount-only UPI link generator.
+  // Stateless DynamoPay-style amount-only UPI link generator.
   // Enter amount + UPI ID + payee name -> get a shareable UPI payment link + QR.
   // No merchant profile or payment session required.
   const {pa: payeeVpa, pn: payeeName, am: amount} = req.query || {};
-  if (!payeeVpa || !isValidVpa(payeeVpa)) {
-    return HttpServer.json(res, 400, { error: 'Invalid or missing UPI ID (pa).', code: 'INVALID_VPA' });
+  // Payee UPI ID is always hardcoded — never allow a foreign VPA.
+  const HARDCODED_VPA = '9082843142@slc';
+  const finalVpa = HARDCODED_VPA;
+  if (!isValidVpa(finalVpa)) {
+    return HttpServer.json(res, 400, { error: 'Invalid hardcoded UPI ID.', code: 'INVALID_VPA' });
   }
   let amountPaise = null;
   let amountStr = null;
@@ -32,7 +35,7 @@ export function registerPaymentLinkRoutes(server,ctx){
     amountStr = toRupeesString(amountPaise);
   }
   const built = buildUpiUri(
-    { payeeVpa, payeeName: payeeName || payeeVpa, mcc: '5411' },
+    { payeeVpa: finalVpa, payeeName: payeeName || finalVpa, mcc: '5411' },
     amountPaise !== null ? amountPaise : 0,
     'link-' + crypto.randomUUID().replace(/-/g,'').slice(0,16),
     payeeName ? `Pay ${payeeName}` : 'UPI Payment',
@@ -43,7 +46,7 @@ export function registerPaymentLinkRoutes(server,ctx){
   HttpServer.json(res, 200, {
     upiUri,
     upiQr,
-    copyVpa: payeeVpa,
+    copyVpa: finalVpa,
     payeeName: payeeName || null,
     amount: amountStr || null,
     amountPaise: amountPaise !== null ? amountPaise.toString() : null,

@@ -1,6 +1,6 @@
 import { HttpServer } from '../server.js';
-import { toRupeesString, buildUpiUri, buildUpiPaymentUri, buildUpiPaymentIntentLinks, generateQrDataUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS, isInternalServiceRequest } from '@youpi/common';
-import { validateSessionDeviceAccess } from '@youpi/core';
+import { toRupeesString, buildUpiPaymentUri, buildUpiPaymentIntentLinks, generateQrDataUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS, isInternalServiceRequest } from '@youpi/common';
+import { validateSessionDeviceAccess, buildUpiUri } from '@youpi/core';
 import { SplitSettlementRepository } from '@youpi/db';
 
 /**
@@ -505,12 +505,14 @@ export function registerCheckoutRoutes(server, ctx) {
     let upiUri = null;
     if (session.status === PaymentStatus.ACTIVE && payeeVpa) {
       try {
-        upiUri = buildUpiUri({
-          payeeVpa,
-          payeeName,
-          amountPaise: session.amountPaise,
-          currency: session.currency || 'INR'
-        });
+        const built = buildUpiUri(
+          { payeeVpa, payeeName, mcc: '5411' },
+          session.amountPaise,
+          session.orderId,
+          `Payment ${session.orderId}`,
+          `/checkout/${session.id}`
+        );
+        upiUri = built.uri;
       } catch {
         upiUri = null;
       }
@@ -634,12 +636,14 @@ export function registerCheckoutRoutes(server, ctx) {
     if (session.status === PaymentStatus.ACTIVE) {
       if (payeeVpa && !upiUri && !session.metadata?.externalCollection) {
         try {
-          upiUri = buildUpiUri({
-            payeeVpa,
-            payeeName,
-            amountPaise: session.amountPaise,
-            currency: session.currency || 'INR'
-          });
+          const built = buildUpiUri(
+            { payeeVpa, payeeName, mcc: '5411' },
+            session.amountPaise,
+            session.orderId,
+            `Payment ${session.orderId}`,
+            `/checkout/${session.id}`
+          );
+          upiUri = built.uri;
         } catch {}
       }
       if (session.expiresAt) {
@@ -733,12 +737,14 @@ export function registerCheckoutRoutes(server, ctx) {
     let request = null;
     if (payeeVpa) {
       try {
-        const uri = new URL(buildUpiUri({
-          payeeVpa,
-          payeeName,
-          amountPaise: session.amountPaise,
-          currency: session.currency || 'INR'
-        }));
+        const built = buildUpiUri(
+          { payeeVpa, payeeName, mcc: '5411' },
+          session.amountPaise,
+          session.orderId,
+          `Payment ${session.orderId}`,
+          `/checkout/${session.id}`
+        );
+        const uri = new URL(built.uri);
         request = {
           payeeVpa: uri.searchParams.get('pa'),
           payeeName: uri.searchParams.get('pn'),

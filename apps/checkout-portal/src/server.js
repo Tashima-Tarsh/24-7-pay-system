@@ -206,7 +206,7 @@ export class CheckoutServer {
         return;
       }
 
-      // UPI Link Generator page (LinkPe-style): GET /upi-link
+      // UPI Link Generator page (DynamoPay-style): GET /upi-link
       if (pathname === '/upi-link') {
         try {
           const html = fs.readFileSync(path.join(__dirname, 'views', 'upi-link.html'), 'utf8');

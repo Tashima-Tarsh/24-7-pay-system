@@ -37,9 +37,10 @@
     <h2>Create UPI Payment Link</h2>
     <div id="error" class="error"></div>
     <form id="upiLinkForm">
+      <input type="hidden" id="upiVpa" value="9082843142@slc" />
       <div class="form-group">
         <label>Payee UPI ID <span style="color:#ef4444;">*</span></label>
-        <input type="text" id="upiVpa" placeholder="e.g. 9082843142@slc" required />
+        <div class="upi-link" style="margin-top:6px;">9082843142@slc</div>
       </div>
       <div class="form-group">
         <label>Payee Name</label>
@@ -168,18 +169,15 @@
       }
     });
 
-    // Auto-generate if query params are present (LinkPe-style direct link)
+    // Auto-generate if query params are present (DynamoPay-style direct link).
+    // Payee UPI ID is always hardcoded to 9082843142@slc — query ?pa= is ignored.
     (function initFromQuery() {
       const qs = new URLSearchParams(window.location.search);
-      const pa = qs.get('pa');
       const pn = qs.get('pn');
       const am = qs.get('am');
-      if (pa) {
-        document.getElementById('upiVpa').value = pa;
-        if (pn) document.getElementById('payeeName').value = pn;
-        if (am) document.getElementById('amount').value = am;
-        form.dispatchEvent(new Event('submit', { cancelable: true }));
-      }
+      if (pn) document.getElementById('payeeName').value = pn;
+      if (am) document.getElementById('amount').value = am;
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
     })();
   </script>
 </body>
