@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UPI Payment Link · Sanbook Pay</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    html, body { height: 100%; margin: 0; padding: 0; background: #f8fafc; color: #0f172a; font-size: 14px; }
+    body { display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .card { background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 24px; width: 100%; max-width: 420px; }
+    h2 { font-size: 20px; margin-bottom: 16px; color: #0f172a; text-align: center; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; }
+    input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; }
+    input:focus { border-color: #0b63e5; }
+    button.btn { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #0b63e5; color: #ffffff; font-size: 15px; font-weight: 600; cursor: pointer; }
+    button.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    button.btn.outline { background: #ffffff; border: 1px solid #cbd5e1; color: #0f172a; margin-top: 10px; }
+    button.btn.secondary { background: #f1f5f9; color: #475569; }
+    .result { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0; display: none; }
+    .result.show { display: block; }
+    .upi-link { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; word-break: break-all; font-size: 13px; color: #475569; font-family: ui-monospace, SFMono-Regular, monospace; }
+    .qr-container { text-align: center; margin: 16px 0; }
+    .qr-container canvas { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }
+    .pay-now { width: 100%; padding: 14px; border: none; border-radius: 8px; background: #0d9f67; color: #ffffff; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 10px; }
+    .pay-now:disabled { opacity: 0.6; cursor: not-allowed; }
+    .hint { font-size: 12px; color: #94a3b8; margin-top: 8px; text-align: center; }
+    .row-btns { display: flex; gap: 10px; margin-top: 12px; }
+    .row-btns button { flex: 1; }
+    .error { color: #ef4444; font-size: 13px; margin-top: 8px; display: none; }
+    .loading { text-align: center; color: #64748b; font-size: 13px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Create UPI Payment Link</h2>
+    <div id="error" class="error"></div>
+    <form id="upiLinkForm">
+      <div class="form-group">
+        <label>Payee UPI ID <span style="color:#ef4444;">*</span></label>
+        <input type="text" id="upiVpa" placeholder="e.g. 9082843142@slc" required />
+      </div>
+      <div class="form-group">
+        <label>Payee Name</label>
+        <input type="text" id="payeeName" placeholder="Merchant Name" />
+      </div>
+      <div class="form-group">
+        <label>Amount (₹ INR, optional)</label>
+        <input type="number" id="amount" step="0.01" min="0" placeholder="0.00" />
+      </div>
+      <button type="submit" class="btn" id="genBtn">Generate Link</button>
+      <div id="loading" class="loading">Creating link…</div>
+    </form>
+    <div id="result" class="result">
+      <div class="form-group">
+        <label>UPI Payment Link</label>
+        <div class="upi-link" id="upiLinkText"></div>
+        <div class="row-btns">
+          <button type="button" class="btn outline" id="copyBtn">Copy Link</button>
+          <button type="button" class="btn outline" id="shareBtn">Share</button>
+        </div>
+      </div>
+      <div class="qr-container">
+        <canvas id="qrCanvas" width="220" height="220"></canvas>
+        <div class="hint">Scan with any UPI app</div>
+      </div>
+      <button type="button" class="pay-now" id="payNowBtn">Pay Now — Open UPI App</button>
+    </div>
+    <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: 16px;">
+      No merchant account needed. Share the link — anyone can pay with any UPI app.
+    </p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/qrious.min.js"></script>
+  <script>
+    const form = document.getElementById('upiLinkForm');
+    const result = document.getElementById('result');
+    const errorEl = document.getElementById('error');
+    const loading = document.getElementById('loading');
+    const genBtn = document.getElementById('genBtn');
+    const upiLinkText = document.getElementById('upiLinkText');
+    const qrCanvas = document.getElementById('qrCanvas');
+    const copyBtn = document.getElementById('copyBtn');
+    const shareBtn = document.getElementById('shareBtn');
+    const payNowBtn = document.getElementById('payNowBtn');
+
+    let currentUri = null;
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+    function hideError() { errorEl.style.display = 'none'; }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+      result.style.display = 'none';
+      loading.style.display = 'block';
+      genBtn.disabled = true;
+      genBtn.textContent = 'Generating…';
+
+      const vpa = document.getElementById('upiVpa').value.trim();
+      const name = document.getElementById('payeeName').value.trim();
+      const amount = document.getElementById('amount').value.trim();
+
+      try {
+        const url = new URL('/api/v1/payment-links/generate', window.location.origin);
+        url.searchParams.set('pa', vpa);
+        if (name) url.searchParams.set('pn', name);
+        if (amount) url.searchParams.set('am', amount);
+
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to generate link');
+
+        currentUri = data.upiUri;
+        upiLinkText.textContent = data.upiUri;
+        result.style.display = 'block';
+
+        // Render QR
+        const qr = new QRious({
+          element: qrCanvas,
+          background: '#fff',
+          foreground: '#000',
+          size: 220,
+          level: 'H',
+          value: data.upiUri
+        });
+
+        payNowBtn.onclick = () => {
+          if (currentUri) {
+            try { location.href = currentUri; } catch {}
+            // Fallback: after 800ms if page didn't blur (app didn't open), show the link
+            setTimeout(() => {
+              if (document.hasFocus()) { alert('Tap "Pay Now" again or copy the link and open it in any UPI app.'); }
+            }, 800);
+          }
+        };
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        loading.style.display = 'none';
+        genBtn.disabled = false;
+        genBtn.textContent = 'Generate Link';
+      }
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      if (!currentUri) return;
+      try {
+        await navigator.clipboard.writeText(currentUri);
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+      } catch {}
+    });
+
+    shareBtn.addEventListener('click', () => {
+      if (!currentUri) return;
+      const text = 'Pay me via UPI: ' + currentUri;
+      if (navigator.share) {
+        navigator.share({ title: 'UPI Payment Link', text, url: currentUri }).catch(() => {});
+      } else {
+        const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(text);
+        try { location.href = whatsappUrl; } catch {}
+      }
+    });
+
+    // Auto-generate if query params are present (LinkPe-style direct link)
+    (function initFromQuery() {
+      const qs = new URLSearchParams(window.location.search);
+      const pa = qs.get('pa');
+      const pn = qs.get('pn');
+      const am = qs.get('am');
+      if (pa) {
+        document.getElementById('upiVpa').value = pa;
+        if (pn) document.getElementById('payeeName').value = pn;
+        if (am) document.getElementById('amount').value = am;
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
+    })();
+  </script>
+</body>
+</html>

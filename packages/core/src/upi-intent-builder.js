@@ -68,7 +68,10 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   params.push(`pa=${encodeURIComponent(String(profile.payeeVpa || ''))}`);
   // pn is double-encoded so UPI apps decode it once to the display name.
   params.push(`pn=${encodeURIComponent(encodeURIComponent(String(profile.payeeName || '')))}`);
-  params.push(`am=${amountToRupees2dp(amountPaise)}`);
+  // am is optional: omitted when no amount is provided (LinkPe-style amount-only links).
+  if (amountPaise !== null && amountPaise !== undefined && amountPaise !== 0) {
+    params.push(`am=${amountToRupees2dp(amountPaise)}`);
+  }
   params.push('cu=INR');
   params.push(`tr=${encodeURIComponent(trRef(paymentId))}`);
   params.push(`tn=${encodeURIComponent(tnNote(note))}`);

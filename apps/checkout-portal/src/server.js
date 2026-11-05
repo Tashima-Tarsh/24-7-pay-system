@@ -206,6 +206,26 @@ export class CheckoutServer {
         return;
       }
 
+      // UPI Link Generator page (LinkPe-style): GET /upi-link
+      if (pathname === '/upi-link') {
+        try {
+          const html = fs.readFileSync(path.join(__dirname, 'views', 'upi-link.html'), 'utf8');
+          res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Access-Control-Allow-Origin': '*',
+            ...BASE_SECURITY_HEADERS
+          });
+          res.end(html);
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Error loading UPI link page: ' + err.message);
+        }
+        return;
+      }
+
       // Transparent API Proxy: /api/* -> Payment Core REST API
       if (pathname.startsWith('/api/')) {
         const targetPort = Number(process.env.PAYMENT_API_PORT || 6100);

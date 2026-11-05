@@ -102,7 +102,7 @@ export function registerPlatformPayments(server,ctx,identity){
  function requireActive(mid){const state=db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',[mid]);if(state&&state.status!=='ACTIVE')throw error(403,'This merchant is not active for new payments.','MERCHANT_NOT_ACTIVE');}
  function credential(req){const value=/^Bearer\s+(dp_(?:live|test)_[A-Za-z0-9_-]+)$/i.exec(req.headers.authorization||'')?.[1];if(!value)return null;const r=db.queryOne('SELECT * FROM pp_api_keys WHERE secret_hash=?',[hash(value)]);if(!r||r.revoked_at||(r.expires_at&&Date.parse(r.expires_at)<=Date.now()))return null;return r;}
  function guard(req,res,path){
-  const financial=/^\/v1\/(payments|transactions|refunds|balance|webhooks)(?:\/|$)/.test(path)||path.startsWith('/api/v1/payment-links/');
+  const financial=/^\/v1\/(payments|transactions|refunds|balance|webhooks)(?:\/|$)/.test(path)||(path.startsWith('/api/v1/payment-links/')&&!path.startsWith('/api/v1/payment-links/generate'));
   if(!financial)return false;
   const start=Date.now(),key=credential(req),ip=resolveClientIp(req);
   res.once('finish',()=>{try{db.execute('INSERT INTO pp_api_requests(id,key_id,merchant_id,method,path,status,duration_ms,client_ip,created_at) VALUES(?,?,?,?,?,?,?,?,?)',[crypto.randomUUID(),key?.id||null,key?.merchant_id||null,req.method,path.slice(0,200),res.statusCode,Date.now()-start,ip,now()]);}catch{/* response already committed; request does not change financial state here */}});

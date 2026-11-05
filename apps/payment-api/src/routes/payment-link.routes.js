@@ -1,4 +1,7 @@
 import {HttpServer} from '../server.js';
+import crypto from 'node:crypto';
+import { buildUpiUri } from '@youpi/core';
+import { generateQrDataUri, isValidVpa, toRupeesString } from '@youpi/common';
 
 // All creation/status requests use the same key scopes, merchant policy and queue.
 export function registerPaymentLinkRoutes(server,ctx){
@@ -9,6 +12,43 @@ export function registerPaymentLinkRoutes(server,ctx){
   const target=handler('POST','/v1/payments');
   if(!target)return HttpServer.json(res,503,{error:'Payment service unavailable'});
   return target(req,res,{});
+ });
+ server.get(base+'/generate',async(req,res)=>{
+  // Stateless LinkPe-style amount-only UPI link generator.
+  // Enter amount + UPI ID + payee name -> get a shareable UPI payment link + QR.
+  // No merchant profile or payment session required.
+  const {pa: payeeVpa, pn: payeeName, am: amount} = req.query || {};
+  if (!payeeVpa || !isValidVpa(payeeVpa)) {
+    return HttpServer.json(res, 400, { error: 'Invalid or missing UPI ID (pa).', code: 'INVALID_VPA' });
+  }
+  let amountPaise = null;
+  let amountStr = null;
+  if (amount !== undefined && amount !== '' && amount !== null) {
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return HttpServer.json(res, 400, { error: 'Amount must be a positive number.', code: 'INVALID_AMOUNT' });
+    }
+    amountPaise = Math.round(parsed * 100);
+    amountStr = toRupeesString(amountPaise);
+  }
+  const built = buildUpiUri(
+    { payeeVpa, payeeName: payeeName || payeeVpa, mcc: '5411' },
+    amountPaise !== null ? amountPaise : 0,
+    'link-' + crypto.randomUUID().replace(/-/g,'').slice(0,16),
+    payeeName ? `Pay ${payeeName}` : 'UPI Payment',
+    undefined
+  );
+  const upiUri = built.uri;
+  const upiQr = upiUri ? generateQrDataUri(upiUri) : null;
+  HttpServer.json(res, 200, {
+    upiUri,
+    upiQr,
+    copyVpa: payeeVpa,
+    payeeName: payeeName || null,
+    amount: amountStr || null,
+    amountPaise: amountPaise !== null ? amountPaise.toString() : null,
+    currency: 'INR'
+  });
  });
  server.post(base+'/:id/failover',async(req,res,p)=>{
   const s=ctx.sessionRepo.findById(p.id);
