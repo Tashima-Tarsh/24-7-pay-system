@@ -21,6 +21,7 @@ export function isValidVpa(vpa) {
  *   amountPaise: bigint,
  *   transactionRef: string,
  *   transactionNote?: string,
+ *   merchantCategoryCode?: string,
  *   currency?: string
  * }} options
  * @returns {string}
@@ -38,8 +39,13 @@ export function buildUpiUri(options) {
   params.set('am', amountStr);
   const txnId = (options.transactionRef || options.transactionNote || '').trim();
   if (txnId) {
+    params.set('tr', txnId);
     params.set('tn', txnId);
   }
+  if (/^\d{4}$/.test(String(options.merchantCategoryCode || ''))) {
+    params.set('mc', options.merchantCategoryCode);
+  }
+  params.set('cu', options.currency || 'INR');
 
   return `upi://pay?${params.toString()}`;
 }

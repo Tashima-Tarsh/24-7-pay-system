@@ -139,6 +139,10 @@ test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, 
     assert.equal(state.body.copyVpa, vpa);
     assert.ok(state.body.upiUri, 'upiUri present');
     assert.ok(state.body.upiQr, 'upiQr present');
+    const upiQuery = new URL(state.body.upiUri).searchParams;
+    assert.equal(upiQuery.get('tr'), 'UTR-ORD-1');
+    assert.equal(upiQuery.get('cu'), 'INR');
+    assert.equal(upiQuery.get('mc'), '5411');
 
     // AC-4: 11-digit UTR -> 400 INVALID_UTR
     const bad = await request(baseUrl, `/api/v1/checkout/${paymentId}/payment-done`, {

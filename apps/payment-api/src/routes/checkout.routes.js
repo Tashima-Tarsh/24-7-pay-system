@@ -460,12 +460,13 @@ export function registerCheckoutRoutes(server, ctx) {
 
     // Payer-visible payee details come from the merchant's active payment profile
     // (the "connection"); fall back to the receiving account snapshot otherwise.
-    let payeeVpa = null, payeeName = null;
+    let payeeVpa = null, payeeName = null, merchantCategoryCode = null;
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
       if (profile) {
         payeeVpa = profile.payeeVpa;
         payeeName = profile.payeeName;
+        merchantCategoryCode = profile.mcc;
       }
     } catch {}
     if (snapshot?.isTestOverride && snapshot.upiId) {
@@ -500,6 +501,7 @@ export function registerCheckoutRoutes(server, ctx) {
           payeeName,
           amountPaise: session.amountPaise,
           transactionRef: session.orderId,
+          merchantCategoryCode,
           currency: session.currency || 'INR'
         });
       } catch {
@@ -630,6 +632,7 @@ export function registerCheckoutRoutes(server, ctx) {
             payeeName,
             amountPaise: session.amountPaise,
             transactionRef: session.orderId,
+            merchantCategoryCode,
             currency: session.currency || 'INR'
           });
         } catch {}

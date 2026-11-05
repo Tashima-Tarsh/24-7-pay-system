@@ -114,13 +114,12 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('pn'), 'Acme Store');
       assert.equal(parsed.searchParams.get('am'), '200.00');
       assert.equal(parsed.searchParams.get('tn'), 'ORDER-99');
-      assert.equal(parsed.searchParams.get('tr'), null);
-      // Verify no extra noisy parameters
-      assert.equal(parsed.searchParams.get('cu'), null);
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tn']);
+      assert.equal(parsed.searchParams.get('tr'), 'ORDER-99');
+      assert.equal(parsed.searchParams.get('cu'), 'INR');
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
     });
 
-    test('strictly excludes cu, tr and all extra parameters even when currency option is passed', () => {
+    test('includes the required Google Pay currency and unique transaction reference', () => {
       const uri = buildUpiUri({
         payeeVpa: '9876543210@axl',
         payeeName: 'Demo Store Merchant',
@@ -135,10 +134,9 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('pn'), 'Demo Store Merchant');
       assert.equal(parsed.searchParams.get('am'), '1.00');
       assert.equal(parsed.searchParams.get('tn'), 'ORDER-123');
-      // Strictly verify NO cu, NO tr, NO extra parameters
-      assert.equal(parsed.searchParams.get('cu'), null);
-      assert.equal(parsed.searchParams.get('tr'), null);
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tn']);
+      assert.equal(parsed.searchParams.get('cu'), 'INR');
+      assert.equal(parsed.searchParams.get('tr'), 'ORDER-123');
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
     });
 
     test('builds valid Android intent URI containing only canonical UPI parameters', () => {
@@ -155,12 +153,12 @@ describe('@youpi/common Unit Tests', () => {
       assert.ok(intentUri.includes('package=com.phonepe.app'));
       assert.ok(intentUri.includes('scheme=upi'));
       assert.ok(intentUri.endsWith('#Intent;scheme=upi;package=com.phonepe.app;end'));
-      // Underlying query payload inside intent must not have cu or tr
+      // Underlying query payload keeps the currency and unique reference required by PSPs.
       const queryPart = intentUri.split('#')[0].replace('intent://pay?', '');
       const queryParams = new URLSearchParams(queryPart);
-      assert.equal(queryParams.get('cu'), null);
-      assert.equal(queryParams.get('tr'), null);
-      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'tn']);
+      assert.equal(queryParams.get('cu'), 'INR');
+      assert.equal(queryParams.get('tr'), 'ORDER-123');
+      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
     });
 
     test('validates 30 official UPI application provider registry', () => {
