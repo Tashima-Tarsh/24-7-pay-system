@@ -1,8 +1,15 @@
 import {enforcePaymentControls} from '../payment-controls.js';
 import { HttpServer } from '../server.js';
-import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, hasBearer, getObserverToken, maskPhone, maskEmail, generateCustomerId } from '@youpi/common';
+import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, hasBearer, getObserverToken, maskPhone, maskEmail, generateCustomerId, isValidVpa } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome, PaiseOffsetAllocator } from '@youpi/core';
 import { isAdminRequest } from '../auth-guard.js';
+
+const DEFAULT_MERCHANT_ID = '00000000-0000-0000-0000-000000000001';
+
+function testReceivingVpa(merchantId) {
+  const vpa = String(process.env.DYNAMO_TEST_RECEIVING_VPA || '').trim().toLowerCase();
+  return merchantId === DEFAULT_MERCHANT_ID && isValidVpa(vpa) ? vpa : null;
+}
 
 /**
  * True when the caller may read the merchant-private fields of a payment session.
@@ -231,14 +238,17 @@ export function registerPaymentRoutes(server, ctx) {
         HttpServer.json(res, 500, { error: 'No active UPI receiving account configured for merchant.' });
         return;
       }
-      const ruleError=enforcePaymentControls(ctx,merchant.id,{RECEIVING_VPA:receivingAccount.upiId,CUSTOMER_VPA:body.customer?.vpa,CUSTOMER:body.customerId});
+      const configuredTestVpa = testReceivingVpa(merchant.id);
+      const payeeVpa = configuredTestVpa || receivingAccount.upiId;
+      const ruleError=enforcePaymentControls(ctx,merchant.id,{RECEIVING_VPA:payeeVpa,CUSTOMER_VPA:body.customer?.vpa,CUSTOMER:body.customerId});
       if(ruleError)return HttpServer.json(res,403,ruleError);
       receivingAccountId = receivingAccount.id;
       receivingAccountSnapshot = {
         id: receivingAccount.id,
-        upiId: receivingAccount.upiId,
+        upiId: payeeVpa,
         payeeName: receivingAccount.payeeName,
-        isMerchantEnabled: receivingAccount.isMerchantEnabled
+        isMerchantEnabled: receivingAccount.isMerchantEnabled,
+        isTestOverride: Boolean(configuredTestVpa)
       };
     }
 

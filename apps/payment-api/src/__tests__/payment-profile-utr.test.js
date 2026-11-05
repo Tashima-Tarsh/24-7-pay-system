@@ -54,6 +54,45 @@ test('active legacy merchant backfills a payer-visible payment profile on first 
   }
 });
 
+test('configured test VPA applies only to payment sessions created while it is enabled', async () => {
+  const previous = process.env.DYNAMO_TEST_RECEIVING_VPA;
+  delete process.env.DYNAMO_TEST_RECEIVING_VPA;
+  const testDb = new Database({ inMemory: true });
+  runMigrations(testDb);
+  const merchantRepo = new MerchantRepository(testDb);
+  const accountRepo = new ReceivingAccountRepository(testDb);
+  const merchant = merchantRepo.getDefault();
+  const account = accountRepo.findActiveForMerchant(merchant.id);
+  const server = await startServer(6196, testDb);
+  const baseUrl = `http://localhost:${server.port}`;
+
+  try {
+    const beforeOverride = await request(baseUrl, '/api/v1/payments', {
+      method: 'POST', body: { orderId: 'VPA-BEFORE-OVERRIDE', amount: '2.00', autoActivate: true }
+    });
+    assert.equal(beforeOverride.status, 201);
+
+    process.env.DYNAMO_TEST_RECEIVING_VPA = 'sanbo67326.ibz@icici';
+    const whileEnabled = await request(baseUrl, '/api/v1/payments', {
+      method: 'POST', body: { orderId: 'VPA-WHILE-OVERRIDE', amount: '2.00', autoActivate: true }
+    });
+    assert.equal(whileEnabled.status, 201);
+
+    const existingState = await request(baseUrl, `/api/v1/checkout/${beforeOverride.body.paymentId}/state`);
+    assert.equal(existingState.status, 200);
+    assert.equal(existingState.body.payeeVpa, account.upiId);
+
+    const testState = await request(baseUrl, `/api/v1/checkout/${whileEnabled.body.paymentId}/state`);
+    assert.equal(testState.status, 200);
+    assert.equal(testState.body.payeeVpa, 'sanbo67326.ibz@icici');
+  } finally {
+    if (previous === undefined) delete process.env.DYNAMO_TEST_RECEIVING_VPA;
+    else process.env.DYNAMO_TEST_RECEIVING_VPA = previous;
+    await server.close();
+    testDb.close();
+  }
+});
+
 test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, state payload', async () => {
   const testDb = new Database({ inMemory: true });
   runMigrations(testDb);

@@ -468,7 +468,10 @@ export function registerCheckoutRoutes(server, ctx) {
         payeeName = profile.payeeName;
       }
     } catch {}
-    if (!payeeVpa) {
+    if (snapshot?.isTestOverride && snapshot.upiId) {
+      payeeVpa = snapshot.upiId;
+      payeeName = snapshot.payeeName || payeeName;
+    } else if (!payeeVpa) {
       payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
       payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
     }
