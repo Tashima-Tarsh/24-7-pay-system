@@ -410,32 +410,20 @@
               <h3 style="font-size:1.2rem; font-weight:800; color:#10b981;">⚡ Instant Payment Link Generator</h3>
               <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;">Create an authoritative payment link and open the Amazon/Razorpay-style multi-method checkout (Cards, UPI, NetBanking, COD).</p>
             </div>
-            <span class="status-pill status-success">AUTOGEN CUSTOMER READY</span>
+            <span class="status-pill status-success">AMOUNT ONLY</span>
           </div>
 
           <form id="instantPayLinkForm" onsubmit="handleGeneratePaymentLink(event)">
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem;">
               <div class="form-group" style="margin:0;">
-                <label>Order ID</label>
-                <input type="text" id="quickLinkOrderId" required placeholder="e.g. ORD-9821" />
-              </div>
-              <div class="form-group" style="margin:0;">
-                <label>Amount (₹ INR)</label>
-                <input type="number" step="0.01" min="1" id="quickLinkAmount" required value="499.00" placeholder="499.00" />
-              </div>
-              <div class="form-group" style="margin:0;">
-                <label>Customer Mobile</label>
-                <input type="tel" id="quickLinkPhone" placeholder="9876543210" value="9876543210" />
-              </div>
-              <div class="form-group" style="margin:0;">
-                <label>Customer Email</label>
-                <input type="email" id="quickLinkEmail" placeholder="customer@example.com" value="customer@example.com" />
+                <label>Receiving UPI ID</label><div>9082843142@slc</div><label>Amount (₹ INR)</label>
+                <input type="number" step="0.01" min="1" id="quickLinkAmount" required />
               </div>
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.25rem; flex-wrap:wrap; gap:1rem;">
               <div style="font-size:0.82rem; color:var(--text-muted);">
-                ℹ️ Automatically creates or links customer identity with masked PII & dispatches SMS/Email receipt upon payment.
+                ℹ️ Enter an amount to create a shareable payment link.
               </div>
               <button type="submit" class="btn-emerald" style="padding:0.65rem 1.5rem; font-size:0.95rem;">
                 🚀 Generate Payment Link & Launch Checkout
@@ -1323,20 +1311,8 @@ def create_sanbook_payment():
 
       <form onsubmit="handleModalPaymentLinkSubmit(event)">
         <div class="form-group">
-          <label>Order ID / Reference</label>
-          <input type="text" id="modalLinkOrderId" required placeholder="ORD-XXXX" />
-        </div>
-        <div class="form-group">
-          <label>Amount (₹ INR)</label>
-          <input type="number" step="0.01" min="1" id="modalLinkAmount" value="499.00" required />
-        </div>
-        <div class="form-group">
-          <label>Customer Mobile (Auto-Provisioned Identity)</label>
-          <input type="tel" id="modalLinkPhone" placeholder="9876543210" value="9876543210" />
-        </div>
-        <div class="form-group">
-          <label>Customer Email (For Tax Receipt)</label>
-          <input type="email" id="modalLinkEmail" placeholder="customer@example.com" value="customer@example.com" />
+          <label>Receiving UPI ID</label><div>9082843142@slc</div><label>Amount (₹ INR)</label>
+          <input type="number" step="0.01" min="1" id="modalLinkAmount" required />
         </div>
 
         <div style="display:flex; justify-content:flex-end; gap:0.6rem; margin-top:1.5rem;">
@@ -1363,7 +1339,7 @@ def create_sanbook_payment():
           <input type="text" id="collInputOrderId" required placeholder="ORD-2026-001" />
         </div>
         <div class="form-group">
-          <label>Amount (₹ INR)</label>
+          <label>Receiving UPI ID</label><div>9082843142@slc</div><label>Amount (₹ INR)</label>
           <input type="number" step="0.01" min="1" id="collInputAmount" required placeholder="499.00" />
         </div>
         <div class="form-group">
@@ -1405,7 +1381,7 @@ def create_sanbook_payment():
           </select>
         </div>
         <div class="form-group">
-          <label>Amount (₹ INR)</label>
+          <label>Receiving UPI ID</label><div>9082843142@slc</div><label>Amount (₹ INR)</label>
           <input type="number" step="0.01" min="1" id="payoutInputAmount" required placeholder="100.00" />
         </div>
         <div class="form-group">
@@ -1619,20 +1595,13 @@ def create_sanbook_payment():
     // Quick payment link generation
     async function handleGeneratePaymentLink(e) {
       if (e) e.preventDefault();
-      const orderId = document.getElementById('quickLinkOrderId').value.trim() || ('ORD-' + Date.now());
       const amount = document.getElementById('quickLinkAmount').value;
-      const phone = document.getElementById('quickLinkPhone').value.trim();
-      const email = document.getElementById('quickLinkEmail').value.trim();
 
       try {
         const res = await fetch('/api/v1/payments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId,
-            amount,
-            customer: { phone, email, name: 'Sanbook Customer' }
-          })
+          body: JSON.stringify({ orderId: crypto.randomUUID(), amount })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -1643,16 +1612,12 @@ def create_sanbook_payment():
         const resultBox = document.getElementById('quickLinkResultBox');
         const urlText = document.getElementById('quickLinkUrlText');
         const openBtn = document.getElementById('quickLinkOpenBtn');
-        const custDetails = document.getElementById('quickLinkCustomerDetails');
 
         if (resultBox && urlText && openBtn) {
           resultBox.style.display = 'block';
           urlText.textContent = data.checkoutUrl;
           openBtn.href = data.checkoutUrl;
 
-          if (custDetails) {
-            custDetails.innerHTML = `👤 Auto-Customer ID: <strong>${escapeHtml(data.customerId || 'cust_' + Date.now())}</strong> | Masked Phone: <strong>${escapeHtml(data.customer?.phone || '+91 98*** ***10')}</strong> | Masked Email: <strong>${escapeHtml(data.customer?.email || 'c***@example.com')}</strong>`;
-          }
 
           showToast('Payment link generated! Click Open Checkout.');
         }
@@ -1671,20 +1636,13 @@ def create_sanbook_payment():
 
     async function handleModalPaymentLinkSubmit(e) {
       if (e) e.preventDefault();
-      const orderId = document.getElementById('modalLinkOrderId').value.trim();
       const amount = document.getElementById('modalLinkAmount').value;
-      const phone = document.getElementById('modalLinkPhone').value.trim();
-      const email = document.getElementById('modalLinkEmail').value.trim();
 
       try {
         const res = await fetch('/api/v1/payments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId,
-            amount,
-            customer: { phone, email }
-          })
+          body: JSON.stringify({ orderId: crypto.randomUUID(), amount })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -1713,15 +1671,7 @@ def create_sanbook_payment():
       const hash = window.location.hash.replace('#', '') || 'overview';
       switchSection(hash);
 
-      const orderInput = document.getElementById('quickLinkOrderId');
-      if (orderInput && !orderInput.value) {
-        orderInput.value = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
-      }
 
-      const modalOrderInput = document.getElementById('modalLinkOrderId');
-      if (modalOrderInput && !modalOrderInput.value) {
-        modalOrderInput.value = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
-      }
     });
   </script>
 </body>

@@ -4,21 +4,6 @@ import { validateSessionDeviceAccess } from '@youpi/core';
 import { SplitSettlementRepository } from '@youpi/db';
 
 /**
- * Google Pay requires the optional UPI transaction URL to be publicly reachable
- * over HTTPS. Local/test checkout origins are intentionally omitted rather than
- * making UPI URI generation fail for the entire session.
- */
-function checkoutTransactionUrl(checkoutBaseUrl, sessionId) {
-  try {
-    const baseUrl = new URL(String(checkoutBaseUrl || ''));
-    if (baseUrl.protocol !== 'https:') return undefined;
-    return new URL(`/checkout/${encodeURIComponent(sessionId)}`, baseUrl).toString();
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * Validates device access to an active payment session.
  * Enforces:
  * 1. If session has no device binding yet, binds to requesting device if provided.
@@ -475,13 +460,12 @@ export function registerCheckoutRoutes(server, ctx) {
 
     // Payer-visible payee details come from the merchant's active payment profile
     // (the "connection"); fall back to the receiving account snapshot otherwise.
-    let payeeVpa = null, payeeName = null, merchantCategoryCode = null;
+    let payeeVpa = null, payeeName = null;
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
       if (profile) {
         payeeVpa = profile.payeeVpa;
         payeeName = profile.payeeName;
-        merchantCategoryCode = profile.mcc;
       }
     } catch {}
     if (snapshot?.isTestOverride && snapshot.upiId) {
@@ -490,6 +474,16 @@ export function registerCheckoutRoutes(server, ctx) {
     } else if (!payeeVpa) {
       payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
       payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
+    }
+    // Bind the production Dynamo Pay checkout to its existing receiving account.
+    if (process.env.NODE_ENV === 'production' &&
+        session.merchantId === '00000000-0000-0000-0000-000000000001' &&
+        !session.metadata?.externalCollection) {
+      const routedAccount = snapshot || receivingAccount;
+      const fixedVpa = '9082843142@slc';
+      payeeVpa = routedAccount?.id === '00000000-0000-0000-0000-000000000002' &&
+        routedAccount.upiId?.toLowerCase() === fixedVpa ? fixedVpa : null;
+      payeeName = payeeVpa ? 'Nitish Kumar' : null;
     }
     const isMerchantEnabled = receivingAccount
       ? Boolean(receivingAccount.isMerchantEnabled)
@@ -515,9 +509,6 @@ export function registerCheckoutRoutes(server, ctx) {
           payeeVpa,
           payeeName,
           amountPaise: session.amountPaise,
-          transactionRef: session.orderId,
-          merchantCategoryCode,
-          transactionUrl: checkoutTransactionUrl(ctx.checkoutBaseUrl, session.id),
           currency: session.currency || 'INR'
         });
       } catch {
@@ -647,9 +638,6 @@ export function registerCheckoutRoutes(server, ctx) {
             payeeVpa,
             payeeName,
             amountPaise: session.amountPaise,
-            transactionRef: session.orderId,
-            merchantCategoryCode,
-            transactionUrl: checkoutTransactionUrl(ctx.checkoutBaseUrl, session.id),
             currency: session.currency || 'INR'
           });
         } catch {}
@@ -727,13 +715,11 @@ export function registerCheckoutRoutes(server, ctx) {
       : (snapshot?.id ? ctx.accountRepo.findById(snapshot.id) : null);
     let payeeVpa = null;
     let payeeName = null;
-    let merchantCategoryCode = null;
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
       if (profile) {
         payeeVpa = profile.payeeVpa;
         payeeName = profile.payeeName;
-        merchantCategoryCode = profile.mcc;
       }
     } catch {}
     if (snapshot?.isTestOverride && snapshot.upiId) {
@@ -751,9 +737,6 @@ export function registerCheckoutRoutes(server, ctx) {
           payeeVpa,
           payeeName,
           amountPaise: session.amountPaise,
-          transactionRef: session.orderId,
-          merchantCategoryCode,
-          transactionUrl: checkoutTransactionUrl(ctx.checkoutBaseUrl, session.id),
           currency: session.currency || 'INR'
         }));
         request = {

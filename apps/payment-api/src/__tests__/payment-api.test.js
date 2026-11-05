@@ -443,7 +443,12 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
     const diagnosticsRes = await request(`/api/v1/checkout/${paymentId}/diagnostics`);
     assert.equal(diagnosticsRes.status, 200);
     assert.equal(diagnosticsRes.body.paymentId, paymentId);
-    assert.equal(diagnosticsRes.body.upiRequest.transactionReference, 'DIAGNOSTIC-UPI-1');
+    const state = await request("/api/v1/checkout/" + paymentId + "/state");
+    assert.equal(state.status, 200);
+    const uri = new URL(state.body.upiUri);
+    assert.deepEqual([...uri.searchParams.keys()].sort(), ['am', 'cu', 'pa', 'pn']);
+    assert.equal(uri.searchParams.get('am'), '2.00');
+    assert.equal(diagnosticsRes.body.upiRequest.transactionReference, null);
     assert.equal(diagnosticsRes.body.upiRequest.currency, 'INR');
     assert.equal(diagnosticsRes.body.timeline.at(-1).action, 'UPI_APP_LAUNCH_REQUESTED');
     assert.deepEqual(diagnosticsRes.body.timeline.at(-1).details, { app: 'gpay', platform: 'Android' });
