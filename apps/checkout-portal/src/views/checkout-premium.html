@@ -708,7 +708,7 @@
           <span class="dp-section-sub" id="dpUpiSectionSub">Android: tap an app to open it directly</span>
         </div>
 
-        <!-- Desktop fallback: no app tiles on non-Android -->
+        <!-- App choices stay visible; only Android can launch them directly. -->
         <div class="dp-desktop-hint" id="dpDesktopHint" hidden>
           <span>Scan with any UPI app</span>
           <span style="font-size:11px; color:var(--dp-text-muted);">Open Google Pay, PhonePe, Paytm, BHIM or any UPI app and scan the QR above.</span>
@@ -937,16 +937,13 @@
         };
       }
 
-      // Build UPI app launcher tiles (Android only). Desktop hides tiles and shows
-      // "Scan with any UPI app" instead.
+      // Keep app choices visible; desktop clicks explain the QR fallback.
       const isAndroid = /Android/i.test(navigator.userAgent);
       const appGrid = $('dpAppGrid');
       const desktopHint = $('dpDesktopHint');
       const upiSectionSub = $('dpUpiSectionSub');
       const genericContainer = $('dpGenericUpiContainer');
-      if (appGrid) {
-        appGrid.hidden = !isAndroid;
-      }
+      if (appGrid) appGrid.hidden = false;
       if (desktopHint) desktopHint.hidden = isAndroid;
       if (upiSectionSub) upiSectionSub.textContent = isAndroid ? 'Tap an app to open its package intent directly' : 'Scan the QR with any UPI app';
       if (genericContainer) genericContainer.hidden = !isAndroid;

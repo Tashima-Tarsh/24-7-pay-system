@@ -72,11 +72,11 @@ function checkout(ua, overrides = {}) {
   return { context, window, element, apps, messages, requests, state };
 }
 
-test('AC-3: desktop UA hides app tiles and shows scan-with-any-app hint', () => {
+test('AC-3: desktop UA keeps app choices visible and shows scan-with-any-app guidance', () => {
   const { element } = checkout('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
   const appGrid = element('dpAppGrid');
   const desktopHint = element('dpDesktopHint');
-  assert.equal(appGrid.hidden, true, 'app tiles hidden on desktop');
+  assert.equal(appGrid.hidden, false, 'app choices remain visible on desktop');
   assert.equal(desktopHint.hidden, false, 'desktop hint shown');
 });
 
