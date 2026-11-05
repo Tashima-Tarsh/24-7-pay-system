@@ -27,6 +27,33 @@ function request(baseUrl, path, options = {}) {
   });
 }
 
+test('active legacy merchant backfills a payer-visible payment profile on first payment', async () => {
+  const testDb = new Database({ inMemory: true });
+  runMigrations(testDb);
+  const merchantRepo = new MerchantRepository(testDb);
+  const accountRepo = new ReceivingAccountRepository(testDb);
+  const ppRepo = new PpMerchantPaymentProfileRepository(testDb);
+  const merchant = merchantRepo.getDefault();
+  const account = accountRepo.findActiveForMerchant(merchant.id);
+  assert.equal(ppRepo.findByMerchantId(merchant.id), null);
+
+  const server = await startServer(0, testDb);
+  const baseUrl = `http://localhost:${server.port}`;
+  try {
+    const created = await request(baseUrl, '/api/v1/payments', {
+      method: 'POST', body: { orderId: 'PROFILE-BACKFILL-1', amount: '2.00', autoActivate: true }
+    });
+    assert.equal(created.status, 201);
+    const profile = ppRepo.findActiveByMerchantId(merchant.id);
+    assert.ok(profile);
+    assert.equal(profile.payeeVpa, account.upiId);
+    assert.equal(profile.payeeEmail, merchant.contactEmail);
+  } finally {
+    await server.close();
+    testDb.close();
+  }
+});
+
 test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, state payload', async () => {
   const testDb = new Database({ inMemory: true });
   runMigrations(testDb);

@@ -75,10 +75,38 @@ export function registerPaymentRoutes(server, ctx) {
         return;
       }
 
-      // PART 1: Reject payment creation when the merchant has no active payment profile.
-      const activeProfile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id);
+      // Legacy merchants already have an approved receiving VPA and contact email but
+      // predate the payer-visible payment-profile table.  Backfill that profile once
+      // from merchant-owned data so an otherwise active merchant is not blocked solely
+      // by this newer configuration record.  An explicitly inactive profile is never
+      // reactivated here; that remains an administrator action.
+      let activeProfile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id);
+      if (!activeProfile && !ctx.ppMerchantPaymentProfileRepo?.findByMerchantId(merchant.id)) {
+        const receivingAccount = ctx.accountRepo?.findActiveForMerchant?.(merchant.id);
+        const payeeEmail = String(merchant.contactEmail || '').trim();
+        if (receivingAccount?.upiId && receivingAccount?.payeeName && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payeeEmail)) {
+          activeProfile = ctx.ppMerchantPaymentProfileRepo.upsert(merchant.id, {
+            payeeVpa: receivingAccount.upiId,
+            payeeName: receivingAccount.payeeName,
+            payeeEmail,
+            mcc: '5411',
+            orgid: null,
+            intentSignKeyPem: null,
+            supportPhone: merchant.contactPhone || null,
+            isActive: true
+          });
+          ctx.auditRepo?.log({
+            merchantId: merchant.id,
+            entityType: 'PP_MERCHANT_PAYMENT_PROFILE',
+            entityId: merchant.id,
+            action: 'PAYMENT_PROFILE_BACKFILLED_FROM_ACTIVE_RECEIVING_ACCOUNT',
+            actorType: 'SYSTEM',
+            details: { payeeVpa: receivingAccount.upiId }
+          });
+        }
+      }
       if (!activeProfile) {
-        HttpServer.json(res, 503, { error: 'Merchant payment profile is incomplete. Activate it via the admin console before accepting payments.', code: 'PAYMENT_PROFILE_INCOMPLETE' });
+        HttpServer.json(res, 503, { error: 'Merchant payment profile is incomplete. Configure an owned active receiving UPI account and a valid merchant contact email, then activate the profile in the admin console.', code: 'PAYMENT_PROFILE_INCOMPLETE' });
         return;
       }
 
