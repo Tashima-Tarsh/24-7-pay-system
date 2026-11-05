@@ -652,9 +652,6 @@
             <span>Copy</span>
           </button>
         </div>
-        <div class="dp-payee-email-row">
-          <a class="dp-payee-email" id="dpPayeeEmail" href="#"></a>
-        </div>
         <div class="dp-payee-meta">
           <span class="dp-payee-amount" id="dpPayeeAmount">₹0.00</span>
           <span class="dp-payee-order" id="dpPayeeOrder">Order #—</span>
@@ -891,23 +888,15 @@
       const payeeBlock = $('dpPayeeBlock');
       const payeeNameEl = $('dpPayeeName');
       const payeeVpaEl = $('dpPayeeVpa');
-      const payeeEmailEl = $('dpPayeeEmail');
       const payeeCopyBtn = $('dpBtnCopyPayeeVpa');
       const payeeAmountEl = $('dpPayeeAmount');
       const payeeOrderEl = $('dpPayeeOrder');
       const payeeCountdownEl = $('dpPayeeCountdown');
-      const hasPayee = Boolean(s.payeeVpa || s.payeeName || s.payeeEmail || s.copyVpa);
+      const hasPayee = Boolean(s.payeeVpa || s.payeeName || s.copyVpa);
       if (payeeBlock) payeeBlock.hidden = !hasPayee;
       if (payeeNameEl && s.payeeName) payeeNameEl.textContent = esc(s.payeeName);
       if (payeeVpaEl && s.copyVpa) payeeVpaEl.textContent = esc(s.copyVpa);
       else if (payeeVpaEl) payeeVpaEl.textContent = esc(payeeVpa);
-      if (payeeEmailEl && s.payeeEmail) {
-        payeeEmailEl.href = 'mailto:' + esc(s.payeeEmail);
-        payeeEmailEl.textContent = 'Send payment proof here — ' + esc(s.payeeEmail);
-        payeeEmailEl.hidden = false;
-      } else if (payeeEmailEl) {
-        payeeEmailEl.hidden = true;
-      }
       if (payeeAmountEl) payeeAmountEl.textContent = money(s.amount);
       if (payeeOrderEl) payeeOrderEl.textContent = 'Order #' + esc(s.orderId || '{{ORDER_ID}}');
 

@@ -92,15 +92,15 @@ test('AC-3: Android UA shows four package app tiles', () => {
   assert.ok(pkgs.includes('in.org.npci.upiapp'));
 });
 
-test('AC-13: payee block renders payer-visible payee details', () => {
+test('AC-13: payee block renders the payment identity without exposing merchant email', () => {
   const { element } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
   const block = element('dpPayeeBlock');
   assert.equal(block.hidden, false);
   assert.equal(element('dpPayeeName').textContent, 'Merchant Store');
   assert.equal(element('dpPayeeVpa').textContent, 'merchant@upi');
-  const email = element('dpPayeeEmail');
-  assert.equal(email.href, 'mailto:billing@merchant.example');
-  assert.ok(email.textContent.includes('Send payment proof here'));
+  const html = fs.readFileSync(new URL('../views/checkout-premium.html', import.meta.url), 'utf8');
+  assert.equal(html.includes('Send payment proof here'), false);
+  assert.equal(html.includes('dpPayeeEmail'), false);
 });
 
 test('AC-17: visibilitychange auto-focuses UTR input while AWAITING_REFERENCE', () => {

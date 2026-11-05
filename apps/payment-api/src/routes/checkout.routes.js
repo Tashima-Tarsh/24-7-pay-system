@@ -460,13 +460,12 @@ export function registerCheckoutRoutes(server, ctx) {
 
     // Payer-visible payee details come from the merchant's active payment profile
     // (the "connection"); fall back to the receiving account snapshot otherwise.
-    let payeeVpa = null, payeeName = null, payeeEmail = null;
+    let payeeVpa = null, payeeName = null;
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
       if (profile) {
         payeeVpa = profile.payeeVpa;
         payeeName = profile.payeeName;
-        payeeEmail = profile.payeeEmail;
       }
     } catch {}
     if (!payeeVpa) {
@@ -668,7 +667,6 @@ export function registerCheckoutRoutes(server, ctx) {
       upiDeepLinks: upiUri ? buildUpiPaymentIntentLinks(upiUri) : null,
       payeeVpa,
       payeeName,
-      payeeEmail,
       copyVpa: payeeVpa,
       isMerchantEnabled,
       upiMode,
@@ -1110,13 +1108,12 @@ export function registerCheckoutRoutes(server, ctx) {
     const updated = ctx.sessionRepo.findById(session.id);
 
     // Resolve payer-visible payee details from the merchant's active payment profile.
-    let payeeVpa = null, payeeName = null, payeeEmail = null;
+    let payeeVpa = null, payeeName = null;
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
       if (profile) {
         payeeVpa = profile.payeeVpa;
         payeeName = profile.payeeName;
-        payeeEmail = profile.payeeEmail;
       }
     } catch {}
     if (!payeeVpa) {
@@ -1138,7 +1135,6 @@ export function registerCheckoutRoutes(server, ctx) {
       utr,
       payeeVpa,
       payeeName,
-      payeeEmail
     });
     server.broadcastSse('admin_counter_events', 'status_change', {
       status: PaymentStatus.VERIFICATION_PENDING,
@@ -1153,7 +1149,6 @@ export function registerCheckoutRoutes(server, ctx) {
       utr,
       payeeVpa,
       payeeName,
-      payeeEmail,
       message: 'Reference saved — waiting for bank confirmation.'
     });
   });
