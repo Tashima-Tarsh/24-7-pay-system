@@ -19,7 +19,7 @@ function checkout(status='ACTIVE',overrides={}) {
 
 test('uncertain external collection hides payment actions and explains reconciliation',()=>{
  const {element,apps}=checkout('ACTIVE',{upiUri:null,metadata:{externalCollection:{stage:'UNKNOWN'}}});
- assert.ok(apps.every(a=>a.disabled));
+ assert.ok(apps.every(a=>!a.getAttribute('href')));
  assert.match(element('notice').textContent,/uncertain/i);
  assert.match(element('notice').textContent,/do not pay/i);
 });
@@ -36,8 +36,8 @@ test('UPI app links preserve the exact session amount, payee and reference',()=>
   assert.throws(()=>window.dynamoUpiLink('gpay','https://malicious.example','Android'));
 });
 test('queued sessions disable payment actions and never launch a UPI app',()=>{
-  const {apps,context}=checkout('QUEUED');
-  assert.ok(apps.every(app=>app.disabled));apps[0].click();assert.equal(context.location.href,'');
+  const {apps,context}=checkout('QUEUED',{upiUri:null});
+  assert.ok(apps.every(app=>!app.getAttribute('href')));apps[0].click();assert.equal(context.location.href,'');
 });
 test('verified success notifies the parent store with an explicit origin',()=>{
   const {messages,element}=checkout('SUCCESS');

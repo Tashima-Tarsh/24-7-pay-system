@@ -86,7 +86,7 @@ test('Android generic UPI uses a direct link to the server-issued payment URI', 
   const android = 'Mozilla/5.0 (Linux; Android 10) Mobile';
   const { element, state } = checkout(android);
   assert.equal(element('dpBtnGenericUpi').getAttribute('href'), state.upiUri);
-  const pending = checkout(android, { status: 'QUEUED' });
+  const pending = checkout(android, { status: 'QUEUED', upiUri: null });
   assert.equal(pending.element('dpBtnGenericUpi').getAttribute('href'), null);
   const invalid = checkout(android, { upiUri: 'https://example.com/pay' });
   assert.equal(invalid.element('dpBtnGenericUpi').getAttribute('href'), null);

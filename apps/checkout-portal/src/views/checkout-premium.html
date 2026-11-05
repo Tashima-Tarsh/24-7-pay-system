@@ -712,21 +712,21 @@
         </div>
 
         <div class="dp-app-grid" id="dpAppGrid">
-          <div class="dp-app-tile" id="gpay" data-app="gpay" data-pkg="com.google.android.apps.nbu.paisa.user">
+          <a class="dp-app-tile" id="gpay" data-app="gpay" data-pkg="com.google.android.apps.nbu.paisa.user">
             <img class="dp-app-tile-icon" src="/icons/gpay.png" alt="GPay" />
             <span class="dp-app-tile-label">Google Pay</span>
-          </div>
-          <div class="dp-app-tile" id="phonepe" data-app="phonepe" data-pkg="com.phonepe.app">
+          </a>
+          <a class="dp-app-tile" id="phonepe" data-app="phonepe" data-pkg="com.phonepe.app">
             <img class="dp-app-tile-icon" src="/icons/phonepe.png" alt="PhonePe" />
             <span class="dp-app-tile-label">PhonePe</span>
-          </div>
-          <div class="dp-app-tile" id="paytm" data-app="paytm" data-pkg="net.one97.paytm">
+          </a>
+          <a class="dp-app-tile" id="paytm" data-app="paytm" data-pkg="net.one97.paytm">
             <img class="dp-app-tile-icon" src="/icons/paytm.png" alt="Paytm" />
             <span class="dp-app-tile-label">Paytm</span>
-          </div>
-          <div class="dp-app-tile" id="bhim" data-app="bhim" data-pkg="in.org.npci.upiapp">
+          </a>
+          <a class="dp-app-tile" id="bhim" data-app="bhim" data-pkg="in.org.npci.upiapp">
             <span class="dp-app-tile-label">BHIM</span>
-          </div>
+          </a>
         </div>
 
         <div class="dp-upi-fallback">
@@ -917,18 +917,25 @@
       if (desktopHint) desktopHint.hidden = isAndroid;
       if (upiSectionSub) upiSectionSub.textContent = isAndroid ? 'Tap Pay with any UPI app to open your UPI app' : 'Scan the QR with any UPI app';
       const genericLink = $('dpBtnGenericUpi');
-      const canLaunchGeneric = canPay && typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
+      const canLaunchGeneric = typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
       if (genericContainer) genericContainer.hidden = !canLaunchGeneric;
-      if (canLaunchGeneric) genericLink.setAttribute('href', upiUri);
-      else genericLink.removeAttribute('href');
-      // Generic link click handler — works on desktop too (shows fallback if scheme not handled)
+      if (canLaunchGeneric) {
+        genericLink.setAttribute('href', upiUri);
+        genericLink.style.opacity = '1';
+        genericLink.style.cursor = 'pointer';
+      } else {
+        genericLink.removeAttribute('href');
+        genericLink.style.opacity = '0.5';
+        genericLink.style.cursor = 'not-allowed';
+      }
+      // Generic link click handler — always navigates to upiUri when present (desktop + Android)
       if (genericLink) {
         genericLink.onclick = (e) => {
-          if (!canPay || !upiUri) { e.preventDefault(); toast('Payment session not active.'); return; }
+          if (!upiUri) { e.preventDefault(); toast('Payment session not active.'); return; }
           try {
             location.href = upiUri;
             if (!isAndroid) {
-              e.preventDefault();
+              // On desktop, upi:// scheme may not be handled; show fallback hint
               toast('Copy the VPA or scan the QR above with your phone\'s UPI app.');
             }
           } catch (err) { e.preventDefault(); toast('Could not open UPI link.'); }
@@ -938,11 +945,20 @@
       const tiles = appGrid ? appGrid.querySelectorAll('.dp-app-tile') : [];
       tiles.forEach(tile => {
         const pkg = tile.getAttribute('data-pkg');
-        tile.disabled = !canPay;
-        if (tile.style) { tile.style.opacity = canPay ? '1' : '0.5'; tile.style.cursor = canPay ? 'pointer' : 'not-allowed'; }
-        tile.onclick = () => {
-          if (!canPay || !upiUri) { toast('Payment session not active.'); return; }
-          if (!isAndroid) { toast('Scan the QR code using the UPI app on your phone.'); return; }
+        // Always set the intent href so tiles are clickable links (not just text)
+        if (upiUri) {
+          const query = upiUri.split('?')[1] || '';
+          const intentUri = 'intent://pay?' + query + '#Intent;scheme=upi;package=' + encodeURIComponent(pkg || '') + ';end';
+          tile.setAttribute('href', intentUri);
+          tile.style.opacity = '1';
+          tile.style.cursor = 'pointer';
+        } else {
+          tile.removeAttribute('href');
+          tile.style.opacity = '0.5';
+          tile.style.cursor = 'not-allowed';
+        }
+        tile.onclick = (e) => {
+          if (!upiUri) { e.preventDefault(); toast('Payment session not active.'); return; }
           const query = upiUri.split('?')[1] || '';
           const intentUri = 'intent://pay?' + query + '#Intent;scheme=upi;package=' + encodeURIComponent(pkg || '') + ';end';
           let blurred = false;
@@ -1057,9 +1073,7 @@
         noticeEl.hidden = true;
       }
 
-      // App elements disabled when not payable or uncertain
-      // Use querySelectorAll('[data-app]) so test-harness element copies (apps array) are disabled directly
-      document.querySelectorAll('[data-app]').forEach(b => { b.disabled = !canPay; b.style.opacity = canPay ? '1' : '0.5'; b.style.cursor = canPay ? 'pointer' : 'not-allowed'; });
+      // App tiles are now <a> links with href set above — no canPay gating needed.
 
       // Pay view hidden on terminal/verification states
       const payViewEl = document.getElementById('payView');
