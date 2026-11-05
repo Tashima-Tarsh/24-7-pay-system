@@ -69,7 +69,9 @@ object UpiResponseParser {
         }
         val rawResult = rawParts.joinToString("; ")
 
-        // If there is genuinely no data, treat as a null/cancelled response.
+        // A missing response is not proof that the payer cancelled. Some UPI apps return
+        // no payload after a network interruption or process restart, so keep it pending
+        // for authoritative server reconciliation.
         if ((extras == null || extras.size() == 0) && dataString.isNullOrBlank()) {
             return UpiCaptureResult.Returned(
                 UpiPaymentReturn(
@@ -80,7 +82,7 @@ object UpiResponseParser {
                     sourcePlatform = sourcePlatform,
                     appIdentity = appIdentity,
                     rawResult = rawResult.takeIf { it.isNotEmpty() } ?: null,
-                    parsedStatus = UpiStatus.CANCELLED.name,
+                    parsedStatus = UpiStatus.UNKNOWN.name,
                     upiTransactionReference = null,
                     eventTimestamp = nowMillis,
                     idempotencyKey = idempotencyKey,

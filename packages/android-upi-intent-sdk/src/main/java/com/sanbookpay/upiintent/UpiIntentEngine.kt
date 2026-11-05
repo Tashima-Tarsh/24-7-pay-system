@@ -9,6 +9,8 @@ import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -114,24 +116,59 @@ class UpiIntentEngine(private val context: Context) {
         amountRupees: Double,
         orderId: String,
         transactionRef: String,
-        note: String = "Sanbookpay payment"
+        note: String = "Sanbookpay payment",
+        merchantCategoryCode: String? = null,
+        transactionUrl: String? = null
     ): Intent {
+        require(amountRupees.isFinite() && amountRupees > 0) { "UPI amount must be positive" }
+        val amount = BigDecimal.valueOf(amountRupees)
+            .setScale(2, RoundingMode.UNNECESSARY)
+            .toPlainString()
         val uri = Uri.parse("upi://pay").buildUpon()
             .appendQueryParameter("pa", vpa)
             .appendQueryParameter("pn", payeeName)
-            .appendQueryParameter("mc", "")
             .appendQueryParameter("mode", "04") // 04 = fixed amount
             .appendQueryParameter("tr", transactionRef)
             .appendQueryParameter("tn", note)
-            .appendQueryParameter("am", amountRupees.toString())
+            .appendQueryParameter("am", amount)
             .appendQueryParameter("cu", "INR")
-            .build()
 
-        return Intent(Intent.ACTION_VIEW, uri).apply {
+        // Merchant code and transaction URL are only emitted when the server supplied them.
+        // Do not fabricate an MCC or send a non-HTTPS callback URL to Google Pay.
+        if (merchantCategoryCode?.matches(Regex("^\\d{4}$")) == true) {
+            uri.appendQueryParameter("mc", merchantCategoryCode)
+        }
+        if (transactionUrl?.startsWith("https://", ignoreCase = true) == true) {
+            uri.appendQueryParameter("url", transactionUrl)
+        }
+
+        return Intent(Intent.ACTION_VIEW, uri.build()).apply {
             addCategory(Intent.CATEGORY_DEFAULT)
             setPackage(null) // generic: let the system resolve a compatible UPI app
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
+    }
+
+    /**
+     * Google documents this package name for an explicit UPI launch. The caller must still
+     * retain the generic UPI chooser: package visibility only proves installation, not that
+     * Google Pay or the payer bank will accept a particular merchant VPA.
+     */
+    fun createGooglePayIntent(
+        vpa: String,
+        payeeName: String,
+        amountRupees: Double,
+        orderId: String,
+        transactionRef: String,
+        note: String = "Sanbookpay payment",
+        merchantCategoryCode: String? = null,
+        transactionUrl: String? = null
+    ): Intent? {
+        if (!isPackageVisible(GOOGLE_PAY_PACKAGE_NAME)) return null
+        return createPaymentIntent(
+            vpa, payeeName, amountRupees, orderId, transactionRef, note,
+            merchantCategoryCode, transactionUrl
+        ).apply { setPackage(GOOGLE_PAY_PACKAGE_NAME) }
     }
 
     /**
@@ -148,6 +185,7 @@ class UpiIntentEngine(private val context: Context) {
 
     companion object {
         const val UPI_SCHEME = "upi://pay"
+        const val GOOGLE_PAY_PACKAGE_NAME = "com.google.android.apps.nbu.paisa.user"
         const val REQUEST_CODE_UPI_PAY = 1001
     }
 }

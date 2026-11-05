@@ -18,6 +18,9 @@
     <!-- Android 11+ package visibility: discover only applications that advertise
          the standard UPI payment capability; do not enumerate installed apps. -->
     <queries>
+        <!-- Official Google Pay Android package. This makes the explicit documented
+             Google Pay launch visible on Android 11+ without broad package discovery. -->
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="upi" android:host="pay" />
