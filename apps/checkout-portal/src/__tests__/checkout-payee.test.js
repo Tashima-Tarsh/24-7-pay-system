@@ -77,29 +77,9 @@ test('AC-3: desktop UA keeps app choices visible and shows scan-with-any-app gui
   assert.equal(desktopHint.hidden, false, 'desktop hint shown');
 });
 
-test('AC-3: Android UA shows four package app tiles', () => {
+test('Android uses the native UPI link in place of branded app shortcuts', () => {
   const { element } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
-  const appGrid = element('dpAppGrid');
-  const tiles = appGrid.querySelectorAll('.dp-app-tile');
-  assert.equal(tiles.length, 4, 'four package tiles on Android');
-  const pkgs = tiles.map(t => t.getAttribute('data-pkg'));
-  assert.ok(pkgs.includes('com.google.android.apps.nbu.paisa.user'));
-  assert.ok(pkgs.includes('com.phonepe.app'));
-  assert.ok(pkgs.includes('net.one97.paytm'));
-  assert.ok(pkgs.includes('in.org.npci.upiapp'));
-});
-
-test('AC-3: Android app tiles use the server-issued PSP deep links', () => {
-  const { element, context, state } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
-  element('gpay').onclick();
-  assert.equal(context.location.href, `intent://pay?${state.upiUri.slice('upi://pay?'.length)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`);
-});
-
-test('AC-3: selecting a UPI app sends exactly one launch request', () => {
-  const { element, timers } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
-  const timerCountBeforeTap = timers.length;
-  element('gpay').onclick();
-  assert.equal(timers.length, timerCountBeforeTap + 1, 'must not auto-launch a second generic UPI request');
+  assert.equal(element('dpAppGrid').hidden, true);
 });
 
 test('Android generic UPI uses a direct link to the server-issued payment URI', () => {

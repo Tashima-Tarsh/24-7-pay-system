@@ -737,7 +737,7 @@
 
       <div class="dp-generic-upi" id="dpGenericUpiContainer">
         <a class="dp-btn-mini" id="dpBtnGenericUpi">
-          Open UPI App (Generic)
+          Pay with any UPI app
         </a>
         <span id="dpGenericUpiHint" style="font-size:11px; color:var(--dp-text-muted);">Uses generic upi://pay — works with any compatible UPI app.</span>
       </div>
@@ -938,15 +938,15 @@
         };
       }
 
-      // Keep app choices visible; desktop clicks explain the QR fallback.
+      // Android handles app selection from the same payment URI encoded in the QR.
       const isAndroid = /Android/i.test(navigator.userAgent);
       const appGrid = $('dpAppGrid');
       const desktopHint = $('dpDesktopHint');
       const upiSectionSub = $('dpUpiSectionSub');
       const genericContainer = $('dpGenericUpiContainer');
-      if (appGrid) appGrid.hidden = false;
+      if (appGrid) appGrid.hidden = isAndroid;
       if (desktopHint) desktopHint.hidden = isAndroid;
-      if (upiSectionSub) upiSectionSub.textContent = isAndroid ? 'Tap an app to open its package intent directly' : 'Scan the QR with any UPI app';
+      if (upiSectionSub) upiSectionSub.textContent = isAndroid ? 'Tap Pay with any UPI app to open your UPI app' : 'Scan the QR with any UPI app';
       const genericLink = $('dpBtnGenericUpi');
       const canLaunchGeneric = isAndroid && canPay && typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
       if (genericContainer) genericContainer.hidden = !canLaunchGeneric;
@@ -955,26 +955,7 @@
 
       const tiles = appGrid ? appGrid.querySelectorAll('.dp-app-tile') : [];
       tiles.forEach(tile => {
-        const app = tile.getAttribute('data-app');
-        tile.disabled = !(isAndroid && canPay && upiUri);
-        tile.onclick = () => {
-          if (!isAndroid) { toast('Scan the QR code using the UPI app on your phone.'); return; }
-          if (!canPay || !upiUri) { toast('Wait for this payment session to activate.'); return; }
-          // Use the app-specific link constructed by the API from the exact same
-          // server-issued UPI URI as the QR.  Do not synthesize a package-forced
-          // Android intent here: several PSPs validate their own URL scheme.
-          const appLink = (s.upiDeepLinks && s.upiDeepLinks[app]) || upiUri;
-          try {
-            upiAppLaunchPending = true;
-            recordUpiDiagnostic('UPI_APP_LAUNCH_REQUESTED', {
-              app,
-              platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
-              request: 'SERVER_ISSUED_UPI_URI'
-            });
-            location.href = appLink;
-            toast('Opening ' + (app || 'UPI app') + '…');
-          } catch (e) { toast('Could not open ' + (app || 'UPI app')); }
-        };
+        tile.disabled = true;
       });
 
       // Intent status strip (legacy INTENT_OPENED / CLIENT_REPORTED_SUCCESS)
