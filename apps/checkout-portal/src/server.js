@@ -114,7 +114,7 @@ export class CheckoutServer {
     const logoUrl = state?.branding?.logoUrl || '';
     const sidebarNotice = state?.branding?.sidebarNotice || 'Direct UPI Collections — Zero Gateway Fee';
     const counterInstructions = state?.branding?.counterInstructions || 'Present this QR at the counter to pay via UPI.';
-    const vpa = state?.payeeVpa || state?.vpa || '9082843142@slc';
+    const vpa = state?.payeeVpa || state?.vpa || '';
 
     // In production and localhost, use relative '' so browser requests hit the checkout portal /api proxy
     // This avoids cross-origin blocking, CORS errors, and tunnel DNS resolution issues.

@@ -44,8 +44,19 @@ test('verified success notifies the parent store with an explicit origin',()=>{
   assert.equal(messages[0][0].event,'youpi.payment_success');assert.equal(messages[0][1],'https://store.example');
   assert.equal(element('payView').hidden,true);assert.equal(element('statusTitle').textContent,'Payment confirmed');
 });
-test('COD stays distinct from received funds',()=>{
-  const {element}=checkout();assert.equal(element('codOption').hidden,false);
+test('an active session without a payment URI shows a status instead of payment controls',()=>{
+  const {element,apps}=checkout('ACTIVE',{upiUri:null});
+  assert.equal(element('payView').hidden,true);
+  assert.equal(element('dpStickyFooter').hidden,true);
+  assert.equal(element('statusTitle').textContent,'Payment session is not payable');
+  assert.ok(apps.every(app=>!app.getAttribute('href')));
+});
+test('queued sessions ignore a stale payment URI',()=>{
+  const {element,apps}=checkout('QUEUED');
+  assert.equal(element('payView').hidden,true);
+  assert.equal(element('dpStickyFooter').hidden,true);
+  assert.equal(element('statusTitle').textContent,'Waiting for a payment slot');
+  assert.ok(apps.every(app=>!app.getAttribute('href')));
 });
 test('checkout polls the actual public payment state API',()=>{
   const {requests}=checkout();

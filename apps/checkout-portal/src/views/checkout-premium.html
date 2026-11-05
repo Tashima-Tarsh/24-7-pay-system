@@ -157,15 +157,18 @@
     .dp-body {
       flex: 1 !important;
       overflow-y: auto !important;
-      padding: 20px 20px 100px 20px !important;
+      padding: 20px !important;
       display: flex !important;
       flex-direction: column !important;
       gap: 16px !important;
     }
 
     @media (max-width: 600px) {
-      .dp-body { padding: 16px 16px 110px 16px !important; }
+      .dp-body { padding: 16px !important; }
     }
+
+    #payView { display: flex; flex-direction: column; gap: 16px; }
+    #statusTitle:empty { display: none; }
 
     /* Amount card */
     .dp-amount-card {
@@ -544,22 +547,11 @@
 
     #dpToast.show { transform: translateX(-50%) translateY(0) !important; opacity: 1 !important; }
 
-    /* Sticky footer (mobile) */
-    .dp-sticky-footer {
-      position: fixed !important;
-      bottom: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      z-index: 40 !important;
-      background: rgba(15, 23, 42, 0.6) !important;
-      backdrop-filter: blur(20px) !important;
-      border-top: 1px solid var(--dp-card-border) !important;
-      color: var(--dp-text) !important;
-      display: none !important;
-    }
-
-    @media (max-width: 600px) {
-      .dp-sticky-footer { display: block !important; }
+    .dp-checkout-footer {
+      flex-shrink: 0;
+      background: rgba(15, 23, 42, 0.6);
+      border-top: 1px solid var(--dp-card-border);
+      color: var(--dp-text);
     }
 
     .dp-footer-bar {
@@ -569,6 +561,8 @@
       justify-content: space-between !important;
       gap: 12px !important;
     }
+
+    .dp-footer-brand { padding: 0 12px 8px; text-align: center; font-size: 10px; color: var(--dp-text-muted); }
 
     .dp-bottom-price {
       font-size: 18px !important;
@@ -636,6 +630,7 @@
     <!-- BODY -->
     <main class="dp-body">
 
+      <div id="payView" hidden>
       <!-- AMOUNT CARD -->
       <div class="dp-amount-card" id="dpAmountCard">
         <div class="dp-amount-label">Payable</div>
@@ -742,41 +737,31 @@
         <span id="dpGenericUpiHint" style="font-size:11px; color:var(--dp-text-muted);">Uses generic upi://pay — works with any compatible UPI app.</span>
       </div>
 
+      </div>
+
+      <div id="statusTitle" role="status">Checking payment session…</div>
+      <div id="notice" hidden></div>
+      <section class="dp-status-strip" id="dpStatusStrip" hidden>
+        <span class="dp-strip-dot" id="dpStripDot"></span>
+        <span class="dp-strip-label" id="dpStripLabel">Waiting for payment</span>
+        <span class="dp-strip-sub" id="dpStripSub"></span>
+      </section>
     </main>
 
-    <!-- STICKY FOOTER (MOBILE) -->
-    <footer class="dp-sticky-footer" id="dpStickyFooter">
+    <footer class="dp-checkout-footer" id="dpStickyFooter" hidden>
       <div class="dp-footer-bar">
         <div class="dp-bottom-amount-group">
           <span class="dp-bottom-amount-label">Total</span>
           <span class="dp-bottom-price" id="dpBottomPrice">₹{{AMOUNT}}</span>
         </div>
-        <div style="font-size:10px; color:var(--dp-text-muted); white-space:nowrap;">Powered by Dynamo Pay · UPI Collection</div>
-        <button type="button" class="dp-btn-continue" id="dpBtnPaymentDone" onclick="handlePaymentDone()">
-          I've Paid
-        </button>
+        <button type="button" class="dp-btn-continue" id="dpBtnPaymentDone">I've Paid</button>
       </div>
+      <div class="dp-footer-brand">Powered by Dynamo Pay</div>
     </footer>
-
-    <!-- STATUS STRIP -->
-    <section class="dp-status-strip" id="dpStatusStrip" hidden>
-      <span class="dp-strip-dot" id="dpStripDot"></span>
-      <span class="dp-strip-label" id="dpStripLabel">Waiting for payment</span>
-      <span class="dp-strip-sub" id="dpStripSub"></span>
-    </section>
-
   </div>
 
-  <!-- STATUS OVERLAY (shown when terminal state reached) -->
   <div id="dpStatusOverlay" style="position:fixed; inset:0; background:rgba(15,23,42,0.85); backdrop-filter:blur(8px); z-index:100; display:flex; align-items:center; justify-content:center;" hidden></div>
-
-      <!-- MISSING SECTION ELEMENTS (test-referenced IDs) -->
-      <div id="notice" style="display:none;"></div>
-      <div id="payView" style="display:none;"></div>
-      <div id="statusTitle"></div>
-      <div id="codOption">Cash on Delivery</div>
-      <button type="button" id="paymentDone">I've Paid</button>
-      <div id="retryPayment" style="display:none;"></div>
+  <div id="retryPayment" style="display:none;"></div>
 
       <script>
     'use strict';
@@ -805,6 +790,7 @@
     const terminal = ['SUCCESS','FAILED','EXPIRED','CANCELLED','SUSPICIOUS'];
     let state = initialState;
     let pollTimer = null;
+    let polling = false;
     let upiAppLaunchPending = false;
 
     // Records the browser boundary only. A UPI app's private UI/error and bank
@@ -842,8 +828,9 @@
       state = s;
       const status = s.status || 'UNKNOWN';
       const done = terminal.includes(status);
-      const canPay = status === 'ACTIVE' && Boolean(s.upiUri);
-      const hasUpiUri = Boolean(s.upiUri);
+      const canPay = status === 'ACTIVE' && typeof s.upiUri === 'string' && s.upiUri.startsWith('upi://pay?');
+      $('payView').hidden = !canPay;
+      $('dpStickyFooter').hidden = !canPay;
 
       // Update amount/order
       $('amount').textContent = money(s.amount);
@@ -852,19 +839,18 @@
 
       // Update VPA
       payeeVpa = s.payeeVpa || s.vpa || '{{VPA}}';
-      upiUri = s.upiUri || null;
+      upiUri = canPay ? s.upiUri : null;
       $('dpVpaBadge').textContent = payeeVpa;
 
       // Update QR
-      if (hasUpiUri && lastQrKey !== upiUri) {
+      if (canPay && lastQrKey !== upiUri) {
         lastQrKey = upiUri;
         const qrBox = $('qrImage');
-        qrBox.innerHTML = `<img src="/checkout/${encodeURIComponent(paymentId)}/qr.svg?v=${Date.now()}" alt="UPI QR" style="width:100%; height:100%; object-fit:contain;" />`;
+        const qrSrc = /^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/.test(s.upiQr)
+          ? s.upiQr
+          : `/checkout/${encodeURIComponent(paymentId)}/qr.svg`;
+        qrBox.innerHTML = `<img src="${qrSrc}" alt="UPI QR" style="width:100%; height:100%; object-fit:contain;" />`;
       }
-      $('qrImage').hidden = !hasUpiUri;
-      $('dpQrPrompt').textContent = hasUpiUri ? 'Scan the QR using any UPI App' : 'Payment session not active';
-      $('dpQrHint').textContent = hasUpiUri ? 'Open Google Pay, PhonePe, Paytm or any UPI app to scan and pay.' : '';
-
       // ---- Payee block (payer-visible payee details) ----
       const payeeBlock = $('dpPayeeBlock');
       const payeeNameEl = $('dpPayeeName');
@@ -915,18 +901,17 @@
       const upiSectionSub = $('dpUpiSectionSub');
       const genericContainer = $('dpGenericUpiContainer');
       const genericLink = $('dpBtnGenericUpi');
-      const canLaunchUpi = typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
 
       if (desktopHint) desktopHint.hidden = isAndroid || isIOS;
       if (upiSectionSub) upiSectionSub.textContent = isAndroid || isIOS ? 'Tap a UPI app to pay' : 'Scan the QR with any UPI app';
-      if (genericContainer) genericContainer.hidden = !canLaunchUpi;
-      if (canLaunchUpi) genericLink.setAttribute('href', upiUri);
+      if (genericContainer) genericContainer.hidden = !canPay;
+      if (canPay) genericLink.setAttribute('href', upiUri);
       else genericLink.removeAttribute('href');
 
       if (appGrid) {
-        appGrid.hidden = !canLaunchUpi;
+        appGrid.hidden = !canPay;
         appGrid.querySelectorAll('.dp-app-tile').forEach(tile => {
-          if (!canLaunchUpi) {
+          if (!canPay) {
             tile.removeAttribute('href');
             return;
           }
@@ -964,10 +949,10 @@
       const utrForm = $('dpUtrForm');
       const utrStatus = $('dpUtrStatus');
       if (statusStrip) {
-        if (status === 'ACTIVE' || status === 'AWAITING_REFERENCE') {
+        if (canPay) {
           statusStrip.hidden = false;
-          stripLabel.textContent = 'Waiting for reference';
-          stripSub.textContent = 'Pay using the QR above, then tap "I\'ve Paid" and save your UTR.';
+          stripLabel.textContent = 'Waiting for payment';
+          stripSub.textContent = 'Pay using the QR above, then tap "I\'ve Paid".';
           stripDot.className = 'dp-strip-dot dp-strip-waiting';
         } else if (status === 'AWAITING_BANK' || status === 'VERIFICATION_PENDING') {
           statusStrip.hidden = false;
@@ -1003,7 +988,7 @@
       if (utrStatus) utrStatus.hidden = true;
 
       // Timer (only when full DOM is available)
-      remaining = Math.max(0, Number(s.timeRemainingSeconds || 0));
+      remaining = canPay ? Math.max(0, Number(s.timeRemainingSeconds || 0)) : 0;
       if (typeof document.createElement === 'function') {
         const timerEl = document.createElement('span');
         timerEl.className = 'dp-timer';
@@ -1036,23 +1021,14 @@
         noticeEl.hidden = true;
       }
 
-      // App tiles are now <a> links with href set above — no canPay gating needed.
-
-      // Pay view hidden on terminal/verification states
-      const payViewEl = document.getElementById('payView');
-      if (payViewEl) payViewEl.hidden = terminal.includes(status) || status === 'VERIFICATION_PENDING';
-
-      // Status title
-      const statusTitleEl = document.getElementById('statusTitle');
-      if (statusTitleEl) {
-        if (status === 'SUCCESS') statusTitleEl.textContent = 'Payment confirmed';
-        else if (status === 'VERIFICATION_PENDING') statusTitleEl.textContent = 'Awaiting bank verification';
-        else statusTitleEl.textContent = '';
-      }
-
-      // COD option visible for UPI sessions
-      const codOptionEl = document.getElementById('codOption');
-      if (codOptionEl) codOptionEl.hidden = false;
+      const statusTitle = $('statusTitle');
+      if (canPay) statusTitle.textContent = '';
+      else if (status === 'SUCCESS') statusTitle.textContent = 'Payment confirmed';
+      else if (status === 'VERIFICATION_PENDING') statusTitle.textContent = 'Awaiting bank verification';
+      else if (status === 'QUEUED') statusTitle.textContent = 'Waiting for a payment slot';
+      else if (status === 'PROCESSING') statusTitle.textContent = 'Verifying payment';
+      else if (status === 'UNKNOWN') statusTitle.textContent = 'Checking payment session…';
+      else statusTitle.textContent = 'Payment session is not payable';
 
       // Retry payment hidden when verification pending
       const retryEl = document.getElementById('retryPayment');
@@ -1163,7 +1139,7 @@
     }
 
     function handlePaymentDone() {
-      if (state.status !== 'ACTIVE' && state.status !== 'AWAITING_REFERENCE') {
+      if (!upiUri) {
         toast('Payment session is not open.');
         return;
       }
@@ -1194,16 +1170,24 @@
     }
 
     async function pollState() {
+      if (polling) return;
+      polling = true;
       if (pollTimer) clearTimeout(pollTimer);
       try {
         const res = await fetch('/api/v1/checkout/' + encodeURIComponent(paymentId) + '/state', {
           headers: { Accept: 'application/json' },
           cache: 'no-store'
         });
+        if (res.status === 404) {
+          render({ status: 'NOT_FOUND' });
+          return;
+        }
         if (!res.ok) throw new Error('Status check failed');
         render(await res.json());
       } catch (e) {
-        // Silent retry
+        if (!terminal.includes(state.status)) render({ ...state, status: 'UNKNOWN', upiUri: null });
+      } finally {
+        polling = false;
       }
       if (!terminal.includes(state.status)) {
         pollTimer = setTimeout(pollState, 3000);
@@ -1216,8 +1200,6 @@
     // Generic UPI button
     $('dpBtnGenericUpi').addEventListener('click', launchGenericUpiIntent);
 
-    // Payment done button (test-referenced id: paymentDone) — simple click, no UTR form
-    $('paymentDone').addEventListener('click', handlePaymentDone);
     $('dpBtnPaymentDone').addEventListener('click', handlePaymentDone);
 
     // Visibility change re-poll; auto-focus UTR field when returning to the page
@@ -1292,13 +1274,7 @@
           try {
             const data = JSON.parse(event.data);
             if (data.type === 'intent_update') {
-              // Update status immediately without waiting for poll
-              state.status = data.status;
-              render(state);
-              if (terminal.includes(state.status)) {
-                showStatusView(state.status, state);
-                if (wsSocket) { wsSocket.close(); wsSocket = null; }
-              }
+              pollState();
             }
           } catch {}
         };
