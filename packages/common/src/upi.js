@@ -22,6 +22,7 @@ export function isValidVpa(vpa) {
  *   transactionRef: string,
  *   transactionNote?: string,
  *   merchantCategoryCode?: string,
+ *   transactionUrl?: string,
  *   currency?: string
  * }} options
  * @returns {string}
@@ -44,6 +45,13 @@ export function buildUpiUri(options) {
   }
   if (/^\d{4}$/.test(String(options.merchantCategoryCode || ''))) {
     params.set('mc', options.merchantCategoryCode);
+  }
+  if (options.transactionUrl) {
+    const transactionUrl = new URL(options.transactionUrl);
+    if (transactionUrl.protocol !== 'https:') {
+      throw new Error('Transaction URL must use HTTPS');
+    }
+    params.set('url', transactionUrl.toString());
   }
   params.set('cu', options.currency || 'INR');
 

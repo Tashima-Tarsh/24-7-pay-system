@@ -139,6 +139,18 @@ describe('@youpi/common Unit Tests', () => {
       assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
     });
 
+    test('includes the Google Pay transaction URL when the server provides one', () => {
+      const uri = buildUpiUri({
+        payeeVpa: 'merchant@icici',
+        payeeName: 'Merchant',
+        amountPaise: 200n,
+        transactionRef: 'ORDER-URL-1',
+        transactionUrl: 'https://dynamo-pay.onrender.com/checkout/payment-1'
+      });
+
+      assert.equal(new URL(uri).searchParams.get('url'), 'https://dynamo-pay.onrender.com/checkout/payment-1');
+    });
+
     test('builds valid Android intent URI containing only canonical UPI parameters', () => {
       const intentUri = buildUpiIntentUri({
         payeeVpa: '9876543210@axl',

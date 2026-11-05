@@ -502,6 +502,7 @@ export function registerCheckoutRoutes(server, ctx) {
           amountPaise: session.amountPaise,
           transactionRef: session.orderId,
           merchantCategoryCode,
+          transactionUrl: `${String(ctx.checkoutBaseUrl || '').replace(/\/$/, '')}/checkout/${session.id}`,
           currency: session.currency || 'INR'
         });
       } catch {
@@ -736,6 +737,7 @@ export function registerCheckoutRoutes(server, ctx) {
           amountPaise: session.amountPaise,
           transactionRef: session.orderId,
           merchantCategoryCode,
+          transactionUrl: `${String(ctx.checkoutBaseUrl || '').replace(/\/$/, '')}/checkout/${session.id}`,
           currency: session.currency || 'INR'
         }));
         request = {
