@@ -91,12 +91,12 @@ test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, 
     assert.equal(created.body.status, PaymentStatus.ACTIVE);
     const paymentId = created.body.paymentId;
 
-    // AC-13: state payload exposes payer-visible payee details
+    // AC-13: state payload exposes payment identity, but not private merchant email.
     const state = await request(baseUrl, `/api/v1/checkout/${paymentId}/state`);
     assert.equal(state.status, 200);
     assert.equal(state.body.payeeVpa, vpa);
     assert.equal(state.body.payeeName, 'Test Merchant');
-    assert.equal(state.body.payeeEmail, 'billing@test.example');
+    assert.equal(state.body.payeeEmail, undefined);
     assert.equal(state.body.copyVpa, vpa);
     assert.ok(state.body.upiUri, 'upiUri present');
     assert.ok(state.body.upiQr, 'upiQr present');
@@ -117,7 +117,7 @@ test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, 
     assert.equal(done.body.utr, '630414503470');
     assert.equal(done.body.payeeVpa, vpa);
     assert.equal(done.body.payeeName, 'Test Merchant');
-    assert.equal(done.body.payeeEmail, 'billing@test.example');
+    assert.equal(done.body.payeeEmail, undefined);
     assert.equal(sessionRepo.findById(paymentId).status, PaymentStatus.VERIFICATION_PENDING);
 
     // AC-5: same UTR on a second session -> 409 UTR_ALREADY_CLAIMED
