@@ -696,6 +696,81 @@ export function registerCheckoutRoutes(server, ctx) {
     HttpServer.json(res, 200, health);
   });
 
+  // GET /api/v1/checkout/:id/diagnostics — payer-safe timeline for a single checkout.
+  // This records what the browser and observers actually reported. It does not claim
+  // that a UPI app launch or browser return is proof that money was settled.
+  server.get('/api/v1/checkout/:id/diagnostics', async (_req, res, params) => {
+    const session = ctx.sessionRepo.findById(params.id);
+    if (!session) return HttpServer.json(res, 404, { error: 'Checkout session not found' });
+
+    const merchant = ctx.merchantRepo.findById(session.merchantId);
+    const snapshot = session.metadata?.receivingAccountSnapshot;
+    const receivingAccount = session.receivingAccountId
+      ? ctx.accountRepo.findById(session.receivingAccountId)
+      : (snapshot?.id ? ctx.accountRepo.findById(snapshot.id) : null);
+    let payeeVpa = null;
+    let payeeName = null;
+    let merchantCategoryCode = null;
+    try {
+      const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
+      if (profile) {
+        payeeVpa = profile.payeeVpa;
+        payeeName = profile.payeeName;
+        merchantCategoryCode = profile.mcc;
+      }
+    } catch {}
+    if (snapshot?.isTestOverride && snapshot.upiId) {
+      payeeVpa = snapshot.upiId;
+      payeeName = snapshot.payeeName || payeeName;
+    } else if (!payeeVpa) {
+      payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
+      payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
+    }
+
+    let request = null;
+    if (payeeVpa) {
+      try {
+        const uri = new URL(buildUpiUri({
+          payeeVpa,
+          payeeName,
+          amountPaise: session.amountPaise,
+          transactionRef: session.orderId,
+          merchantCategoryCode,
+          currency: session.currency || 'INR'
+        }));
+        request = {
+          payeeVpa: uri.searchParams.get('pa'),
+          payeeName: uri.searchParams.get('pn'),
+          amount: uri.searchParams.get('am'),
+          transactionReference: uri.searchParams.get('tr'),
+          merchantCategoryCode: uri.searchParams.get('mc'),
+          currency: uri.searchParams.get('cu')
+        };
+      } catch {}
+    }
+
+    const timeline = (ctx.auditRepo?.findByEntity('PAYMENT_SESSION', session.id) || [])
+      .filter(event => event.action.startsWith('UPI_') || event.action.startsWith('HOOK_'))
+      .map(event => ({ action: event.action.replace(/^HOOK_/, ''), details: event.details, at: event.createdAt }));
+    const launched = timeline.some(event => event.action === 'UPI_APP_LAUNCH_REQUESTED');
+    const returned = timeline.some(event => event.action === 'UPI_APP_RETURNED_TO_CHECKOUT');
+    const diagnosis = !launched
+      ? 'NO_UPI_APP_LAUNCH_RECORDED'
+      : !returned
+        ? 'UPI_APP_LAUNCHED_NO_BROWSER_RETURN'
+        : 'UPI_RETURNED_AWAITING_OBSERVER_OR_PROVIDER_RESULT';
+
+    HttpServer.json(res, 200, {
+      paymentId: session.id,
+      orderId: session.orderId,
+      status: session.status,
+      upiRequest: request,
+      timeline,
+      diagnosis,
+      limitation: 'Browser telemetry cannot read a UPI app or bank error. Android Bridge attestation or an authorised provider/bank response is required for that result.'
+    });
+  });
+
   // GET /api/v1/checkout/:id/upi-qr — Get UPI QR code data URI for a checkout session
   server.get('/api/v1/checkout/:id/upi-qr', async (req, res, params) => {
     const session = ctx.sessionRepo.findById(params.id);

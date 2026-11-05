@@ -146,6 +146,13 @@ describe('Checkout Portal Integration Tests', () => {
       assert.equal(res.text.includes('WhatsApp Mobile Number'), false);
       assert.equal(res.text.includes('ypg-pc-sidebar'), false);
     });
+
+    test('checkout records UPI app launch and return diagnostic events', async () => {
+      const res = await get('/checkout/pay_test_uuid_12345');
+      assert.equal(res.status, 200);
+      assert.ok(res.text.includes("UPI_APP_LAUNCH_REQUESTED"));
+      assert.ok(res.text.includes("UPI_APP_RETURNED_TO_CHECKOUT"));
+    });
   });
   test('missing sessions never generate a payable QR with invented details', async () => {
     const res=await get('/checkout/missing/qr.svg');

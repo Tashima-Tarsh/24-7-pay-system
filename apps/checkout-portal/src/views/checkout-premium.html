@@ -837,6 +837,18 @@
     const terminal = ['SUCCESS','FAILED','EXPIRED','CANCELLED','SUSPICIOUS'];
     let state = initialState;
     let pollTimer = null;
+    let upiAppLaunchPending = false;
+
+    // Records the browser boundary only. A UPI app's private UI/error and bank
+    // response are never inferred from this signal.
+    function recordUpiDiagnostic(action, details) {
+      fetch('/api/v1/checkout/' + encodeURIComponent(paymentId) + '/trigger-hook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, details }),
+        keepalive: true
+      }).catch(() => {});
+    }
     let remaining = 0;
     let announced = '';
     let toastTimer = null;
@@ -949,6 +961,12 @@
           // Android intent here: several PSPs validate their own URL scheme.
           const appLink = (s.upiDeepLinks && s.upiDeepLinks[app]) || upiUri;
           try {
+            upiAppLaunchPending = true;
+            recordUpiDiagnostic('UPI_APP_LAUNCH_REQUESTED', {
+              app,
+              platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
+              request: 'SERVER_ISSUED_UPI_URI'
+            });
             location.href = appLink;
             toast('Opening ' + (app || 'UPI app') + '…');
           } catch (e) { toast('Could not open ' + (app || 'UPI app')); }
@@ -1157,7 +1175,16 @@
 
     function launchGenericUpiIntent() {
       if (!upiUri) { toast('Wait for this payment session to activate.'); return; }
-      try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); }
+      try {
+        upiAppLaunchPending = true;
+        recordUpiDiagnostic('UPI_APP_LAUNCH_REQUESTED', {
+          app: 'generic',
+          platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
+          request: 'SERVER_ISSUED_UPI_URI'
+        });
+        location.href = upiUri;
+        toast('Return to this page after paying.');
+      } catch (e) { toast('Could not launch UPI app.'); }
     }
 
     function copyVpa() {
@@ -1276,6 +1303,12 @@
     // while the session is still awaiting a reference.
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
+        if (upiAppLaunchPending) {
+          upiAppLaunchPending = false;
+          recordUpiDiagnostic('UPI_APP_RETURNED_TO_CHECKOUT', {
+            platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other'
+          });
+        }
         pollState();
         if ((state.status === 'ACTIVE' || state.status === 'AWAITING_REFERENCE')) {
           const input = $('dpUtrInput');

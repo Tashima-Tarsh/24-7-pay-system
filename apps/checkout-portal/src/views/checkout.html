@@ -7162,9 +7162,17 @@
         : 'Desktop: use the dynamic QR code above with any UPI app.';
     }
 
+    let upiAppLaunchPending = false;
+
     function launchUpiApp(deepLink, appName) {
       if (!deepLink) return;
       try {
+        upiAppLaunchPending = true;
+        emitTriggerHook('UPI_APP_LAUNCH_REQUESTED', {
+          app: appName,
+          platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
+          request: 'SERVER_ISSUED_UPI_URI'
+        });
         window.location.href = deepLink;
         setTimeout(() => { loadState(); }, 2500);
       } catch (e) {
@@ -7180,12 +7188,25 @@
         return;
       }
       try {
+        upiAppLaunchPending = true;
+        emitTriggerHook('UPI_APP_LAUNCH_REQUESTED', {
+          app: 'Any UPI App',
+          platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
+          request: 'SERVER_ISSUED_UPI_URI'
+        });
         window.location.href = upiUri;
         setTimeout(() => { loadState(); }, 2500);
       } catch (e) {
         console.warn('launchGenericUpiIntent error:', e);
       }
     }
+
+    document.addEventListener('visibilitychange', () => {
+      if (upiAppLaunchPending && document.visibilityState === 'visible') {
+        upiAppLaunchPending = false;
+        emitTriggerHook('UPI_APP_RETURNED_TO_CHECKOUT', { platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other' });
+      }
+    });
 
     // --- PSYCHOLOGICAL TIME-SAVING CONVERSION BANNER ---
     // Invariant: ONLY display when the customer is actively waiting in the UPI queue!

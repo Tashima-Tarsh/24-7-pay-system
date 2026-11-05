@@ -426,6 +426,29 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
     assert.equal(hookRes.body.action, 'CANCEL_CLICKED');
   });
 
+  test('checkout diagnostics joins the server-issued UPI request with launch telemetry', async () => {
+    const payRes = await request('/api/v1/payments', {
+      method: 'POST',
+      body: { orderId: 'DIAGNOSTIC-UPI-1', amount: '2.00', autoActivate: true }
+    });
+    assert.equal(payRes.status, 201);
+    const paymentId = payRes.body.paymentId;
+
+    const hookRes = await request(`/api/v1/checkout/${paymentId}/trigger-hook`, {
+      method: 'POST',
+      body: { action: 'UPI_APP_LAUNCH_REQUESTED', details: { app: 'gpay', platform: 'Android' } }
+    });
+    assert.equal(hookRes.status, 200);
+
+    const diagnosticsRes = await request(`/api/v1/checkout/${paymentId}/diagnostics`);
+    assert.equal(diagnosticsRes.status, 200);
+    assert.equal(diagnosticsRes.body.paymentId, paymentId);
+    assert.equal(diagnosticsRes.body.upiRequest.transactionReference, 'DIAGNOSTIC-UPI-1');
+    assert.equal(diagnosticsRes.body.upiRequest.currency, 'INR');
+    assert.equal(diagnosticsRes.body.timeline.at(-1).action, 'UPI_APP_LAUNCH_REQUESTED');
+    assert.deepEqual(diagnosticsRes.body.timeline.at(-1).details, { app: 'gpay', platform: 'Android' });
+  });
+
   test('Payment timer does not start until customer logs in or signs up', async () => {
     // Ensure slot is clean
     const prevActive = serverInstance.app.context.sessionRepo.findCurrentActiveOrProcessing('00000000-0000-0000-0000-000000000002');
