@@ -1119,9 +1119,10 @@ export function registerCheckoutRoutes(server, ctx) {
   });
 
   // POST /api/v1/checkout/:id/payment-done
-  // Customer reports the 12-digit UTR after paying. Allowed from ACTIVE or
-  // INTENT_ISSUED only. Device binding is intentionally OPTIONAL (a desktop payer
-  // with no deviceId must not be rejected).
+  // Customer reports payment after paying. Allowed from ACTIVE or
+  // INTENT_ISSUED only. Device binding is intentionally OPTIONAL.
+  // UTR is optional — if provided, it is validated and stored; if omitted,
+  // the session still moves to VERIFICATION_PENDING.
   server.post('/api/v1/checkout/:id/payment-done', async (req, res, params) => {
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {
@@ -1139,21 +1140,24 @@ export function registerCheckoutRoutes(server, ctx) {
 
     const claim = await HttpServer.parseBody(req);
     const rawUtr = String(claim.utr || '');
-    // Normalize: strip whitespace and hyphens, require exactly 12 digits.
-    const utr = rawUtr.replace(/[\s-]/g, '');
-    if (!/^\d{12}$/.test(utr)) {
-      HttpServer.json(res, 400, { error: 'Invalid UTR: must be a 12-digit UPI reference.', code: 'INVALID_UTR' });
-      return;
-    }
+    let utr = null;
+    if (rawUtr.trim() !== '') {
+      // Normalize: strip whitespace and hyphens, require exactly 12 digits.
+      utr = rawUtr.replace(/[\s-]/g, '');
+      if (!/^\d{12}$/.test(utr)) {
+        HttpServer.json(res, 400, { error: 'Invalid UTR: must be a 12-digit UPI reference.', code: 'INVALID_UTR' });
+        return;
+      }
 
-    // UTR already claimed by another non-terminal session -> conflict.
-    const existing = ctx.db.queryOne(
-      `SELECT id, status FROM payment_sessions WHERE reported_utr = ? AND id != ? AND status NOT IN ('SUCCESS','FAILED','EXPIRED','CANCELLED')`,
-      [utr, session.id]
-    );
-    if (existing) {
-      HttpServer.json(res, 409, { error: 'UTR already claimed by another payment session.', code: 'UTR_ALREADY_CLAIMED', claimedSessionId: existing.id });
-      return;
+      // UTR already claimed by another non-terminal session -> conflict.
+      const existing = ctx.db.queryOne(
+        `SELECT id, status FROM payment_sessions WHERE reported_utr = ? AND id != ? AND status NOT IN ('SUCCESS','FAILED','EXPIRED','CANCELLED')`,
+        [utr, session.id]
+      );
+      if (existing) {
+        HttpServer.json(res, 409, { error: 'UTR already claimed by another payment session.', code: 'UTR_ALREADY_CLAIMED', claimedSessionId: existing.id });
+        return;
+      }
     }
 
     const now = new Date();
@@ -1168,8 +1172,12 @@ export function registerCheckoutRoutes(server, ctx) {
     if (typeof metadata === 'string') {
       try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
     }
-    metadata.reportedUtr = utr;
-    metadata.reportedUtrSource = 'CUSTOMER_REPORTED';
+    if (utr) {
+      metadata.reportedUtr = utr;
+      metadata.reportedUtrSource = 'CUSTOMER_REPORTED';
+    } else {
+      metadata.utrNotRequired = true;
+    }
     metadata.payerName = payerName;
     metadata.payerVpa = payerVpa;
 
@@ -1180,8 +1188,8 @@ export function registerCheckoutRoutes(server, ctx) {
       WHERE id = ?
     `, [
       PaymentStatus.VERIFICATION_PENDING,
-      utr,
-      'CUSTOMER_REPORTED',
+      utr || null,
+      utr ? 'CUSTOMER_REPORTED' : null,
       payerName,
       payerVpa,
       nowIso,

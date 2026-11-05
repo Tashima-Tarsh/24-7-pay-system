@@ -752,48 +752,16 @@
           <span class="dp-bottom-price" id="dpBottomPrice">₹{{AMOUNT}}</span>
         </div>
         <div style="font-size:10px; color:var(--dp-text-muted); white-space:nowrap;">Powered by Dynamo Pay · UPI Collection</div>
-        <button type="button" class="dp-btn-continue" id="dpBtnPaymentDone" onclick="openPaymentDoneForm()">
+        <button type="button" class="dp-btn-continue" id="dpBtnPaymentDone" onclick="handlePaymentDone()">
           I've Paid
         </button>
       </div>
     </footer>
 
-    <!-- INLINE UTR FORM (shown after "I've Paid") -->
-    <section class="dp-utr-form" id="dpUtrForm" hidden>
-      <div class="dp-section-header">
-        <span class="dp-section-title">Confirm Payment</span>
-        <span class="dp-section-sub">Enter the 12-digit UTR from your UPI app receipt</span>
-      </div>
-      <form id="dpUtrFormEl" novalidate>
-        <div class="dp-utr-field">
-          <input
-            type="text"
-            inputmode="numeric"
-            pattern="\d{12}"
-            maxlength="14"
-            id="dpUtrInput"
-            placeholder="XXXX XXXX XXXX"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <span class="dp-utr-hint" id="dpUtrHint">12 digits required</span>
-        </div>
-        <div class="dp-utr-optional">
-          <input type="text" id="dpPayerName" placeholder="Payer name (optional)" />
-          <input type="text" id="dpPayerVpa" placeholder="Your UPI ID (optional)" />
-        </div>
-        <div class="dp-utr-actions">
-          <button type="button" class="dp-btn-secondary" id="dpBtnCancelUtr" onclick="closePaymentDoneForm()">Cancel</button>
-          <button type="submit" class="dp-btn-primary" id="dpBtnSubmitUtr" disabled>Save Reference</button>
-        </div>
-      </form>
-      <div class="dp-utr-status" id="dpUtrStatus" hidden></div>
-    </section>
-
     <!-- STATUS STRIP -->
     <section class="dp-status-strip" id="dpStatusStrip" hidden>
       <span class="dp-strip-dot" id="dpStripDot"></span>
-      <span class="dp-strip-label" id="dpStripLabel">Waiting for reference</span>
+      <span class="dp-strip-label" id="dpStripLabel">Waiting for payment</span>
       <span class="dp-strip-sub" id="dpStripSub"></span>
     </section>
 
@@ -875,6 +843,7 @@
       const status = s.status || 'UNKNOWN';
       const done = terminal.includes(status);
       const canPay = status === 'ACTIVE' && Boolean(s.upiUri);
+      const hasUpiUri = Boolean(s.upiUri);
 
       // Update amount/order
       $('amount').textContent = money(s.amount);
@@ -887,14 +856,14 @@
       $('dpVpaBadge').textContent = payeeVpa;
 
       // Update QR
-      if (canPay && lastQrKey !== upiUri) {
+      if (hasUpiUri && lastQrKey !== upiUri) {
         lastQrKey = upiUri;
         const qrBox = $('qrImage');
         qrBox.innerHTML = `<img src="/checkout/${encodeURIComponent(paymentId)}/qr.svg?v=${Date.now()}" alt="UPI QR" style="width:100%; height:100%; object-fit:contain;" />`;
       }
-      $('qrImage').hidden = !canPay;
-      $('dpQrPrompt').textContent = canPay ? 'Scan the QR using any UPI App' : 'Payment session not active';
-      $('dpQrHint').textContent = canPay ? 'Open Google Pay, PhonePe, Paytm or any UPI app to scan and pay.' : '';
+      $('qrImage').hidden = !hasUpiUri;
+      $('dpQrPrompt').textContent = hasUpiUri ? 'Scan the QR using any UPI App' : 'Payment session not active';
+      $('dpQrHint').textContent = hasUpiUri ? 'Open Google Pay, PhonePe, Paytm or any UPI app to scan and pay.' : '';
 
       // ---- Payee block (payer-visible payee details) ----
       const payeeBlock = $('dpPayeeBlock');
@@ -948,14 +917,49 @@
       if (desktopHint) desktopHint.hidden = isAndroid;
       if (upiSectionSub) upiSectionSub.textContent = isAndroid ? 'Tap Pay with any UPI app to open your UPI app' : 'Scan the QR with any UPI app';
       const genericLink = $('dpBtnGenericUpi');
-      const canLaunchGeneric = isAndroid && canPay && typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
+      const canLaunchGeneric = canPay && typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
       if (genericContainer) genericContainer.hidden = !canLaunchGeneric;
       if (canLaunchGeneric) genericLink.setAttribute('href', upiUri);
       else genericLink.removeAttribute('href');
+      // Generic link click handler — works on desktop too (shows fallback if scheme not handled)
+      if (genericLink) {
+        genericLink.onclick = (e) => {
+          if (!canPay || !upiUri) { e.preventDefault(); toast('Payment session not active.'); return; }
+          try {
+            location.href = upiUri;
+            if (!isAndroid) {
+              e.preventDefault();
+              toast('Copy the VPA or scan the QR above with your phone\'s UPI app.');
+            }
+          } catch (err) { e.preventDefault(); toast('Could not open UPI link.'); }
+        };
+      }
 
       const tiles = appGrid ? appGrid.querySelectorAll('.dp-app-tile') : [];
       tiles.forEach(tile => {
-        tile.disabled = true;
+        const pkg = tile.getAttribute('data-pkg');
+        tile.disabled = !canPay;
+        if (tile.style) { tile.style.opacity = canPay ? '1' : '0.5'; tile.style.cursor = canPay ? 'pointer' : 'not-allowed'; }
+        tile.onclick = () => {
+          if (!canPay || !upiUri) { toast('Payment session not active.'); return; }
+          if (!isAndroid) { toast('Scan the QR code using the UPI app on your phone.'); return; }
+          const query = upiUri.split('?')[1] || '';
+          const intentUri = 'intent://pay?' + query + '#Intent;scheme=upi;package=' + encodeURIComponent(pkg || '') + ';end';
+          let blurred = false;
+          const handleBlur = () => { blurred = true; };
+          window.addEventListener('blur', handleBlur, { once: true });
+          try {
+            location.href = intentUri;
+            toast('Opening app…');
+          } catch (e) { toast('Could not open app.'); }
+          // Fall back to the bare upiUri after 800ms if the page did not blur (app did not open).
+          setTimeout(() => {
+            window.removeEventListener('blur', handleBlur);
+            if (!blurred && document.hasFocus()) {
+              try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); }
+            }
+          }, 800);
+        };
       });
 
       // Intent status strip (legacy INTENT_OPENED / CLIENT_REPORTED_SUCCESS)
@@ -1055,7 +1059,7 @@
 
       // App elements disabled when not payable or uncertain
       // Use querySelectorAll('[data-app]) so test-harness element copies (apps array) are disabled directly
-      document.querySelectorAll('[data-app]').forEach(b => { b.disabled = !canPay; });
+      document.querySelectorAll('[data-app]').forEach(b => { b.disabled = !canPay; b.style.opacity = canPay ? '1' : '0.5'; b.style.cursor = canPay ? 'pointer' : 'not-allowed'; });
 
       // Pay view hidden on terminal/verification states
       const payViewEl = document.getElementById('payView');
@@ -1181,80 +1185,36 @@
       }).catch(() => toast('Copy the UPI ID shown below the QR code.'));
     }
 
-    function openPaymentDoneForm() {
+    function handlePaymentDone() {
       if (state.status !== 'ACTIVE' && state.status !== 'AWAITING_REFERENCE') {
-        toast('Payment session is not open for reference entry.');
+        toast('Payment session is not open.');
         return;
       }
-      const form = $('dpUtrForm');
-      if (form) form.hidden = false;
-      const input = $('dpUtrInput');
-      if (input) input.focus();
-    }
-
-    function closePaymentDoneForm() {
-      const form = $('dpUtrForm');
-      if (form) form.hidden = true;
-      const status = $('dpUtrStatus');
-      if (status) status.hidden = true;
-    }
-
-    // Auto-format UTR input as 4-4-4 (numeric only)
-    (function initUtrInput() {
-      const input = $('dpUtrInput');
-      if (!input) return;
-      input.addEventListener('input', () => {
-        let v = input.value.replace(/\D/g, '');
-        if (v.length > 12) v = v.slice(0, 12);
-        const groups = [];
-        for (let i = 0; i < v.length; i += 4) groups.push(v.slice(i, i + 4));
-        input.value = groups.join(' ');
-        const digits = v.replace(/\s/g, '');
-        const submit = $('dpBtnSubmitUtr');
-        if (submit) submit.disabled = digits.length !== 12;
-        const hint = $('dpUtrHint');
-        if (hint) hint.textContent = digits.length === 12 ? '12 digits — ready to save' : (12 - digits.length) + ' more digit(s)';
-      });
-      const submit = $('dpBtnSubmitUtr');
-      if (submit) submit.disabled = true;
-      const cancel = $('dpBtnCancelUtr');
-      if (cancel) cancel.addEventListener('click', closePaymentDoneForm);
-      const form = $('dpUtrFormEl');
-      if (form) {
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const raw = input.value.replace(/\D/g, '');
-          if (!/^\d{12}$/.test(raw)) return;
-          const btn = $('dpBtnSubmitUtr');
-          btn.disabled = true;
-          btn.textContent = 'Saving…';
-          const statusEl = $('dpUtrStatus');
-          if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Saving reference…'; }
-          try {
-            const res = await fetch('/api/v1/checkout/' + encodeURIComponent(paymentId) + '/payment-done', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                utr: raw,
-                payerName: ($('dpPayerName') || {}).value || undefined,
-                payerVpa: ($('dpPayerVpa') || {}).value || undefined
-              })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Request failed.');
-            // Never show "success" from payment-done alone — only from a SUCCESS state poll.
-            closePaymentDoneForm();
-            if (statusEl) { statusEl.textContent = 'Reference saved — waiting for bank confirmation.'; statusEl.hidden = false; }
-            toast('Reference saved — waiting for bank confirmation.');
-            await pollState();
-          } catch (err) {
-            toast(err.message);
-            btn.disabled = false;
-            btn.textContent = 'Save Reference';
-          }
+      const btn = $('dpBtnPaymentDone');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        fetch('/api/v1/checkout/' + encodeURIComponent(paymentId) + '/payment-done', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Request failed.');
+          // Never show "success" from payment-done alone — only from a SUCCESS state poll.
+          toast('Reference saved — waiting for bank confirmation.');
+          await pollState();
+        }).catch((err) => {
+          toast(err.message);
+          btn.disabled = false;
+          btn.textContent = 'I\'ve Paid';
         });
+      } catch (err) {
+        toast(err.message);
+        btn.disabled = false;
+        btn.textContent = 'I\'ve Paid';
       }
-    })();
+    }
 
     async function pollState() {
       if (pollTimer) clearTimeout(pollTimer);
@@ -1279,9 +1239,9 @@
     // Generic UPI button
     $('dpBtnGenericUpi').addEventListener('click', launchGenericUpiIntent);
 
-    // Payment done button (test-referenced id: paymentDone) — opens the UTR form
-    $('paymentDone').addEventListener('click', openPaymentDoneForm);
-    $('dpBtnPaymentDone').addEventListener('click', openPaymentDoneForm);
+    // Payment done button (test-referenced id: paymentDone) — simple click, no UTR form
+    $('paymentDone').addEventListener('click', handlePaymentDone);
+    $('dpBtnPaymentDone').addEventListener('click', handlePaymentDone);
 
     // Visibility change re-poll; auto-focus UTR field when returning to the page
     // while the session is still awaiting a reference.

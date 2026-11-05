@@ -6,7 +6,7 @@ import vm from 'node:vm';
 function checkout(status='ACTIVE',overrides={}) {
   const html=fs.readFileSync(new URL('../views/checkout-premium.html',import.meta.url),'utf8');
   const elements=new Map();
-  function element(id) {if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,textContent:'',value:'',attributes:{},addEventListener(name,fn){this[name]=fn;},setAttribute(name,v){this.attributes[name]=v;this[name]=v;},removeAttribute(name){delete this.attributes[name];delete this[name];},getAttribute(name){return this.attributes[name]!==undefined?this.attributes[name]:(this.dataset&&this.dataset[name]!==undefined?this.dataset[name]:null);},querySelectorAll(){return apps;},focus(){},dispatchEvent(evt){const h=this[evt.type];if(h){h(evt);}return true;},showModal(){this.open=true;},close(){this.open=false;},click(){}});return elements.get(id);}
+  function element(id) {if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,textContent:'',value:'',attributes:{},style:{},addEventListener(name,fn){this[name]=fn;},setAttribute(name,v){this.attributes[name]=v;this[name]=v;},removeAttribute(name){delete this.attributes[name];delete this[name];},getAttribute(name){return this.attributes[name]!==undefined?this.attributes[name]:(this.dataset&&this.dataset[name]!==undefined?this.dataset[name]:null);},querySelectorAll(){return apps;},focus(){},dispatchEvent(evt){const h=this[evt.type];if(h){h(evt);}return true;},showModal(){this.open=true;},close(){this.open=false;},click(){}});return elements.get(id);}
   const apps=['gpay','phonepe','paytm','navi','generic'].map(app=>({...element(app),dataset:{app}}));
   const state={paymentId:'payment-1',orderId:'ORDER-1',merchantName:'Merchant',amount:'123.45',status,payeeVpa:'merchant@upi',upiUri:'upi://pay?pa=merchant%40upi&pn=Merchant&am=123.45&tr=ORDER-1&cu=INR',enabledMethods:['UPI','COD'],timeRemainingSeconds:300};
   Object.assign(state,overrides);
@@ -52,22 +52,11 @@ test('checkout polls the actual public payment state API',()=>{
   assert.equal(requests[0].url,'/api/v1/checkout/payment-1/state');
 });
 
-test('payment-done opens a UTR reference form; submitting it posts the 12-digit UTR',async()=>{
-  const html=fs.readFileSync(new URL('../views/checkout-premium.html',import.meta.url),'utf8');
+test('payment-done clicks without UTR form; posting empty body sets VERIFICATION_PENDING',async()=>{
   const {element,requests,messages}=checkout();await element('dpBtnPaymentDone').click();
-  const section=element('dpUtrForm');
-  assert.equal(section.hidden,false,'UTR form should open when I\'ve Paid is tapped');
-  const form=element('dpUtrFormEl');
-  const input=element('dpUtrInput');
-  input.value='1234 5678 9012';
-  // trigger the input formatter
-  input.dispatchEvent({type:'input'});
-  const submit=element('dpBtnSubmitUtr');
-  assert.equal(submit.disabled,false,'submit enabled once 12 digits entered');
-  await form['submit']({preventDefault(){}});
   const request=requests.find(r=>r.url.endsWith('/payment-done'));
   assert.ok(request,'payment-done should be called');
-  assert.deepEqual(JSON.parse(request.init.body),{utr:'123456789012'});
+  assert.deepEqual(JSON.parse(request.init.body),{});
   assert.equal(messages.length,0);
 });
 test('unconfirmed payments remain pending and do not emit a failed or successful result',()=>{

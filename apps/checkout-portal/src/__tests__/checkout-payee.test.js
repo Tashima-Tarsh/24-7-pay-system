@@ -20,7 +20,7 @@ function checkout(ua, overrides = {}) {
     if (!elements.has(id)) {
       elements.set(id, {
         hidden: false, disabled: false, textContent: '', value: '', attributes: {},
-        dataset: {},
+        dataset: {}, style: {},
         addEventListener(name, fn) { this[name] = fn; },
         setAttribute(name, v) { this.attributes[name] = v; this[name] = v; },
         removeAttribute(name) { delete this.attributes[name]; delete this[name]; },

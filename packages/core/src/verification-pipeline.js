@@ -236,10 +236,10 @@ export class PaymentVerificationPipeline {
     }
 
     if (!session) {
-      // 1. Try finding active or processing session for this specific receiving account
+      // 1. Try finding active, processing, or verification-pending session for this specific receiving account
       if (input.receivingAccountId) {
         const row = this.db.queryOne(
-          `SELECT * FROM payment_sessions WHERE receiving_account_id = ? AND status IN ('ACTIVE', 'PROCESSING') ORDER BY created_at DESC LIMIT 1`,
+          `SELECT * FROM payment_sessions WHERE receiving_account_id = ? AND status IN ('ACTIVE', 'PROCESSING', 'VERIFICATION_PENDING') ORDER BY created_at DESC LIMIT 1`,
           [input.receivingAccountId]
         );
         if (row) session = this.sessionRepo.mapRow(row);
@@ -251,7 +251,7 @@ export class PaymentVerificationPipeline {
         const row = this.db.queryOne(`
           SELECT ps.* FROM payment_sessions ps
           JOIN payment_receiving_accounts ra ON ps.receiving_account_id = ra.id
-          WHERE LOWER(ra.upi_id) = ? AND ps.status IN ('ACTIVE', 'PROCESSING')
+          WHERE LOWER(ra.upi_id) = ? AND ps.status IN ('ACTIVE', 'PROCESSING', 'VERIFICATION_PENDING')
           ORDER BY ps.created_at DESC LIMIT 1
         `, [observedVpa]);
         if (row) session = this.sessionRepo.mapRow(row);

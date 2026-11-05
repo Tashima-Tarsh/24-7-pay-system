@@ -57,8 +57,15 @@ export class AttributionEngine {
 
   reconcilePendingPayment(sessionId) {
     const session=this.sessionRepo.findById(sessionId);
-    if(![PaymentStatus.ACTIVE,PaymentStatus.PROCESSING,PaymentStatus.VERIFICATION_PENDING].includes(session?.status) || !session.metadata?.reportedUtr) return null;
-    const rows=this.sessionRepo.db.query(`SELECT * FROM payment_observations WHERE receiving_account_id=? AND amount_paise=? AND bank_reference_number=? AND attributed_payment_id IS NULL AND attribution_status IN ('UNATTRIBUTED','LATE_UNMATCHED') ORDER BY observed_at`,[session.receivingAccountId,Number(session.amountPaise),session.metadata.reportedUtr]);
+    if(![PaymentStatus.ACTIVE,PaymentStatus.PROCESSING,PaymentStatus.VERIFICATION_PENDING].includes(session?.status)) return null;
+    const reportedUtr = session.metadata?.reportedUtr || null;
+    let sql = `SELECT * FROM payment_observations WHERE receiving_account_id=? AND amount_paise=? AND attributed_payment_id IS NULL AND attribution_status IN ('UNATTRIBUTED','LATE_UNMATCHED') ORDER BY observed_at`;
+    let params = [session.receivingAccountId, Number(session.amountPaise)];
+    if (reportedUtr) {
+      sql = sql.replace('ORDER BY observed_at', 'AND bank_reference_number=? ORDER BY observed_at');
+      params.push(reportedUtr);
+    }
+    const rows=this.sessionRepo.db.query(sql, params);
     for(const row of rows){
       if(!BANK_SOURCES.includes(row.source)) continue;
       const normalized=this.obsRepo.mapRow(row);
@@ -161,6 +168,11 @@ export class AttributionEngine {
 
   holdProbable(session, source, observationId) {
     this.obsRepo.markAttributed(observationId, session.id);
+    // If no UTR was required (payment-done called without UTR), amount match
+    // settles at Level 1 (Single Verification) — one source is enough.
+    if (session.metadata?.utrNotRequired) {
+      return this.finalizeAmountMatchL1(session, source, observationId);
+    }
     if (this.auditRepo) {
       this.auditRepo.log({
         merchantId: session.merchantId,
@@ -172,6 +184,63 @@ export class AttributionEngine {
       });
     }
     return { attributed: false, paymentSessionId: session.id, observationId, outcomeStatus: PaymentStatus.VERIFICATION_PENDING };
+  }
+
+  /**
+   * Settle via amount-only match at Level 1 (Single Verification).
+   * Used when payment-done was called without a UTR.
+   */
+  finalizeAmountMatchL1(session, source, observationId) {
+    const now = new Date().toISOString();
+    const sources = [source];
+    const tag = 'AMOUNT_MATCH_SINGLE_VERIFICATION';
+    this.sessionRepo.db.execute(`
+      UPDATE payment_sessions
+      SET status = ?, verification_level = 1, verification_sources = ?, verification_tag = ?,
+          attributed_observation_id = COALESCE(attributed_observation_id, ?),
+          completed_at = COALESCE(completed_at, ?), updated_at = ?
+      WHERE id = ?
+    `, [PaymentStatus.SUCCESS, JSON.stringify(sources), tag, observationId, now, now, now, session.id]);
+    this.obsRepo.markAttributed(observationId, session.id);
+
+    if (this.auditRepo) {
+      this.auditRepo.log({
+        merchantId: session.merchantId,
+        entityType: 'PAYMENT_SESSION',
+        entityId: session.id,
+        action: 'PAYMENT_AMOUNT_MATCH_SUCCESS_L1',
+        actorType: 'SYSTEM',
+        details: { source, observationId, verificationLevel: 1, verificationTag: tag, sources }
+      });
+    }
+
+    this.eventEmitter.emit('PAYMENT.SUCCESS', {
+      paymentId: session.id,
+      orderId: session.orderId,
+      merchantId: session.merchantId,
+      amountPaise: session.amountPaise,
+      observationId,
+      verificationLevel: 1,
+      verificationTag: tag,
+      sources
+    });
+    this.eventEmitter.emit('PAYMENT.VERIFICATION_UPGRADED', {
+      paymentId: session.id,
+      verificationLevel: 1,
+      verificationTag: tag,
+      sources
+    });
+    return {
+      attributed: true,
+      duplicate: false,
+      lateMatch: false,
+      paymentSessionId: session.id,
+      observationId,
+      outcomeStatus: PaymentStatus.SUCCESS,
+      verificationLevel: 1,
+      verificationTag: tag,
+      verificationSources: sources
+    };
   }
 
   /**
@@ -316,12 +385,24 @@ export class AttributionEngine {
     const unresolved=this.sessionRepo.db.query(`SELECT * FROM payment_sessions WHERE receiving_account_id=? AND amount_paise=? AND status=?`,[normalizedObs.receivingAccountId,Number(normalizedObs.amountPaise),PaymentStatus.VERIFICATION_PENDING]);
     // A delayed bank record can settle an unresolved payment only by its exact reported reference,
     // receiving account and amount; amount-only matching could credit a newer customer's order.
+    // Exception: when payment-done was called without UTR (utrNotRequired), amount-only match
+    // settles at Level 1.
     if (normalizedObs.bankReferenceNumber) {
       const pending = this.sessionRepo.db.query(`SELECT * FROM payment_sessions WHERE receiving_account_id=? AND amount_paise=? AND status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING') AND json_extract(metadata,'$.reportedUtr')=?`, [normalizedObs.receivingAccountId, Number(normalizedObs.amountPaise), normalizedObs.bankReferenceNumber]);
       if(pending.length > 1) return { attributed:false, duplicate:false, lateMatch:false, observationId:savedObs.id, outcomeStatus:ObservationAttributionStatus.UNATTRIBUTED };
       if(pending.length === 1) currentSession=this.sessionRepo.mapRow(pending[0]);
     }
-    if(!currentSession && unresolved.length)return {attributed:false,duplicate:false,lateMatch:false,observationId:savedObs.id,outcomeStatus:ObservationAttributionStatus.UNATTRIBUTED};
+    if(!currentSession && unresolved.length) {
+      // If no UTR match but session was created without UTR requirement, allow amount-only L1 settlement
+      const noUtrSession = unresolved.find(s => {
+        try { return JSON.parse(s.metadata || '{}').utrNotRequired === true; } catch { return false; }
+      });
+      if (noUtrSession) {
+        currentSession = this.sessionRepo.mapRow(noUtrSession);
+      } else {
+        return {attributed:false,duplicate:false,lateMatch:false,observationId:savedObs.id,outcomeStatus:ObservationAttributionStatus.UNATTRIBUTED};
+      }
+    }
     if (!currentSession && normalizedObs.rawPayload?.targetSessionId) {
       currentSession = this.sessionRepo.findById(normalizedObs.rawPayload.targetSessionId);
     }
@@ -358,7 +439,7 @@ export class AttributionEngine {
 
     if (currentSession) {
       // Invariant Check 1: Must be in ACTIVE or PROCESSING status
-      const isEligibleStatus = [PaymentStatus.ACTIVE, PaymentStatus.PROCESSING].includes(currentSession.status) || (currentSession.status === PaymentStatus.VERIFICATION_PENDING && BANK_SOURCES.includes(normalizedObs.source) && Boolean(normalizedObs.bankReferenceNumber) && currentSession.metadata?.reportedUtr === normalizedObs.bankReferenceNumber);
+      const isEligibleStatus = [PaymentStatus.ACTIVE, PaymentStatus.PROCESSING].includes(currentSession.status) || (currentSession.status === PaymentStatus.VERIFICATION_PENDING && BANK_SOURCES.includes(normalizedObs.source) && Boolean(normalizedObs.bankReferenceNumber) && (currentSession.metadata?.reportedUtr === normalizedObs.bankReferenceNumber || currentSession.metadata?.utrNotRequired === true));
 
       // Invariant Check 2: Exact Amount Match (in integer paise)
       const isAmountMatch = Number(currentSession.amountPaise) === Number(normalizedObs.amountPaise);
