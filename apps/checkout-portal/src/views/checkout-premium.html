@@ -948,20 +948,10 @@
           // server-issued UPI URI as the QR.  Do not synthesize a package-forced
           // Android intent here: several PSPs validate their own URL scheme.
           const appLink = (s.upiDeepLinks && s.upiDeepLinks[app]) || upiUri;
-          let blurred = false;
-          const handleBlur = () => { blurred = true; };
-          window.addEventListener('blur', handleBlur, { once: true });
           try {
             location.href = appLink;
             toast('Opening ' + (app || 'UPI app') + '…');
           } catch (e) { toast('Could not open ' + (app || 'UPI app')); }
-          // Fall back to the bare upiUri after 800ms if the page did not blur (app did not open).
-          setTimeout(() => {
-            window.removeEventListener('blur', handleBlur);
-            if (!blurred && document.hasFocus()) {
-              try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); }
-            }
-          }, 800);
         };
       });
 

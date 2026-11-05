@@ -48,7 +48,7 @@ function checkout(ua, overrides = {}) {
     enabledMethods: ['UPI', 'COD'], timeRemainingSeconds: 300, expiresAt: new Date(Date.now() + 100000).toISOString()
   };
   Object.assign(state, overrides);
-  const messages = [], requests = [];
+  const messages = [], requests = [], timers = [];
   const window = {
     parent: { postMessage: (...args) => messages.push(args) },
     addEventListener() {},
@@ -64,12 +64,12 @@ function checkout(ua, overrides = {}) {
       addEventListener() {}
     },
     navigator: window.navigator, location: window.location,
-    setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, URL, Intl, console,
+    setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimeout() {}, setInterval: () => 1, URL, Intl, console,
     sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
     fetch: async (url, init) => { requests.push({ url, init }); return { ok: true, json: async () => state }; }
   };
   vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1].replace('{{INITIAL_STATE_JSON}}', JSON.stringify(state)), context);
-  return { context, window, element, apps, messages, requests, state };
+  return { context, window, element, apps, messages, requests, state, timers };
 }
 
 test('AC-3: desktop UA keeps app choices visible and shows scan-with-any-app guidance', () => {
@@ -96,6 +96,13 @@ test('AC-3: Android app tiles use the server-issued PSP deep links', () => {
   const { element, context } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
   element('gpay').onclick();
   assert.equal(context.location.href, 'tez://upi/pay?pa=merchant%40upi');
+});
+
+test('AC-3: selecting a UPI app sends exactly one launch request', () => {
+  const { element, timers } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
+  const timerCountBeforeTap = timers.length;
+  element('gpay').onclick();
+  assert.equal(timers.length, timerCountBeforeTap + 1, 'must not auto-launch a second generic UPI request');
 });
 
 test('AC-13: payee block renders the payment identity without exposing merchant email', () => {
