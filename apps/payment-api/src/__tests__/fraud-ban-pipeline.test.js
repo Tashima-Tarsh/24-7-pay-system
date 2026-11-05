@@ -5,7 +5,7 @@ import { Database, CustomerRepository, PaymentSessionRepository, MerchantReposit
 import { extractIntelligentAmount, BankSmsParser, PaymentVerificationPipeline } from '@youpi/core';
 import { startServer as startPaymentApi } from '../index.js';
 import { PaymentStatus, PaymentMethod } from '@youpi/common';
-import { authHeadersFor } from '../../../../scripts/test-support.js';
+import { authHeadersFor, seedActivePaymentProfile } from '../../../../scripts/test-support.js';
 
 describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acceptance Tests)', () => {
   let apiInstance;
@@ -42,6 +42,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
 
     apiInstance = await startPaymentApi(6197, testDb);
     baseUrl = `http://localhost:${apiInstance.port}`;
+    seedActivePaymentProfile(testDb, merchantId);
 
     // Set a known webhook secret for the demo merchant so raw requests authenticate
     testDb.execute("UPDATE merchants SET webhook_secret = 'sim_test_webhook_secret_001' WHERE id = ?", [merchantId]);

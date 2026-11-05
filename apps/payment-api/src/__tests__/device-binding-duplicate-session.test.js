@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { Database, CustomerRepository, PaymentSessionRepository, MerchantRepository } from '@youpi/db';
 import { startServer as startPaymentApi } from '../index.js';
-import { authHeadersFor } from '../../../../scripts/test-support.js';
+import { authHeadersFor, seedActivePaymentProfile } from '../../../../scripts/test-support.js';
 
 describe('YOUPI PG: Device Binding & Duplicate Session Detection', () => {
   let apiInstance;
@@ -25,6 +25,7 @@ describe('YOUPI PG: Device Binding & Duplicate Session Detection', () => {
 
     apiInstance = await startPaymentApi(6201, testDb);
     baseUrl = `http://localhost:${apiInstance.port}`;
+    seedActivePaymentProfile(testDb, merchantId);
 
     // Set a known webhook secret for the demo merchant so raw requests authenticate
     testDb.execute("UPDATE merchants SET webhook_secret = 'sim_test_webhook_secret_001' WHERE id = ?", [merchantId]);

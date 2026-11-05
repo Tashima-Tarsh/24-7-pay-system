@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { Database, CustomerRepository, CustomerSessionRepository, PaymentSessionRepository, MerchantRepository } from '@youpi/db';
 import { startServer as startPaymentApi } from '../index.js';
-import { authHeadersFor } from '../../../../scripts/test-support.js';
+import { authHeadersFor, seedActivePaymentProfile } from '../../../../scripts/test-support.js';
 
 describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite', () => {
   let apiInstance;
@@ -26,6 +26,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
 
     apiInstance = await startPaymentApi(6205, testDb);
     baseUrl = `http://localhost:${apiInstance.port}`;
+    seedActivePaymentProfile(testDb, merchantId);
 
     // Set a known webhook secret for the demo merchant so SDK/raw requests authenticate
     testDb.execute("UPDATE merchants SET webhook_secret = 'sim_test_webhook_secret_001' WHERE id = ?", [merchantId]);

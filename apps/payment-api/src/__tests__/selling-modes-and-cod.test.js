@@ -4,7 +4,7 @@ import http from 'node:http';
 import { Database } from '@youpi/db';
 import { startServer as startPaymentApi } from '../index.js';
 import { PaymentStatus, PaymentMethod, SellingMode } from '@youpi/common';
-import { authHeadersFor } from '../../../../scripts/test-support.js';
+import { authHeadersFor, seedActivePaymentProfile } from '../../../../scripts/test-support.js';
 
 describe('Architectural Update: Selling Modes (Online vs Offline), COD Flow, & Clean VPA Config', () => {
   let apiInstance;
@@ -15,6 +15,7 @@ describe('Architectural Update: Selling Modes (Online vs Offline), COD Flow, & C
     testDb = new Database({ inMemory: true });
     apiInstance = await startPaymentApi(6195, testDb);
     baseUrl = `http://localhost:${apiInstance.port}`;
+    seedActivePaymentProfile(testDb);
   });
 
   after(async () => {

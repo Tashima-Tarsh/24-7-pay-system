@@ -12,6 +12,8 @@ test('production payment boundaries, observer isolation and refund reservations'
  await new Promise(r=>app.rawServer.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${app.rawServer.address().port}`;
  const merchants=new MerchantRepository(db),merchant=merchants.getDefault(),ctx=app.context;
  merchants.update(merchant.id,{webhookUrl:null});
+ const profileAccount=ctx.accountRepo.findActiveForMerchant(merchant.id);
+ ctx.ppMerchantPaymentProfileRepo.upsert(merchant.id,{payeeVpa:profileAccount.upiId,payeeName:profileAccount.payeeName,payeeEmail:'billing@test.example',mcc:'5411',orgid:null,intentSignKeyPem:null,supportPhone:null,isActive:true});
  const previous=process.env.NODE_ENV;process.env.NODE_ENV='production';
  t.after(async()=>{process.env.NODE_ENV=previous;app.destroy();app.rawServer.closeAllConnections();await new Promise(r=>app.rawServer.close(r));db.close();});
  const post=(path,body,headers={})=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});

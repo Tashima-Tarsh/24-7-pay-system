@@ -1,7 +1,7 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { Database, MerchantRepository } from '@youpi/db';
+import { Database, MerchantRepository, ReceivingAccountRepository, PpMerchantPaymentProfileRepository } from '@youpi/db';
 import { startServer } from '../index.js';
 import { PaymentStatus, ObserverSource, verifyHmac } from '@youpi/common';
 import { authHeadersFor, merchantHeaders } from '../../../../scripts/test-support.js';
@@ -20,7 +20,19 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
     // Merchant-private fields on GET /payments/:id are only returned to the owning
     // merchant, so read the seeded secret through the repository (the raw column is
     // encrypted at rest).
-    merchantSecret = new MerchantRepository(testDb).findAll()[0].webhookSecret;
+    const merchant = new MerchantRepository(testDb).findAll()[0];
+    merchantSecret = merchant.webhookSecret;
+    const account = new ReceivingAccountRepository(testDb).findActiveForMerchant(merchant.id);
+    new PpMerchantPaymentProfileRepository(testDb).upsert(merchant.id, {
+      payeeVpa: account.upiId,
+      payeeName: account.payeeName,
+      payeeEmail: 'billing@test.example',
+      mcc: '5411',
+      orgid: null,
+      intentSignKeyPem: null,
+      supportPhone: null,
+      isActive: true
+    });
   });
 
   after(async () => {
@@ -89,7 +101,7 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
     const id=created.body.paymentId;
     const claim=await request(`/api/v1/checkout/${id}/verify-utr`,{method:'POST',body:{utr:'630414503470'}});
     assert.equal(claim.status,200);assert.equal(claim.body.verified,false);assert.notEqual(claim.body.status,'SUCCESS');
-    await request(`/api/v1/checkout/${id}/payment-done`,{method:'POST',body:{}});
+    await request(`/api/v1/checkout/${id}/payment-done`,{method:'POST',body:{utr:'630414503470'}});
     testDb.execute('UPDATE payment_sessions SET processing_expires_at=? WHERE id=?',[new Date(Date.now()-1000).toISOString(),id]);
     const state=await request(`/api/v1/checkout/${id}/state`);assert.equal(state.body.status,'VERIFICATION_PENDING');
     const corrected=await request(`/api/v1/checkout/${id}/verify-utr`,{method:'POST',body:{utr:'630414503471'}});
@@ -145,11 +157,12 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
 
     // 4. Customer A clicks "PAYMENT DONE — CHECK MY PAYMENT"
     const doneA = await request(`/api/v1/checkout/${paymentIdA}/payment-done`, {
-      method: 'POST'
+      method: 'POST',
+      body: { utr: '630414503471' }
     });
 
     assert.equal(doneA.status, 200);
-    assert.equal(doneA.body.status, PaymentStatus.PROCESSING);
+    assert.equal(doneA.body.status, PaymentStatus.VERIFICATION_PENDING);
 
     // 5. Observer reports incoming ₹200 UPI payment
     const obsRes = await request('/api/v1/pollers/events', {
@@ -158,7 +171,7 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
         source: ObserverSource.GOOGLE_MESSAGES,
         receivingAccountId: '00000000-0000-0000-0000-000000000002',
         amount: '200.00',
-        utr: 'UTR-HTTP-999',
+        utr: '630414503471',
         observedAt: new Date().toISOString()
       }
     });
@@ -282,6 +295,20 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
     assert.equal(upiUpdateRes.status, 200);
     assert.equal(upiUpdateRes.body.success, true);
     assert.equal(upiUpdateRes.body.receivingAccount.upiId, 'customstore@okhdfcbank');
+
+    // A payment profile is the authoritative payer-facing payee identity.  Keep it
+    // aligned with this test's explicitly changed receiving account before checkout.
+    const merchant = new MerchantRepository(testDb).findAll()[0];
+    new PpMerchantPaymentProfileRepository(testDb).upsert(merchant.id, {
+      payeeVpa: 'customstore@okhdfcbank',
+      payeeName: 'Custom Store India',
+      payeeEmail: 'billing@test.example',
+      mcc: '5411',
+      orgid: null,
+      intentSignKeyPem: null,
+      supportPhone: null,
+      isActive: true
+    });
 
     // 2. Create a new payment session
     const payRes = await request('/api/v1/payments', {

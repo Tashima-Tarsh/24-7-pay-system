@@ -4,7 +4,7 @@ import net from 'node:net';
 import { Database } from '@youpi/db';
 import { startServer as startPaymentApi } from '../index.js';
 import { PaymentMethod } from '@youpi/common';
-import { TEST_ADMIN_TOKEN, TEST_OBSERVER_TOKEN } from '../../../../scripts/test-support.js';
+import { TEST_ADMIN_TOKEN, TEST_OBSERVER_TOKEN, seedActivePaymentProfile } from '../../../../scripts/test-support.js';
 
 describe('Auth guard: admin, observer and force-success endpoints', () => {
   let api;
@@ -25,6 +25,7 @@ describe('Auth guard: admin, observer and force-success endpoints', () => {
     db = new Database({ inMemory: true });
     api = await startPaymentApi(6197, db);
     baseUrl = `http://localhost:${api.port}`;
+    seedActivePaymentProfile(db);
   });
 
   after(async () => {

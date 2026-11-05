@@ -2,6 +2,7 @@
  * Shared test credentials. Importing this module sets the env vars the services read lazily,
  * so in-process servers started by tests accept the tokens below.
  */
+import { ReceivingAccountRepository, PpMerchantPaymentProfileRepository } from '@youpi/db';
 export const TEST_ADMIN_TOKEN = 'test-admin-token-0123456789abcdef0123456789abcdef';
 export const TEST_OBSERVER_TOKEN = 'test-observer-token-0123456789abcdef0123456789abcd';
 
@@ -36,4 +37,24 @@ export function authHeadersFor(path, extra = {}) {
  */
 export function merchantHeaders(webhookSecret, extra = {}) {
   return { 'X-Merchant-Key': webhookSecret, ...extra };
+}
+
+/**
+ * Activate the same merchant-owned receiving VPA in an in-memory test profile.
+ * Production payment creation correctly requires this profile; legacy fixtures
+ * call this helper when they exercise payment creation.
+ */
+export function seedActivePaymentProfile(db, merchantId = '00000000-0000-0000-0000-000000000001') {
+  const account = new ReceivingAccountRepository(db).findActiveForMerchant(merchantId);
+  if (!account) throw new Error(`No active receiving account for test merchant ${merchantId}`);
+  return new PpMerchantPaymentProfileRepository(db).upsert(merchantId, {
+    payeeVpa: account.upiId,
+    payeeName: account.payeeName,
+    payeeEmail: 'billing@test.example',
+    mcc: '5411',
+    orgid: null,
+    intentSignKeyPem: null,
+    supportPhone: null,
+    isActive: true
+  });
 }

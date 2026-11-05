@@ -2,7 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Database } from '@youpi/db';
 import { startServer as startPaymentApi } from '../index.js';
-import { authFetch } from '../../../../scripts/test-support.js';
+import { authFetch, seedActivePaymentProfile } from '../../../../scripts/test-support.js';
 
 describe('White-Label Branding & Visual Gateway Customizer Test Suite', () => {
   let apiInstance;
@@ -14,6 +14,7 @@ describe('White-Label Branding & Visual Gateway Customizer Test Suite', () => {
     testDb = new Database({ inMemory: true });
     apiInstance = await startPaymentApi(6209, testDb);
     baseUrl = 'http://localhost:6209';
+    seedActivePaymentProfile(testDb, merchantId);
   });
 
   after(async () => {

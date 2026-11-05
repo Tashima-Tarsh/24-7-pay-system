@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import http from 'node:http';
-import {Database, ReceivingAccountRepository, MerchantRepository, PaymentSessionRepository, runMigrations} from '@youpi/db';
+import {Database, ReceivingAccountRepository, MerchantRepository, PaymentSessionRepository, PpMerchantPaymentProfileRepository, runMigrations} from '@youpi/db';
 import {QueueEngine} from '@youpi/core';
 import {HttpServer} from '../server.js';
 import {registerPlatformPayments} from '../platform/payments.js';
@@ -33,11 +33,12 @@ test('receiving bank details are validated, encrypted and returned masked',()=>{
 
 test('merchant-owned integration creates one exact-amount checkout and notification evidence never settles it',async()=>{
  const db=new Database({inMemory:true});runMigrations(db);
- const merchantRepo=new MerchantRepository(db),accountRepo=new ReceivingAccountRepository(db),sessionRepo=new PaymentSessionRepository(db);
+ const merchantRepo=new MerchantRepository(db),accountRepo=new ReceivingAccountRepository(db),sessionRepo=new PaymentSessionRepository(db),profileRepo=new PpMerchantPaymentProfileRepository(db);
  const merchant=merchantRepo.create({businessName:'Connector merchant',slug:'connector-merchant',contactEmail:'connector@example.test',contactPhone:'9000000000'});
  const other=merchantRepo.create({businessName:'Other merchant',slug:'other-connector',contactEmail:'other@example.test',contactPhone:'9000000001'});
  merchantRepo.update(merchant.id,{branding:{upiChannel:{enabled:true,minAmountPaise:0,maxAmountPaise:2000000,allowedVpas:[]}}});
  const account=accountRepo.create({merchantId:merchant.id,upiId:'business@bank',payeeName:'Business'});
+ profileRepo.upsert(merchant.id,{payeeVpa:account.upiId,payeeName:account.payeeName,payeeEmail:'connector@example.test',mcc:'5411',orgid:null,intentSignKeyPem:null,supportPhone:null,isActive:true});
  db.execute('CREATE TABLE pp_merchants(merchant_id TEXT PRIMARY KEY,status TEXT)');
  db.execute('INSERT INTO pp_merchants VALUES(?,?)',[merchant.id,'ACTIVE']);
  let creates=0,unavailable=false,failReads=false;
@@ -51,7 +52,7 @@ test('merchant-owned integration creates one exact-amount checkout and notificat
  const server=new HttpServer();
  server.use(req=>{req.platform={merchantId:req.headers['x-test-other']?other.id:merchant.id,userId:'owner',platform:false,permissions:['*'],environment:'PRODUCTION'};return false;});
  const identity={authorize:()=>true,tenant:req=>req.platform.merchantId,audit(){}};
- const ctx={db,merchantRepo,accountRepo,sessionRepo,auditRepo:{log(){}},queueEngine:new QueueEngine({sessionRepo,accountRepo}),timingEngine:{startActiveTimer(){}},checkoutBaseUrl:'https://gateway.example.test'};
+ const ctx={db,merchantRepo,accountRepo,sessionRepo,ppMerchantPaymentProfileRepo:profileRepo,auditRepo:{log(){}},queueEngine:new QueueEngine({sessionRepo,accountRepo}),timingEngine:{startActiveTimer(){}},checkoutBaseUrl:'https://gateway.example.test'};
  registerPlatformPayments(server,ctx,identity);
  registerPaymentRoutes(server,ctx);
  const api=server.createServer();await new Promise(r=>api.listen(0,'127.0.0.1',r));
