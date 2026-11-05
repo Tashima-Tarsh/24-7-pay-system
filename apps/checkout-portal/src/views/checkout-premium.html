@@ -736,9 +736,9 @@
       </section>
 
       <div class="dp-generic-upi" id="dpGenericUpiContainer">
-        <button type="button" class="dp-btn-mini" id="dpBtnGenericUpi" onclick="launchGenericUpiIntent()">
+        <a class="dp-btn-mini" id="dpBtnGenericUpi">
           Open UPI App (Generic)
-        </button>
+        </a>
         <span id="dpGenericUpiHint" style="font-size:11px; color:var(--dp-text-muted);">Uses generic upi://pay — works with any compatible UPI app.</span>
       </div>
 
@@ -947,7 +947,11 @@
       if (appGrid) appGrid.hidden = false;
       if (desktopHint) desktopHint.hidden = isAndroid;
       if (upiSectionSub) upiSectionSub.textContent = isAndroid ? 'Tap an app to open its package intent directly' : 'Scan the QR with any UPI app';
-      if (genericContainer) genericContainer.hidden = !isAndroid;
+      const genericLink = $('dpBtnGenericUpi');
+      const canLaunchGeneric = isAndroid && canPay && typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
+      if (genericContainer) genericContainer.hidden = !canLaunchGeneric;
+      if (canLaunchGeneric) genericLink.setAttribute('href', upiUri);
+      else genericLink.removeAttribute('href');
 
       const tiles = appGrid ? appGrid.querySelectorAll('.dp-app-tile') : [];
       tiles.forEach(tile => {
@@ -1173,18 +1177,17 @@
       // Amount card id already set in HTML markup
     })();
 
-    function launchGenericUpiIntent() {
-      if (!upiUri) { toast('Wait for this payment session to activate.'); return; }
-      try {
-        upiAppLaunchPending = true;
-        recordUpiDiagnostic('UPI_APP_LAUNCH_REQUESTED', {
-          app: 'generic',
-          platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
-          request: 'SERVER_ISSUED_UPI_URI'
-        });
-        location.href = upiUri;
-        toast('Return to this page after paying.');
-      } catch (e) { toast('Could not launch UPI app.'); }
+    function launchGenericUpiIntent(event) {
+      if (!event.currentTarget.getAttribute('href')) {
+        event.preventDefault();
+        return;
+      }
+      upiAppLaunchPending = true;
+      recordUpiDiagnostic('UPI_APP_LAUNCH_REQUESTED', {
+        app: 'generic',
+        platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
+        request: 'SERVER_ISSUED_UPI_URI'
+      });
     }
 
     function copyVpa() {

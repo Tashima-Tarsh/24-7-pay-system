@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { buildUpiPaymentIntentLinks } from '@youpi/common';
 
 function checkout(ua, overrides = {}) {
   const html = fs.readFileSync(new URL('../views/checkout-premium.html', import.meta.url), 'utf8');
@@ -22,6 +23,7 @@ function checkout(ua, overrides = {}) {
         dataset: {},
         addEventListener(name, fn) { this[name] = fn; },
         setAttribute(name, v) { this.attributes[name] = v; this[name] = v; },
+        removeAttribute(name) { delete this.attributes[name]; delete this[name]; },
         getAttribute(name) { return this.attributes[name] !== undefined ? this.attributes[name] : (this.dataset && this.dataset[name] !== undefined ? this.dataset[name] : null); },
         querySelectorAll() { return apps; },
         focus() {},
@@ -39,14 +41,9 @@ function checkout(ua, overrides = {}) {
     payeeEmail: 'billing@merchant.example', copyVpa: 'merchant@upi',
     upiUri: 'upi://pay?pa=merchant%40upi&pn=Merchant+Store&am=123.45&tr=ORDER-1&cu=INR&mc=5411&mode=02',
     upiQr: 'data:image/svg+xml;base64,abc',
-    upiDeepLinks: {
-      gpay: 'tez://upi/pay?pa=merchant%40upi',
-      phonepe: 'phonepe://pay?pa=merchant%40upi',
-      paytm: 'paytmmp://pay?pa=merchant%40upi',
-      bhim: 'upi://pay?pa=merchant%40upi'
-    },
     enabledMethods: ['UPI', 'COD'], timeRemainingSeconds: 300, expiresAt: new Date(Date.now() + 100000).toISOString()
   };
+  state.upiDeepLinks = buildUpiPaymentIntentLinks(state.upiUri);
   Object.assign(state, overrides);
   const messages = [], requests = [], timers = [];
   const window = {
@@ -93,9 +90,9 @@ test('AC-3: Android UA shows four package app tiles', () => {
 });
 
 test('AC-3: Android app tiles use the server-issued PSP deep links', () => {
-  const { element, context } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
+  const { element, context, state } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
   element('gpay').onclick();
-  assert.equal(context.location.href, 'tez://upi/pay?pa=merchant%40upi');
+  assert.equal(context.location.href, `intent://pay?${state.upiUri.slice('upi://pay?'.length)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`);
 });
 
 test('AC-3: selecting a UPI app sends exactly one launch request', () => {
@@ -103,6 +100,16 @@ test('AC-3: selecting a UPI app sends exactly one launch request', () => {
   const timerCountBeforeTap = timers.length;
   element('gpay').onclick();
   assert.equal(timers.length, timerCountBeforeTap + 1, 'must not auto-launch a second generic UPI request');
+});
+
+test('Android generic UPI uses a direct link to the server-issued payment URI', () => {
+  const android = 'Mozilla/5.0 (Linux; Android 10) Mobile';
+  const { element, state } = checkout(android);
+  assert.equal(element('dpBtnGenericUpi').getAttribute('href'), state.upiUri);
+  const pending = checkout(android, { status: 'QUEUED' });
+  assert.equal(pending.element('dpBtnGenericUpi').getAttribute('href'), null);
+  const invalid = checkout(android, { upiUri: 'https://example.com/pay' });
+  assert.equal(invalid.element('dpBtnGenericUpi').getAttribute('href'), null);
 });
 
 test('AC-13: payee block renders the payment identity without exposing merchant email', () => {

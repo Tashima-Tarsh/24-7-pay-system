@@ -53,7 +53,7 @@ export function buildUpiPaymentIntentLinks(upiUri) {
 
   return {
     phonepe: `phonepe://pay?${query}`,
-    gpay: `tez://upi/pay?${query}`,
+    gpay: `intent://pay?${query}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`,
     paytm: `paytmmp://pay?${query}`,
     bhim: `upi://pay?${query}`,
     upi: upiUri // Generic fallback

@@ -124,7 +124,7 @@ describe('E2E: UPI Real-Time Payment Flow (QR → Payment → SSE Callback)', ()
     // Generate deep links for all UPI apps
     const deepLinks = buildUpiPaymentIntentLinks(upiUri);
     assert.ok(deepLinks.phonepe.startsWith('phonepe://pay?'), 'PhonePe deep link');
-    assert.ok(deepLinks.gpay.startsWith('tez://upi/pay?'), 'Google Pay deep link');
+    assert.equal(deepLinks.gpay, `intent://pay?${upiUri.slice('upi://pay?'.length)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`, 'Google Pay receives the complete canonical query');
     assert.ok(deepLinks.paytm.startsWith('paytmmp://pay?'), 'Paytm deep link');
     assert.ok(deepLinks.bhim.startsWith('upi://pay?'), 'BHIM deep link');
 
