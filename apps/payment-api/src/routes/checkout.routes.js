@@ -4,6 +4,21 @@ import { validateSessionDeviceAccess } from '@youpi/core';
 import { SplitSettlementRepository } from '@youpi/db';
 
 /**
+ * Google Pay requires the optional UPI transaction URL to be publicly reachable
+ * over HTTPS. Local/test checkout origins are intentionally omitted rather than
+ * making UPI URI generation fail for the entire session.
+ */
+function checkoutTransactionUrl(checkoutBaseUrl, sessionId) {
+  try {
+    const baseUrl = new URL(String(checkoutBaseUrl || ''));
+    if (baseUrl.protocol !== 'https:') return undefined;
+    return new URL(`/checkout/${encodeURIComponent(sessionId)}`, baseUrl).toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Validates device access to an active payment session.
  * Enforces:
  * 1. If session has no device binding yet, binds to requesting device if provided.
@@ -502,7 +517,7 @@ export function registerCheckoutRoutes(server, ctx) {
           amountPaise: session.amountPaise,
           transactionRef: session.orderId,
           merchantCategoryCode,
-          transactionUrl: `${String(ctx.checkoutBaseUrl || '').replace(/\/$/, '')}/checkout/${session.id}`,
+          transactionUrl: checkoutTransactionUrl(ctx.checkoutBaseUrl, session.id),
           currency: session.currency || 'INR'
         });
       } catch {
@@ -634,6 +649,7 @@ export function registerCheckoutRoutes(server, ctx) {
             amountPaise: session.amountPaise,
             transactionRef: session.orderId,
             merchantCategoryCode,
+            transactionUrl: checkoutTransactionUrl(ctx.checkoutBaseUrl, session.id),
             currency: session.currency || 'INR'
           });
         } catch {}
@@ -737,7 +753,7 @@ export function registerCheckoutRoutes(server, ctx) {
           amountPaise: session.amountPaise,
           transactionRef: session.orderId,
           merchantCategoryCode,
-          transactionUrl: `${String(ctx.checkoutBaseUrl || '').replace(/\/$/, '')}/checkout/${session.id}`,
+          transactionUrl: checkoutTransactionUrl(ctx.checkoutBaseUrl, session.id),
           currency: session.currency || 'INR'
         }));
         request = {
