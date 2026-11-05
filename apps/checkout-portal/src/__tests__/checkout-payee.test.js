@@ -77,9 +77,18 @@ test('AC-3: desktop UA keeps app choices visible and shows scan-with-any-app gui
   assert.equal(desktopHint.hidden, false, 'desktop hint shown');
 });
 
-test('Android uses the native UPI link in place of branded app shortcuts', () => {
-  const { element } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
-  assert.equal(element('dpAppGrid').hidden, true);
+test('app tiles use native links with the exact server-issued payment details', () => {
+  const { element, apps, state } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
+  assert.equal(element('dpAppGrid').hidden, false);
+  for (const app of apps) {
+    assert.equal(app.getAttribute('href'),
+      'intent://pay?' + state.upiUri.slice('upi://pay?'.length) +
+      '#Intent;scheme=upi;package=' + app.dataset.pkg + ';end');
+  }
+  const iphone = checkout('Mozilla/5.0 (iPhone)');
+  assert.equal(iphone.apps[0].getAttribute('href'), iphone.state.upiUri.replace('upi://pay?', 'gpay://upi/pay?'));
+  const desktop = checkout('Mozilla/5.0 (Windows NT 10.0)');
+  assert.equal(desktop.apps[0].getAttribute('href'), desktop.state.upiUri);
 });
 
 test('Android generic UPI uses a direct link to the server-issued payment URI', () => {
@@ -88,8 +97,10 @@ test('Android generic UPI uses a direct link to the server-issued payment URI', 
   assert.equal(element('dpBtnGenericUpi').getAttribute('href'), state.upiUri);
   const pending = checkout(android, { status: 'QUEUED', upiUri: null });
   assert.equal(pending.element('dpBtnGenericUpi').getAttribute('href'), null);
+  assert.equal(pending.element('dpAppGrid').hidden, true);
   const invalid = checkout(android, { upiUri: 'https://example.com/pay' });
   assert.equal(invalid.element('dpBtnGenericUpi').getAttribute('href'), null);
+  assert.ok(invalid.apps.every(app => !app.getAttribute('href')));
 });
 
 test('AC-13: payee block renders the payment identity without exposing merchant email', () => {

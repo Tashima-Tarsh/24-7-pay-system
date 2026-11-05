@@ -711,7 +711,7 @@
           <span style="font-size:11px; color:var(--dp-text-muted);">Open Google Pay, PhonePe, Paytm, BHIM or any UPI app and scan the QR above.</span>
         </div>
 
-        <div class="dp-app-grid" id="dpAppGrid">
+        <div class="dp-app-grid" id="dpAppGrid" hidden>
           <a class="dp-app-tile" id="gpay" data-app="gpay" data-pkg="com.google.android.apps.nbu.paisa.user">
             <img class="dp-app-tile-icon" src="/icons/gpay.png" alt="GPay" />
             <span class="dp-app-tile-label">Google Pay</span>
@@ -735,7 +735,7 @@
         </div>
       </section>
 
-      <div class="dp-generic-upi" id="dpGenericUpiContainer">
+      <div class="dp-generic-upi" id="dpGenericUpiContainer" hidden>
         <a class="dp-btn-mini" id="dpBtnGenericUpi">
           Pay with any UPI app
         </a>
@@ -907,76 +907,39 @@
         };
       }
 
-      // Android handles app selection from the same payment URI encoded in the QR.
-      const isAndroid = /Android/i.test(navigator.userAgent);
+      const userAgent = navigator.userAgent;
+      const isAndroid = /Android/i.test(userAgent);
+      const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
       const appGrid = $('dpAppGrid');
       const desktopHint = $('dpDesktopHint');
       const upiSectionSub = $('dpUpiSectionSub');
       const genericContainer = $('dpGenericUpiContainer');
-      if (appGrid) appGrid.hidden = isAndroid;
-      if (desktopHint) desktopHint.hidden = isAndroid;
-      if (upiSectionSub) upiSectionSub.textContent = isAndroid ? 'Tap Pay with any UPI app to open your UPI app' : 'Scan the QR with any UPI app';
       const genericLink = $('dpBtnGenericUpi');
-      const canLaunchGeneric = typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
-      if (genericContainer) genericContainer.hidden = !canLaunchGeneric;
-      if (canLaunchGeneric) {
-        genericLink.setAttribute('href', upiUri);
-        genericLink.style.opacity = '1';
-        genericLink.style.cursor = 'pointer';
-      } else {
-        genericLink.removeAttribute('href');
-        genericLink.style.opacity = '0.5';
-        genericLink.style.cursor = 'not-allowed';
-      }
-      // Generic link click handler — always navigates to upiUri when present (desktop + Android)
-      if (genericLink) {
-        genericLink.onclick = (e) => {
-          if (!upiUri) { e.preventDefault(); toast('Payment session not active.'); return; }
-          try {
-            location.href = upiUri;
-            if (!isAndroid) {
-              // On desktop, upi:// scheme may not be handled; show fallback hint
-              toast('Copy the VPA or scan the QR above with your phone\'s UPI app.');
-            }
-          } catch (err) { e.preventDefault(); toast('Could not open UPI link.'); }
-        };
-      }
+      const canLaunchUpi = typeof upiUri === 'string' && upiUri.startsWith('upi://pay?');
 
-      const tiles = appGrid ? appGrid.querySelectorAll('.dp-app-tile') : [];
-      tiles.forEach(tile => {
-        const pkg = tile.getAttribute('data-pkg');
-        // Always set the intent href so tiles are clickable links (not just text)
-        if (upiUri) {
-          const query = upiUri.split('?')[1] || '';
-          const intentUri = 'intent://pay?' + query + '#Intent;scheme=upi;package=' + encodeURIComponent(pkg || '') + ';end';
-          tile.setAttribute('href', intentUri);
-          tile.style.opacity = '1';
-          tile.style.cursor = 'pointer';
-        } else {
-          tile.removeAttribute('href');
-          tile.style.opacity = '0.5';
-          tile.style.cursor = 'not-allowed';
-        }
-        tile.onclick = (e) => {
-          if (!upiUri) { e.preventDefault(); toast('Payment session not active.'); return; }
-          const query = upiUri.split('?')[1] || '';
-          const intentUri = 'intent://pay?' + query + '#Intent;scheme=upi;package=' + encodeURIComponent(pkg || '') + ';end';
-          let blurred = false;
-          const handleBlur = () => { blurred = true; };
-          window.addEventListener('blur', handleBlur, { once: true });
-          try {
-            location.href = intentUri;
-            toast('Opening app…');
-          } catch (e) { toast('Could not open app.'); }
-          // Fall back to the bare upiUri after 800ms if the page did not blur (app did not open).
-          setTimeout(() => {
-            window.removeEventListener('blur', handleBlur);
-            if (!blurred && document.hasFocus()) {
-              try { location.href = upiUri; toast('Return to this page after paying.'); } catch (e) { toast('Could not launch UPI app.'); }
-            }
-          }, 800);
-        };
-      });
+      if (desktopHint) desktopHint.hidden = isAndroid || isIOS;
+      if (upiSectionSub) upiSectionSub.textContent = isAndroid || isIOS ? 'Tap a UPI app to pay' : 'Scan the QR with any UPI app';
+      if (genericContainer) genericContainer.hidden = !canLaunchUpi;
+      if (canLaunchUpi) genericLink.setAttribute('href', upiUri);
+      else genericLink.removeAttribute('href');
+
+      if (appGrid) {
+        appGrid.hidden = !canLaunchUpi;
+        appGrid.querySelectorAll('.dp-app-tile').forEach(tile => {
+          if (!canLaunchUpi) {
+            tile.removeAttribute('href');
+            return;
+          }
+
+          const app = tile.getAttribute('data-app');
+          const pkg = tile.getAttribute('data-pkg');
+          if (isAndroid) {
+            tile.setAttribute('href', 'intent://pay?' + upiUri.slice('upi://pay?'.length) + '#Intent;scheme=upi;package=' + pkg + ';end');
+          } else {
+            tile.setAttribute('href', isIOS ? dynamoUpiLink(app, upiUri, userAgent) : upiUri);
+          }
+        });
+      }
 
       // Intent status strip (legacy INTENT_OPENED / CLIENT_REPORTED_SUCCESS)
       const intentStrip = $('dpIntentStrip');
