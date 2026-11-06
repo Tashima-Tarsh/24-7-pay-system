@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: sanbookpay-merchant-portal
+    runtime: docker
+    plan: standard
+    region: singapore
+    dockerfilePath: ./integrations/master-payment/Dockerfile.render
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    disk:
+      name: sanbookpay-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TOKEN_SECRET
+        generateValue: true
+      - key: BANK_WEBHOOK_SECRET
+        generateValue: true
+      - key: PORTAL_BOOTSTRAP_PASSWORD
+        sync: false
