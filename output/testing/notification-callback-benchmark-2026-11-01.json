@@ -1,0 +1,644 @@
+{
+  "measuredAt": "2026-11-01T07:46:33.014Z",
+  "sourceCommit": "8edffa388ab9bcc287bf6fddfc17149c464959c5",
+  "workingTreeCandidate": true,
+  "environment": {
+    "node": "v24.14.1",
+    "platform": "win32",
+    "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+    "database": "isolated on-disk SQLite WAL",
+    "transport": "HTTP loopback",
+    "mode": "test; production-shaped bearer API and signed observer, synthetic evidence; private callbacks permitted only for test receiver"
+  },
+  "scope": "Payment creation -> checkout + QR -> signed Android HTTP ingestion -> notification acceptance + clearing ledger + durable outbox -> real HTTP signed callback -> separate durable merchant wallet -> inquiry + duplicate checks",
+  "sampleCount": 50,
+  "summaryMs": {
+    "createMs": {
+      "min": 10.35,
+      "p50": 12.77,
+      "p95": 14.59,
+      "max": 24.66
+    },
+    "checkoutAndQrMs": {
+      "min": 17.9,
+      "p50": 20.5,
+      "p95": 36.01,
+      "max": 59.32
+    },
+    "alertToIngressAckMs": {
+      "min": 8.47,
+      "p50": 10.84,
+      "p95": 13.09,
+      "max": 25.93
+    },
+    "alertToCallbackReceivedMs": {
+      "min": 9.44,
+      "p50": 11.42,
+      "p95": 13.83,
+      "max": 27.36
+    },
+    "alertToWalletCommittedMs": {
+      "min": 10.72,
+      "p50": 12.84,
+      "p95": 15.06,
+      "max": 28.73
+    },
+    "createToWalletCommittedMs": {
+      "min": 40.02,
+      "p50": 46.85,
+      "p95": 63.11,
+      "max": 116.97
+    }
+  },
+  "retry": {
+    "index": 50,
+    "scenario": "first-callback-503-then-automatic-retry",
+    "createMs": 12.37,
+    "checkoutAndQrMs": 36.12,
+    "alertToIngressAckMs": 10.32,
+    "alertToCallbackReceivedMs": 5979.24,
+    "alertToWalletCommittedMs": 5981.99,
+    "createToWalletCommittedMs": 6030.49,
+    "callbackAttempts": 2
+  },
+  "checks": {
+    "signaturesVerified": true,
+    "paidStatusAndSourceChecked": true,
+    "duplicateNotificationNoDoublePost": true,
+    "duplicateCallbackNoDoubleCredit": true,
+    "unsignedIngressRejected": true,
+    "automaticRetryObserved": true,
+    "retryStablePayloadAndDeliveryId": true,
+    "totalPayments": 51,
+    "totalLedgerTransactions": 51,
+    "totalWalletCredits": 51
+  },
+  "limitations": [
+    "No real bank transfer, receiving phone, Android app, Gmail consent or bank alert timing",
+    "Not hosted Render/PostgreSQL latency, cold start, concurrent load, owner verification or live settlement acceptance",
+    "Sequential warm-path samples; synthetic notification success is not bank verification"
+  ],
+  "samples": [
+    {
+      "index": 0,
+      "scenario": "first-attempt",
+      "createMs": 24.66,
+      "checkoutAndQrMs": 59.32,
+      "alertToIngressAckMs": 25.93,
+      "alertToCallbackReceivedMs": 27.36,
+      "alertToWalletCommittedMs": 28.73,
+      "createToWalletCommittedMs": 116.97,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 1,
+      "scenario": "first-attempt",
+      "createMs": 12.65,
+      "checkoutAndQrMs": 36.01,
+      "alertToIngressAckMs": 12.77,
+      "alertToCallbackReceivedMs": 13.59,
+      "alertToWalletCommittedMs": 14.87,
+      "createToWalletCommittedMs": 63.56,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 2,
+      "scenario": "first-attempt",
+      "createMs": 11.71,
+      "checkoutAndQrMs": 26.96,
+      "alertToIngressAckMs": 13.09,
+      "alertToCallbackReceivedMs": 13.83,
+      "alertToWalletCommittedMs": 15.06,
+      "createToWalletCommittedMs": 53.79,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 3,
+      "scenario": "first-attempt",
+      "createMs": 11.41,
+      "checkoutAndQrMs": 25.49,
+      "alertToIngressAckMs": 11.58,
+      "alertToCallbackReceivedMs": 12.43,
+      "alertToWalletCommittedMs": 13.66,
+      "createToWalletCommittedMs": 50.58,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 4,
+      "scenario": "first-attempt",
+      "createMs": 10.94,
+      "checkoutAndQrMs": 27.29,
+      "alertToIngressAckMs": 10.75,
+      "alertToCallbackReceivedMs": 11.49,
+      "alertToWalletCommittedMs": 12.77,
+      "createToWalletCommittedMs": 51.03,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 5,
+      "scenario": "first-attempt",
+      "createMs": 13.94,
+      "checkoutAndQrMs": 24.91,
+      "alertToIngressAckMs": 12.12,
+      "alertToCallbackReceivedMs": 12.87,
+      "alertToWalletCommittedMs": 14.2,
+      "createToWalletCommittedMs": 53.06,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 6,
+      "scenario": "first-attempt",
+      "createMs": 13.27,
+      "checkoutAndQrMs": 23.71,
+      "alertToIngressAckMs": 10.82,
+      "alertToCallbackReceivedMs": 11.51,
+      "alertToWalletCommittedMs": 12.71,
+      "createToWalletCommittedMs": 49.71,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 7,
+      "scenario": "first-attempt",
+      "createMs": 11.72,
+      "checkoutAndQrMs": 23.79,
+      "alertToIngressAckMs": 12.34,
+      "alertToCallbackReceivedMs": 13.29,
+      "alertToWalletCommittedMs": 14.9,
+      "createToWalletCommittedMs": 50.42,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 8,
+      "scenario": "first-attempt",
+      "createMs": 11.17,
+      "checkoutAndQrMs": 25.81,
+      "alertToIngressAckMs": 11.11,
+      "alertToCallbackReceivedMs": 11.82,
+      "alertToWalletCommittedMs": 12.94,
+      "createToWalletCommittedMs": 49.93,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 9,
+      "scenario": "first-attempt",
+      "createMs": 14.2,
+      "checkoutAndQrMs": 34.84,
+      "alertToIngressAckMs": 11.51,
+      "alertToCallbackReceivedMs": 12.54,
+      "alertToWalletCommittedMs": 14.04,
+      "createToWalletCommittedMs": 63.11,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 10,
+      "scenario": "first-attempt",
+      "createMs": 14.59,
+      "checkoutAndQrMs": 29.97,
+      "alertToIngressAckMs": 12.28,
+      "alertToCallbackReceivedMs": 12.92,
+      "alertToWalletCommittedMs": 14.32,
+      "createToWalletCommittedMs": 58.91,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 11,
+      "scenario": "first-attempt",
+      "createMs": 13.5,
+      "checkoutAndQrMs": 21.39,
+      "alertToIngressAckMs": 10.84,
+      "alertToCallbackReceivedMs": 11.42,
+      "alertToWalletCommittedMs": 12.84,
+      "createToWalletCommittedMs": 47.75,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 12,
+      "scenario": "first-attempt",
+      "createMs": 13.23,
+      "checkoutAndQrMs": 20.27,
+      "alertToIngressAckMs": 10.27,
+      "alertToCallbackReceivedMs": 10.84,
+      "alertToWalletCommittedMs": 12.36,
+      "createToWalletCommittedMs": 45.89,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 13,
+      "scenario": "first-attempt",
+      "createMs": 13.26,
+      "checkoutAndQrMs": 20.52,
+      "alertToIngressAckMs": 9.78,
+      "alertToCallbackReceivedMs": 10.3,
+      "alertToWalletCommittedMs": 11.68,
+      "createToWalletCommittedMs": 45.47,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 14,
+      "scenario": "first-attempt",
+      "createMs": 12.86,
+      "checkoutAndQrMs": 20.25,
+      "alertToIngressAckMs": 11.62,
+      "alertToCallbackReceivedMs": 12.23,
+      "alertToWalletCommittedMs": 13.73,
+      "createToWalletCommittedMs": 46.85,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 15,
+      "scenario": "first-attempt",
+      "createMs": 11.96,
+      "checkoutAndQrMs": 20.27,
+      "alertToIngressAckMs": 11.43,
+      "alertToCallbackReceivedMs": 12,
+      "alertToWalletCommittedMs": 13.37,
+      "createToWalletCommittedMs": 45.62,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 16,
+      "scenario": "first-attempt",
+      "createMs": 13.25,
+      "checkoutAndQrMs": 20.54,
+      "alertToIngressAckMs": 11.66,
+      "alertToCallbackReceivedMs": 12.32,
+      "alertToWalletCommittedMs": 13.77,
+      "createToWalletCommittedMs": 47.57,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 17,
+      "scenario": "first-attempt",
+      "createMs": 12.72,
+      "checkoutAndQrMs": 21.48,
+      "alertToIngressAckMs": 10.9,
+      "alertToCallbackReceivedMs": 11.63,
+      "alertToWalletCommittedMs": 13.08,
+      "createToWalletCommittedMs": 47.29,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 18,
+      "scenario": "first-attempt",
+      "createMs": 12.9,
+      "checkoutAndQrMs": 20.42,
+      "alertToIngressAckMs": 10.73,
+      "alertToCallbackReceivedMs": 11.21,
+      "alertToWalletCommittedMs": 12.62,
+      "createToWalletCommittedMs": 45.94,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 19,
+      "scenario": "first-attempt",
+      "createMs": 18.44,
+      "checkoutAndQrMs": 20.32,
+      "alertToIngressAckMs": 11.58,
+      "alertToCallbackReceivedMs": 12.18,
+      "alertToWalletCommittedMs": 13.61,
+      "createToWalletCommittedMs": 52.39,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 20,
+      "scenario": "first-attempt",
+      "createMs": 13.21,
+      "checkoutAndQrMs": 28.49,
+      "alertToIngressAckMs": 10.2,
+      "alertToCallbackReceivedMs": 10.85,
+      "alertToWalletCommittedMs": 12.25,
+      "createToWalletCommittedMs": 53.95,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 21,
+      "scenario": "first-attempt",
+      "createMs": 12.5,
+      "checkoutAndQrMs": 17.9,
+      "alertToIngressAckMs": 8.47,
+      "alertToCallbackReceivedMs": 9.44,
+      "alertToWalletCommittedMs": 10.88,
+      "createToWalletCommittedMs": 41.29,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 22,
+      "scenario": "first-attempt",
+      "createMs": 12.32,
+      "checkoutAndQrMs": 18.79,
+      "alertToIngressAckMs": 9.94,
+      "alertToCallbackReceivedMs": 11.16,
+      "alertToWalletCommittedMs": 12.73,
+      "createToWalletCommittedMs": 43.85,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 23,
+      "scenario": "first-attempt",
+      "createMs": 12.88,
+      "checkoutAndQrMs": 18.06,
+      "alertToIngressAckMs": 9.75,
+      "alertToCallbackReceivedMs": 10.6,
+      "alertToWalletCommittedMs": 11.96,
+      "createToWalletCommittedMs": 42.9,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 24,
+      "scenario": "first-attempt",
+      "createMs": 11.02,
+      "checkoutAndQrMs": 20.27,
+      "alertToIngressAckMs": 10.38,
+      "alertToCallbackReceivedMs": 11.14,
+      "alertToWalletCommittedMs": 13.05,
+      "createToWalletCommittedMs": 44.35,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 25,
+      "scenario": "first-attempt",
+      "createMs": 12.54,
+      "checkoutAndQrMs": 19.28,
+      "alertToIngressAckMs": 10.25,
+      "alertToCallbackReceivedMs": 10.9,
+      "alertToWalletCommittedMs": 12.44,
+      "createToWalletCommittedMs": 44.27,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 26,
+      "scenario": "first-attempt",
+      "createMs": 12.9,
+      "checkoutAndQrMs": 18.7,
+      "alertToIngressAckMs": 9.62,
+      "alertToCallbackReceivedMs": 10.34,
+      "alertToWalletCommittedMs": 11.7,
+      "createToWalletCommittedMs": 43.32,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 27,
+      "scenario": "first-attempt",
+      "createMs": 10.35,
+      "checkoutAndQrMs": 18.94,
+      "alertToIngressAckMs": 8.95,
+      "alertToCallbackReceivedMs": 9.59,
+      "alertToWalletCommittedMs": 10.72,
+      "createToWalletCommittedMs": 40.02,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 28,
+      "scenario": "first-attempt",
+      "createMs": 12.57,
+      "checkoutAndQrMs": 19.42,
+      "alertToIngressAckMs": 11.27,
+      "alertToCallbackReceivedMs": 11.82,
+      "alertToWalletCommittedMs": 13.25,
+      "createToWalletCommittedMs": 45.25,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 29,
+      "scenario": "first-attempt",
+      "createMs": 13.05,
+      "checkoutAndQrMs": 18.65,
+      "alertToIngressAckMs": 8.89,
+      "alertToCallbackReceivedMs": 9.6,
+      "alertToWalletCommittedMs": 10.81,
+      "createToWalletCommittedMs": 42.52,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 30,
+      "scenario": "first-attempt",
+      "createMs": 13.6,
+      "checkoutAndQrMs": 33.59,
+      "alertToIngressAckMs": 9.18,
+      "alertToCallbackReceivedMs": 9.7,
+      "alertToWalletCommittedMs": 10.87,
+      "createToWalletCommittedMs": 58.07,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 31,
+      "scenario": "first-attempt",
+      "createMs": 13.45,
+      "checkoutAndQrMs": 22.78,
+      "alertToIngressAckMs": 10.33,
+      "alertToCallbackReceivedMs": 10.87,
+      "alertToWalletCommittedMs": 12.28,
+      "createToWalletCommittedMs": 48.53,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 32,
+      "scenario": "first-attempt",
+      "createMs": 13.1,
+      "checkoutAndQrMs": 19.51,
+      "alertToIngressAckMs": 10.41,
+      "alertToCallbackReceivedMs": 11.14,
+      "alertToWalletCommittedMs": 12.29,
+      "createToWalletCommittedMs": 44.91,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 33,
+      "scenario": "first-attempt",
+      "createMs": 13.18,
+      "checkoutAndQrMs": 18.31,
+      "alertToIngressAckMs": 10.3,
+      "alertToCallbackReceivedMs": 10.94,
+      "alertToWalletCommittedMs": 12.28,
+      "createToWalletCommittedMs": 43.78,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 34,
+      "scenario": "first-attempt",
+      "createMs": 12.57,
+      "checkoutAndQrMs": 18.5,
+      "alertToIngressAckMs": 9.84,
+      "alertToCallbackReceivedMs": 10.7,
+      "alertToWalletCommittedMs": 12.24,
+      "createToWalletCommittedMs": 43.31,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 35,
+      "scenario": "first-attempt",
+      "createMs": 12.77,
+      "checkoutAndQrMs": 21.21,
+      "alertToIngressAckMs": 12.09,
+      "alertToCallbackReceivedMs": 13.19,
+      "alertToWalletCommittedMs": 14.3,
+      "createToWalletCommittedMs": 48.29,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 36,
+      "scenario": "first-attempt",
+      "createMs": 12.24,
+      "checkoutAndQrMs": 19.54,
+      "alertToIngressAckMs": 12.93,
+      "alertToCallbackReceivedMs": 13.52,
+      "alertToWalletCommittedMs": 14.87,
+      "createToWalletCommittedMs": 46.66,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 37,
+      "scenario": "first-attempt",
+      "createMs": 12.06,
+      "checkoutAndQrMs": 22.09,
+      "alertToIngressAckMs": 10.84,
+      "alertToCallbackReceivedMs": 11.4,
+      "alertToWalletCommittedMs": 12.62,
+      "createToWalletCommittedMs": 46.84,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 38,
+      "scenario": "first-attempt",
+      "createMs": 14.02,
+      "checkoutAndQrMs": 20.7,
+      "alertToIngressAckMs": 15.24,
+      "alertToCallbackReceivedMs": 15.8,
+      "alertToWalletCommittedMs": 17.06,
+      "createToWalletCommittedMs": 51.79,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 39,
+      "scenario": "first-attempt",
+      "createMs": 12.73,
+      "checkoutAndQrMs": 22.91,
+      "alertToIngressAckMs": 10.42,
+      "alertToCallbackReceivedMs": 11.01,
+      "alertToWalletCommittedMs": 12.43,
+      "createToWalletCommittedMs": 48.08,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 40,
+      "scenario": "first-attempt",
+      "createMs": 11.54,
+      "checkoutAndQrMs": 25.12,
+      "alertToIngressAckMs": 12.24,
+      "alertToCallbackReceivedMs": 12.78,
+      "alertToWalletCommittedMs": 14.01,
+      "createToWalletCommittedMs": 50.68,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 41,
+      "scenario": "first-attempt",
+      "createMs": 12.69,
+      "checkoutAndQrMs": 36.31,
+      "alertToIngressAckMs": 11.85,
+      "alertToCallbackReceivedMs": 12.43,
+      "alertToWalletCommittedMs": 13.68,
+      "createToWalletCommittedMs": 62.7,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 42,
+      "scenario": "first-attempt",
+      "createMs": 13.13,
+      "checkoutAndQrMs": 20.8,
+      "alertToIngressAckMs": 11.58,
+      "alertToCallbackReceivedMs": 12.35,
+      "alertToWalletCommittedMs": 13.88,
+      "createToWalletCommittedMs": 47.82,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 43,
+      "scenario": "first-attempt",
+      "createMs": 13.18,
+      "checkoutAndQrMs": 20.38,
+      "alertToIngressAckMs": 11.52,
+      "alertToCallbackReceivedMs": 12.26,
+      "alertToWalletCommittedMs": 13.72,
+      "createToWalletCommittedMs": 47.28,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 44,
+      "scenario": "first-attempt",
+      "createMs": 13.3,
+      "checkoutAndQrMs": 19.34,
+      "alertToIngressAckMs": 10.32,
+      "alertToCallbackReceivedMs": 11.3,
+      "alertToWalletCommittedMs": 12.65,
+      "createToWalletCommittedMs": 45.3,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 45,
+      "scenario": "first-attempt",
+      "createMs": 12.72,
+      "checkoutAndQrMs": 20.28,
+      "alertToIngressAckMs": 11.01,
+      "alertToCallbackReceivedMs": 11.53,
+      "alertToWalletCommittedMs": 12.87,
+      "createToWalletCommittedMs": 45.88,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 46,
+      "scenario": "first-attempt",
+      "createMs": 13.31,
+      "checkoutAndQrMs": 20.5,
+      "alertToIngressAckMs": 10.88,
+      "alertToCallbackReceivedMs": 11.41,
+      "alertToWalletCommittedMs": 12.91,
+      "createToWalletCommittedMs": 46.73,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 47,
+      "scenario": "first-attempt",
+      "createMs": 12.68,
+      "checkoutAndQrMs": 18.39,
+      "alertToIngressAckMs": 9.85,
+      "alertToCallbackReceivedMs": 10.68,
+      "alertToWalletCommittedMs": 12.2,
+      "createToWalletCommittedMs": 43.28,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 48,
+      "scenario": "first-attempt",
+      "createMs": 12.1,
+      "checkoutAndQrMs": 18.65,
+      "alertToIngressAckMs": 10.31,
+      "alertToCallbackReceivedMs": 11.05,
+      "alertToWalletCommittedMs": 12.74,
+      "createToWalletCommittedMs": 43.5,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 49,
+      "scenario": "first-attempt",
+      "createMs": 11.88,
+      "checkoutAndQrMs": 17.95,
+      "alertToIngressAckMs": 9.69,
+      "alertToCallbackReceivedMs": 10.34,
+      "alertToWalletCommittedMs": 11.63,
+      "createToWalletCommittedMs": 41.47,
+      "callbackAttempts": 1
+    },
+    {
+      "index": 50,
+      "scenario": "first-callback-503-then-automatic-retry",
+      "createMs": 12.37,
+      "checkoutAndQrMs": 36.12,
+      "alertToIngressAckMs": 10.32,
+      "alertToCallbackReceivedMs": 5979.24,
+      "alertToWalletCommittedMs": 5981.99,
+      "createToWalletCommittedMs": 6030.49,
+      "callbackAttempts": 2
+    }
+  ]
+}

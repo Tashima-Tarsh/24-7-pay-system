@@ -1,0 +1,497 @@
+import crypto from 'node:crypto';
+import { PaymentProvider } from './payment-provider.interface.js';
+
+/**
+ * Cashfree Payments Production Provider
+ * Official REST API implementation for:
+ * 1. Cashfree PG — Collections (orders, sessions, payment status, webhooks)
+ * 2. Cashfree Payouts — Outbound disbursements (beneficiaries, transfers, UTR, balance)
+ * 3. Cashfree Settlements & Reconciliation
+ */
+export class CashfreeProvider extends PaymentProvider {
+  constructor(config = {}) {
+    super({
+      ...config,
+      providerName: 'CASHFREE'
+    });
+
+    const isSandbox = (this.environment || '').toUpperCase() === 'SANDBOX';
+    this.pgBaseUrl = isSandbox
+      ? 'https://sandbox.cashfree.com/pg'
+      : 'https://api.cashfree.com/pg';
+
+    this.payoutBaseUrl = isSandbox
+      ? 'https://payout-gamma.cashfree.com/payout/v1'
+      : 'https://payout-api.cashfree.com/payout/v1';
+
+    this.apiVersion = config.apiVersion || '2023-08-01';
+  }
+
+  /**
+   * Helper to execute HTTP requests with proper timeout and headers.
+   */
+  async _request(url, options = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-client-id': this.clientId,
+      'x-client-secret': this.clientSecret,
+      'x-api-version': this.apiVersion,
+      ...(options.headers || {})
+    };
+
+    if(url.startsWith(this.payoutBaseUrl) && !url.endsWith('/authorize')) {
+      const authorization=await this._request(this.payoutBaseUrl+'/authorize',{method:'POST'});
+      const token=authorization.data?.data?.token;
+      if(!authorization.ok||!token)return {ok:false,status:authorization.status,data:null,error:'Payout authorization failed'};
+      headers.Authorization=`Bearer ${token}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      const text = await response.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { raw: text };
+      }
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        data
+      };
+    } catch (err) {
+      clearTimeout(timeout);
+      return {
+        ok: false,
+        status: 0,
+        error: err.name === 'AbortError' ? 'Provider request timed out (15s)' : err.message,
+        data: null
+      };
+    }
+  }
+
+  /**
+   * Validates production credentials against Cashfree PG and Payouts.
+   */
+  async validateCredentials() {
+    if (!this.clientId || !this.clientSecret) {
+      return {
+        valid: false,
+        error: 'Cashfree Client ID and Client Secret are required.'
+      };
+    }
+
+    // Test PG credentials with a lightweight authenticated request
+    const pgRes = await this._request(`${this.pgBaseUrl}/orders?limit=1`, {
+      method: 'GET'
+    });
+
+    if (pgRes.status === 401 || pgRes.status === 403) {
+      return {
+        valid: false,
+        error: `Authentication failed (HTTP ${pgRes.status}): ${pgRes.data?.message || 'Invalid Client ID or Secret'}`
+      };
+    }
+
+    if (pgRes.status >= 500) {
+      return {
+        valid: false,
+        error: `Cashfree gateway error (HTTP ${pgRes.status}): ${pgRes.data?.message || 'Service Unavailable'}`
+      };
+    }
+
+    if(!pgRes.ok)return {valid:false,error:'Cashfree credential validation could not be completed (HTTP '+pgRes.status+').'};
+    return {
+      valid: true,
+      details: {
+        environment: this.environment,
+        pgStatus: pgRes.ok ? 'OK' : `HTTP ${pgRes.status}`,
+        checkedAt: new Date().toISOString()
+      }
+    };
+  }
+
+  /**
+   * Retrieves available capabilities.
+   */
+  async getCapabilities() {
+    const enabled=new Set(this.extra?.capabilities||[]);
+    const caps=['COLLECTIONS','WEBHOOKS','REFUNDS','PAYOUTS','BENEFICIARY_VERIFY','SETTLEMENTS','BALANCE_CHECK','DYNAMIC_QR'].map(code=>({code,enabled:enabled.has(code),description:enabled.has(code)?'Account capability explicitly configured; provider validation required.':'Account entitlement not configured.'}));
+    return caps;
+  }
+
+  /**
+   * Creates a payment collection order in Cashfree.
+   */
+  async createCollection(order) {
+    if(!/^[0-9]{10}$/.test(String(order.customerPhone||'')))throw Object.assign(Error('This Cashfree product requires a real customer phone supplied by the authenticated merchant backend; amount-only availability is not configured.'),{definitiveRejection:true,code:'PROVIDER_CUSTOMER_DATA_REQUIRED'});
+    const amountRupees = Number((order.amountPaise / 100).toFixed(2));
+    const payload = {
+      order_id: order.merchantOrderId,
+      order_amount: amountRupees,
+      order_currency: order.currency || 'INR',
+      customer_details: {
+        customer_id: order.customerId || order.customerPhone,
+        customer_phone: order.customerPhone,
+        customer_name: order.customerName || undefined,
+        customer_email: order.customerEmail || undefined
+      },
+      order_meta: {
+        return_url: order.returnUrl || undefined,
+        notify_url: order.notifyUrl || undefined
+      }
+    };
+
+    const res = await this._request(`${this.pgBaseUrl}/orders`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: order.idempotencyKey?{'x-idempotency-key':order.idempotencyKey}:{}
+    });
+
+    if (!res.ok) {
+      throw Object.assign(new Error('Cashfree rejected or could not acknowledge order creation.'),{code:'PROVIDER_ORDER_CREATE_FAILED',definitiveRejection:[400,401,403,404,422].includes(res.status),httpStatus:res.status});
+    }
+
+    const data = res.data;
+    if(!data.order_id || (!data.payment_session_id&&!data.payment_link))throw Error('Provider did not return a valid payable collection order');
+    const checkoutUrl = null; // Hosted checkout is opened using Cashfree JS v3 and the returned session ID.
+
+    return {
+      providerOrderId: data.order_id || (data.cf_order_id ? String(data.cf_order_id) : null),
+      merchantOrderId: data.order_id,
+      paymentSessionId: data.payment_session_id,
+      checkoutUrl,
+      rawResponse: data
+    };
+  }
+
+  /**
+   * Gets authoritative payment collection status and list of payment attempts.
+   */
+  async getCollectionStatus(orderId) {
+    const res = await this._request(`${this.pgBaseUrl}/orders/${encodeURIComponent(orderId)}/payments`, {
+      method: 'GET'
+    });
+
+    if (!res.ok) {
+      // Fallback: query order directly
+      const orderRes = await this._request(`${this.pgBaseUrl}/orders/${encodeURIComponent(orderId)}`, {
+        method: 'GET'
+      });
+      if (!orderRes.ok) {
+        throw new Error(`Cashfree getCollectionStatus failed (HTTP ${res.status}): ${res.data?.message || 'Order not found'}`);
+      }
+      const od = orderRes.data;
+      return {
+        status: od.order_status === 'PAID' ? 'SUCCESS' : od.order_status,
+        amountPaise: Math.round(Number(od.order_amount) * 100),
+        currency: od.order_currency,
+        bankReference: null,
+        providerPaymentId: null,
+        rawResponse: od
+      };
+    }
+
+    const payments = Array.isArray(res.data) ? res.data : [];
+    const successfulPayment = payments.find(p => p.payment_status === 'SUCCESS');
+
+    if (successfulPayment) {
+      return {
+        status: 'SUCCESS',
+        amountPaise: Math.round(Number(successfulPayment.payment_amount) * 100),
+        currency: successfulPayment.payment_currency,
+        bankReference: successfulPayment.bank_reference || null,
+        providerPaymentId: String(successfulPayment.cf_payment_id),
+        paymentMethod: successfulPayment.payment_group || 'UPI',
+        rawResponse: successfulPayment
+      };
+    }
+
+    const latest = payments[payments.length - 1];
+    return {
+      status: latest ? (latest.payment_status === 'FAILED' ? 'FAILED' : 'PENDING') : 'PENDING',
+      amountPaise: latest ? Math.round(Number(latest.payment_amount) * 100) : 0,
+      bankReference: latest?.bank_reference || null,
+      providerPaymentId: latest ? String(latest.cf_payment_id) : null,
+      rawResponse: latest || {}
+    };
+  }
+
+  /**
+   * Verifies Cashfree Webhook Signature.
+   * Cashfree computes HMAC-SHA256 over: `${timestamp}${rawBody}` using the client secret, base64 encoded.
+   */
+  verifyPayoutWebhook({rawBody,headers}) {
+    const signature=headers['x-cf-signature'];
+    if(typeof signature!=='string'||!this.clientSecret)return false;
+    const expected=crypto.createHmac('sha256',this.clientSecret).update(rawBody).digest('hex');
+    return signature.length===expected.length && crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(expected));
+  }
+
+  verifyCollectionWebhook({ rawBody, headers }) {
+    const signature = headers['x-webhook-signature'] || headers['X-Webhook-Signature'];
+    const timestamp = headers['x-webhook-timestamp'] || headers['X-Webhook-Timestamp'];
+
+    if (!signature || !timestamp || !this.clientSecret) {
+      return false;
+    }
+
+    try {
+      const dataToSign = `${timestamp}${rawBody}`;
+      const expected = crypto.createHmac('sha256', this.clientSecret)
+        .update(dataToSign)
+        .digest('base64');
+
+      return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Registers a beneficiary for outbound payouts.
+   */
+  async registerBeneficiary(beneficiary) {
+    if(typeof beneficiary.name!=='string'||!beneficiary.name.trim()||!/^[0-9]{10}$/.test(String(beneficiary.phone||'')))throw Error('Actual beneficiary name and phone are required; no default contact is permitted.');
+    const isUpi = beneficiary.beneficiaryType === 'UPI_ID' || Boolean(beneficiary.upiId);
+    const payload = {
+      beneId: beneficiary.id || `bene_${Date.now()}`,
+      name: beneficiary.name,
+      email: beneficiary.email || undefined,
+      phone: beneficiary.phone,
+      address1: beneficiary.address1 || undefined,
+      city: beneficiary.city || undefined,
+      state: beneficiary.state || undefined,
+      pincode: beneficiary.pincode || undefined
+    };
+
+    if (isUpi) {
+      payload.vpa = beneficiary.upiId;
+    } else {
+      payload.bankAccount = beneficiary.bankAccount;
+      payload.ifsc = beneficiary.ifsc;
+    }
+
+    const res = await this._request(`${this.payoutBaseUrl}/addBeneficiary`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok && res.data?.subCode !== '409') { // 409 means beneficiary already exists
+      throw new Error(`Cashfree registerBeneficiary failed (HTTP ${res.status}): ${res.data?.message || JSON.stringify(res.data)}`);
+    }
+
+    return {
+      providerBeneId: payload.beneId,
+      verified: false,
+      rawResponse: res.data
+    };
+  }
+
+  /**
+   * Verifies a bank account or UPI ID.
+   */
+  async verifyBeneficiary(target) {
+    const isUpi = Boolean(target.upiId);
+    if(!isUpi&&!/^[0-9]{10}$/.test(String(target.phone||'')))throw Error('A real beneficiary phone is required for bank verification.');
+    let url;
+    let method = 'GET';
+    let body = undefined;
+
+    if (isUpi) {
+      url = `${this.payoutBaseUrl}/validation/upiDetails?vpa=${encodeURIComponent(target.upiId)}&name=${encodeURIComponent(target.name || '')}`;
+    } else {
+      url = `${this.payoutBaseUrl}/validation/bankDetails?name=${encodeURIComponent(target.name || '')}&phone=${encodeURIComponent(target.phone)}&bankAccount=${encodeURIComponent(target.bankAccount)}&ifsc=${encodeURIComponent(target.ifsc)}`;
+    }
+
+    const res = await this._request(url, { method });
+    if (!res.ok) {
+      return {
+        valid: false,
+        error: res.data?.message || 'Verification failed',
+        rawResponse: res.data
+      };
+    }
+
+    const data = res.data?.data || res.data;
+    const isValid = data.accountStatus === 'VALID' || data.accountExists === 'YES' || res.data.status === 'SUCCESS';
+
+    return {
+      valid: isValid,
+      registeredName: data.nameAtBank || data.name || null,
+      rawResponse: res.data
+    };
+  }
+
+  /**
+   * Submits an authorized payout instruction to Cashfree Payouts.
+   */
+  async createPayout(payout) {
+    const amountRupees = (payout.amountPaise / 100).toFixed(2);
+    const payload = {
+      beneId: payout.providerBeneId || payout.beneficiaryId,
+      amount: amountRupees,
+      transferId: payout.transferId,
+      transferMode: (payout.payoutRail || 'IMPS').toLowerCase(),
+      remarks: payout.remarks || 'Sanbook Pay Authorized Payout'
+    };
+
+    const res = await this._request(`${this.payoutBaseUrl}/requestTransfer`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      throw new Error(`Cashfree createPayout failed (HTTP ${res.status}): ${res.data?.message || JSON.stringify(res.data)}`);
+    }
+
+    const data = res.data?.data || res.data;
+    const statusMap = {
+      SUCCESS: 'SUCCESS',
+      PENDING: 'PROCESSING',
+      RECEIVED: 'ACCEPTED',
+      FAILED: 'FAILED',
+      REJECTED: 'REJECTED'
+    };
+
+    if(!statusMap[data.status])throw Error('Provider payout response has no recognized transfer status; reconciliation required');
+    return {
+      providerTransferId: data.referenceId ? String(data.referenceId) : payout.transferId,
+      status: statusMap[data.status],
+      utr: data.utr || null,
+      rawResponse: res.data
+    };
+  }
+
+  /**
+   * Queries authoritative payout transfer status.
+   */
+  async getPayoutStatus(transferId) {
+    const res = await this._request(`${this.payoutBaseUrl}/getTransferStatus?transferId=${encodeURIComponent(transferId)}`, {
+      method: 'GET'
+    });
+
+    if (!res.ok) {
+      throw new Error(`Cashfree getPayoutStatus failed (HTTP ${res.status}): ${res.data?.message || 'Transfer not found'}`);
+    }
+
+    const transfer = res.data?.data?.transfer || res.data?.data || res.data;
+    const statusMap = {
+      SUCCESS: 'SUCCESS',
+      PENDING: 'PROCESSING',
+      RECEIVED: 'ACCEPTED',
+      FAILED: 'FAILED',
+      REJECTED: 'REJECTED',
+      RETURNED: 'RETURNED'
+    };
+
+    return {
+      status: statusMap[transfer.status] || transfer.status,
+      utr: transfer.utr || null,
+      failureReason: transfer.reason || null,
+      rawResponse: res.data
+    };
+  }
+
+  /**
+   * Initiates a refund for an order.
+   */
+  async createRefund(refund) {
+    const amountRupees = Number((refund.amountPaise / 100).toFixed(2));
+    const payload = {
+      refund_amount: amountRupees,
+      refund_id: refund.refundId,
+      refund_note: refund.reason || 'Sanbook Pay Authorized Refund'
+    };
+
+    const res = await this._request(`${this.pgBaseUrl}/orders/${encodeURIComponent(refund.merchantOrderId)}/refunds`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      throw new Error(`Cashfree createRefund failed (HTTP ${res.status}): ${res.data?.message || JSON.stringify(res.data)}`);
+    }
+
+    const data = res.data;
+    return {
+      providerRefundId: data.cf_refund_id ? String(data.cf_refund_id) : data.refund_id,
+      status: data.refund_status === 'SUCCESS' ? 'SUCCESS' : 'PENDING',
+      rawResponse: data
+    };
+  }
+
+  /**
+   * Gets refund status.
+   */
+  async getRefundStatus(orderId, refundId) {
+    const res = await this._request(`${this.pgBaseUrl}/orders/${encodeURIComponent(orderId)}/refunds/${encodeURIComponent(refundId)}`, {
+      method: 'GET'
+    });
+
+    if (!res.ok) {
+      throw new Error(`Cashfree getRefundStatus failed (HTTP ${res.status}): ${res.data?.message || 'Refund not found'}`);
+    }
+
+    const data = res.data;
+    return {
+      status: data.refund_status === 'SUCCESS' ? 'SUCCESS' : data.refund_status,
+      utr: data.refund_arn || null,
+      rawResponse: data
+    };
+  }
+
+  /**
+   * Retrieves available balance for payouts.
+   */
+  async retrieveAvailableBalance() {
+    const res = await this._request(`${this.payoutBaseUrl}/getBalance`, {
+      method: 'GET'
+    });
+
+    if (!res.ok) {
+      throw new Error(`Cashfree retrieveAvailableBalance failed (HTTP ${res.status}): ${res.data?.message || 'Balance inquiry failed'}`);
+    }
+
+    const data = res.data?.data || res.data;
+    const balancePaise = Math.round(Number(data.balance || 0) * 100);
+    const availablePaise = Math.round(Number(data.availableBalance || data.balance || 0) * 100);
+
+    return {
+      balancePaise,
+      availableBalancePaise: availablePaise,
+      currency: 'INR'
+    };
+  }
+
+  /**
+   * Retrieves settlement records from Cashfree.
+   */
+  async retrieveSettlements(options = {}) {
+    const url = `${this.pgBaseUrl}/settlements`;
+    const res = await this._request(url, { method: 'GET' });
+    if (!res.ok) return [];
+    return Array.isArray(res.data) ? res.data : [];
+  }
+
+  /**
+   * Retrieves reconciliation records from Cashfree.
+   */
+  async retrieveReconciliationRecords(options = {}) {
+    const url = `${this.pgBaseUrl}/reconciliation/combined`;
+    const res = await this._request(url, { method: 'POST', body: JSON.stringify(options) });
+    if (!res.ok) return [];
+    return Array.isArray(res.data) ? res.data : [];
+  }
+}
+

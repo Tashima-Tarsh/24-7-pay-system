@@ -1,0 +1,43 @@
+# DYNAMO PAY — Caddy Reverse Proxy with TLS
+# Production: obtain TLS certs via ACME (Let's Encrypt)
+# Local dev: use self-signed or skip TLS
+
+{
+  email admin@example.com
+  acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+# Payment API — HTTPS
+api.example.com {
+  reverse_proxy payment-api:6100
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+  }
+}
+
+# Super Admin — HTTPS
+admin.example.com {
+  reverse_proxy super-admin:9000
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+  }
+}
+
+# Checkout portal — HTTPS
+checkout.example.com {
+  reverse_proxy payment-api:6100
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+  }
+}
+
+# HTTP to HTTPS redirect
+:80 {
+  redir https://{host}{uri} 308
+}

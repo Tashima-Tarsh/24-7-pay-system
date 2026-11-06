@@ -1,0 +1,52 @@
+{
+  "name": "youpi-pg",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Self-Hosted White-Label UPI Payment Gateway with Payment Observation Engine",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "gmail-auth": "node scripts/gmail-auth.js",
+    "notifications:setup": "node scripts/notifications.js --setup",
+    "notifications:status": "node scripts/notifications.js",
+    "notifications:test": "node scripts/notifications.js --test",
+    "build": "node scripts/check-runtime.js",
+    "build:typescript": "tsc -b",
+    "clean": "node scripts/clean.js",
+    "db:setup": "node scripts/init-db.cjs",
+    "sync:package": "node scripts/sync-package.cjs",
+    "start": "node scripts/start.js",
+    "start:prod": "node scripts/start.js",
+    "start:local": "node scripts/start-local.js",
+    "start:tunnel": "node scripts/start-quick-tunnel.js",
+    "start:hosted": "node scripts/start-hosted.js",
+    "start:prod:api": "node apps/payment-api/src/index.js",
+    "start:super-admin": "node apps/super-admin/src/index.js",
+    "dev": "node scripts/dev.js",
+    "test": "node scripts/test-all.js",
+    "test:all": "node scripts/test-all.js",
+    "test:acceptance": "node --test scripts/production-infrastructure.test.js",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "bullmq": "^5.35.0",
+    "googleapis": "^189.0.0",
+    "ioredis": "^5.5.0",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "svix": "^2.9.1",
+    "ws": "^8.22.1"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "author": "Antigravity Systems",
+  "license": "Commercial"
+}

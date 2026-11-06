@@ -1,0 +1,31 @@
+R_DEF: Internal format may change without notice
+local
+color colorAccent
+color colorError
+color colorPrimary
+color colorPrimaryDark
+color colorSuccess
+color colorSurface
+color colorTextPrimary
+color colorTextSecondary
+color colorWarning
+drawable ic_launcher
+string app_name
+string device_health
+string events_forwarded
+string export_logs
+string last_heartbeat
+string pair_qr_desc
+string pair_qr_title
+string permission_notification
+string permission_notification_desc
+string privacy_notice
+string revoke_device
+string status_connected
+string status_degraded
+string status_not_paired
+string status_offline
+string status_pairing_pending
+style Theme.DynamoBridge
+style Theme.DynamoBridge.FullScreen
+xml network_security_config

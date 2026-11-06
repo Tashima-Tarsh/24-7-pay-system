@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>{{MERCHANT_NAME}} · {{APP_NAME}} Checkout</title>
+  <style>
+    :root {
+      --dp-bg: #0b0f19;
+      --dp-card: rgba(255, 255, 255, 0.04);
+      --dp-card-border: rgba(255, 255, 255, 0.10);
+      --dp-primary: #6366f1;
+      --dp-primary-glow: rgba(99, 102, 241, 0.35);
+      --dp-accent: #a855f7;
+      --dp-success: #22c55e;
+      --dp-text: #f8fafc;
+      --dp-text-muted: #94a3b8;
+      --dp-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      --upi-green: #0d9f67;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--dp-font); -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      height: 100% !important;
+      min-height: 100vh !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow-x: hidden !important;
+      background: var(--dp-bg) !important;
+      color: var(--dp-text) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 14px !important;
+    }
+
+    body.is-embedded { background: transparent !important; padding: 0 !important; width: 100% !important; height: 100% !important; overflow: hidden !important; }
+
+    body::before {
+      content: "" !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.15), transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.12), transparent 40%),
+        radial-gradient(circle at 50% 10%, rgba(16, 185, 129, 0.08), transparent 30%);
+      background-attachment: fixed !important;
+      z-index: -1 !important;
+      pointer-events: none !important;
+    }
+
+    /* Main glass drawer */
+    .dp-wrapper {
+      width: 100% !important;
+      max-width: 430px !important;
+      background: var(--dp-card) !important;
+      backdrop-filter: blur(24px) !important;
+      -webkit-backdrop-filter: blur(24px) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 24px !important;
+      box-shadow: 0 32px 64px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+      min-height: 560px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      position: relative !important;
+      overflow: hidden !important;
+      animation: dpFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    @keyframes dpFadeIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (min-width: 601px) {
+      body:not(.is-embedded) { padding: 24px !important; }
+      body:not(.is-embedded) .dp-wrapper { min-height: 600px !important; max-height: 90vh !important; }
+    }
+
+    @media (max-width: 600px) {
+      .dp-wrapper { max-width: 100vw !important; border-radius: 0 !important; min-height: 100vh !important; height: 100% !important; }
+    }
+
+    /* Header glass */
+    .dp-header {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.7)) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-bottom: 1px solid var(--dp-card-border) !important;
+      color: var(--dp-text) !important;
+      padding: 0 !important;
+    }
+
+    .dp-header-row {
+      padding: 16px 18px 14px 18px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+    }
+
+    .dp-merchant-avatar {
+      width: 40px !important;
+      height: 40px !important;
+      border-radius: 12px !important;
+      background: linear-gradient(135deg, var(--dp-primary), var(--dp-accent)) !important;
+      border: none !important;
+      color: #ffffff !important;
+      font-size: 20px !important;
+      font-weight: 800 !important;
+      box-shadow: 0 8px 20px var(--dp-primary-glow) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .dp-merchant-text-group { display: flex; flex-direction: column; gap: 2px; }
+
+    .dp-merchant-name {
+      color: var(--dp-text) !important;
+      font-size: 16px !important;
+      font-weight: 800 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      line-height: 1.2 !important;
+    }
+
+    .dp-merchant-subtitle {
+      color: var(--dp-text-muted) !important;
+      font-size: 11.5px !important;
+      font-weight: 600 !important;
+    }
+
+    .dp-btn-profile {
+      width: 34px !important;
+      height: 34px !important;
+      border-radius: 50% !important;
+      background: rgba(255, 255, 255, 0.10) !important;
+      border: none !important;
+      color: var(--dp-text) !important;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      transition: background 0.15s !important;
+      flex-shrink: 0 !important;
+    }
+
+    .dp-btn-profile:hover { background: rgba(255, 255, 255, 0.20) !important; }
+
+    /* Body */
+    .dp-body {
+      flex: 1 !important;
+      overflow-y: auto !important;
+      padding: 20px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 16px !important;
+    }
+
+    @media (max-width: 600px) {
+      .dp-body { padding: 16px !important; }
+    }
+
+    #payView { display: flex; flex-direction: column; gap: 16px; }
+    #statusTitle:empty { display: none; }
+
+    /* Amount card */
+    .dp-amount-card {
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 20px !important;
+      padding: 24px !important;
+      text-align: center !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 8px !important;
+    }
+
+    .dp-amount-label {
+      color: var(--dp-text-muted) !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+    }
+
+    .dp-amount-value {
+      font-size: 40px !important;
+      font-weight: 900 !important;
+      color: var(--dp-text) !important;
+      letter-spacing: -1px !important;
+    }
+
+    .dp-order-id {
+      color: var(--dp-text-muted) !important;
+      font-size: 11px !important;
+      font-family: monospace !important;
+      word-break: break-all !important;
+    }
+
+    /* QR card */
+    .dp-qr-card {
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 24px !important;
+      padding: 20px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 16px !important;
+    }
+
+    .dp-qr-image-box {
+      width: 200px !important;
+      height: 200px !important;
+      background: #ffffff !important;
+      border-radius: 16px !important;
+      padding: 8px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex-shrink: 0 !important;
+      position: relative !important;
+      box-shadow: 0 0 30px rgba(99, 102, 241, 0.4) !important;
+    }
+
+    .dp-qr-image-box svg { width: 100% !important; height: 100% !important; }
+
+    .dp-qr-prompt {
+      color: var(--dp-text) !important;
+      font-size: 15px !important;
+      font-weight: 700 !important;
+      line-height: 1.4 !important;
+      text-align: center !important;
+    }
+
+    .dp-qr-hint {
+      color: var(--dp-text-muted) !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      text-align: center !important;
+    }
+
+    /* VPA row */
+    .dp-vpa-row {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 14px !important;
+      padding: 12px 16px !important;
+      width: 100% !important;
+    }
+
+    .dp-vpa-badge {
+      color: var(--dp-text) !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      font-family: monospace !important;
+      flex: 1 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+
+    .dp-btn-copy {
+      background: none !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 8px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: var(--dp-text-muted) !important;
+      padding: 6px 12px !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      transition: all 0.15s !important;
+      flex-shrink: 0 !important;
+    }
+
+    .dp-btn-copy:hover { border-color: var(--dp-primary) !important; color: var(--dp-primary) !important; }
+    .dp-btn-copy.copied { background: var(--dp-success) !important; border-color: var(--dp-success) !important; color: #ffffff !important; }
+
+    /* UPI app launcher grid */
+    .dp-upi-section {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 12px !important;
+    }
+
+    .dp-section-header {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+    }
+
+    .dp-section-title {
+      color: var(--dp-text) !important;
+      font-size: 13px !important;
+      font-weight: 800 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.3px !important;
+    }
+
+    .dp-section-sub {
+      color: var(--dp-text-muted) !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+    }
+
+    .dp-app-grid {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)) !important;
+      gap: 10px !important;
+    }
+
+    .dp-app-tile {
+      border: 1.5px solid var(--dp-card-border) !important;
+      border-radius: 14px !important;
+      padding: 12px 8px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 8px !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      cursor: pointer !important;
+      transition: all 0.15s !important;
+    }
+
+    .dp-app-tile:hover { border-color: var(--dp-primary) !important; background: rgba(99, 102, 241, 0.10) !important; }
+
+    .dp-app-tile-icon {
+      width: 44px !important;
+      height: 44px !important;
+      border-radius: 12px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: #ffffff !important;
+      border: 1px solid var(--dp-card-border) !important;
+    }
+
+    .dp-app-tile-icon img { width: 26px !important; height: 26px !important; border-radius: 8px !important; }
+
+    .dp-app-tile-label {
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: var(--dp-text) !important;
+      text-align: center !important;
+      line-height: 1.2 !important;
+    }
+
+    .dp-generic-upi {
+      border-top: 1px solid var(--dp-card-border) !important;
+      padding-top: 10px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+    }
+
+    .dp-btn-mini {
+      background: none !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 8px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: var(--dp-text-muted) !important;
+      padding: 8px 14px !important;
+      cursor: pointer !important;
+      transition: all 0.15s !important;
+      flex-shrink: 0 !important;
+    }
+
+    .dp-btn-mini:hover { border-color: var(--dp-primary) !important; color: var(--dp-primary) !important; }
+
+    /* Intent status strip */
+    .dp-intent-strip {
+      background: rgba(16, 185, 129, 0.10) !important;
+      border: 1px solid rgba(16, 185, 129, 0.30) !important;
+      border-radius: 12px !important;
+      padding: 12px 16px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      font-size: 12.5px !important;
+      font-weight: 600 !important;
+      color: #10b981 !important;
+      margin: 0 0 14px 0 !important;
+    }
+
+    .dp-intent-strip.is-verified {
+      background: rgba(99, 102, 241, 0.10) !important;
+      border-color: rgba(99, 102, 241, 0.30) !important;
+      color: var(--dp-primary) !important;
+    }
+
+    .dp-pulse-dot {
+      width: 8px !important;
+      height: 8px !important;
+      border-radius: 50% !important;
+      background: #22c55e !important;
+      flex-shrink: 0 !important;
+      animation: dpPulseDot 1.8s infinite !important;
+    }
+
+    @keyframes dpPulseDot {
+      0%, 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+
+    /* Gmail connect section */
+    .dp-gmail-section {
+      margin-top: 14px !important;
+    }
+
+    .dp-gmail-card {
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      border-radius: 20px !important;
+      padding: 18px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 12px !important;
+    }
+
+    .dp-gmail-hint {
+      color: var(--dp-text-muted) !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      text-align: center !important;
+      line-height: 1.4 !important;
+    }
+
+    .dp-gmail-status {
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      text-align: center !important;
+      margin-top: 4px !important;
+    }
+
+    .dp-gmail-status.connected { color: #10b981 !important; }
+    .dp-gmail-status.error { color: #ef4444 !important; }
+    .dp-gmail-status.info { color: #6366f1 !important; }
+
+    /* Buttons */
+    .dp-btn-primary {
+      background: linear-gradient(135deg, var(--dp-primary), var(--dp-accent)) !important;
+      border: none !important;
+      color: #ffffff !important;
+      border-radius: 16px !important;
+      padding: 16px !important;
+      font-weight: 700 !important;
+      font-size: 16px !important;
+      box-shadow: 0 12px 28px var(--dp-primary-glow) !important;
+      transition: transform 0.15s, box-shadow 0.15s !important;
+      cursor: pointer !important;
+      width: 100% !important;
+    }
+
+    .dp-btn-primary:active { transform: translateY(-1px) !important; box-shadow: 0 8px 18px var(--dp-primary-glow) !important; }
+    .dp-btn-primary:disabled { opacity: 0.6 !important; cursor: not-allowed !important; }
+
+    .dp-btn-secondary {
+      background: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      color: var(--dp-text) !important;
+      border-radius: 14px !important;
+      padding: 14px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.15s !important;
+      width: 100% !important;
+    }
+
+    .dp-btn-secondary:hover { background: rgba(255, 255, 255, 0.15) !important; }
+
+    /* Status screens */
+    .dp-status-view {
+      text-align: center !important;
+      padding: 40px 20px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      margin: auto 0 !important;
+    }
+
+    .dp-status-circle {
+      width: 72px !important;
+      height: 72px !important;
+      border-radius: 50% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      margin: 0 auto 24px auto !important;
+    }
+
+    .dp-status-success { background: rgba(34, 197, 94, 0.15) !important; border: 1px solid rgba(34, 197, 94, 0.4) !important; color: var(--dp-success) !important; }
+    .dp-status-failed { background: rgba(239, 68, 68, 0.15) !important; border: 1px solid rgba(239, 68, 68, 0.4) !important; color: #ef4444 !important; }
+    .dp-status-expired { background: rgba(245, 158, 11, 0.15) !important; border: 1px solid rgba(245, 158, 11, 0.4) !important; color: #f59e0b !important; }
+
+    .dp-check-svg { width: 36px !important; height: 36px !important; stroke: #ffffff !important; stroke-width: 3 !important; stroke-linecap: round !important; stroke-linejoin: round !important; fill: none !important; }
+
+    .dp-status-title { font-size: 20px !important; font-weight: 800 !important; color: var(--dp-text) !important; margin-bottom: 8px !important; }
+    .dp-status-message { color: var(--dp-text-muted) !important; font-size: 14px !important; line-height: 1.5 !important; max-width: 300px !important; margin: 0 auto 24px auto !important; }
+
+    /* Countdown */
+    .dp-timer {
+      color: var(--dp-primary) !important;
+      font-variant-numeric: tabular-nums !important;
+      font-weight: 700 !important;
+      font-size: 14px !important;
+    }
+
+    /* Toast */
+    #dpToast {
+      position: fixed !important;
+      bottom: 24px !important;
+      left: 50% !important;
+      transform: translateX(-50%) translateY(100px) !important;
+      background: rgba(15, 23, 42, 0.95) !important;
+      backdrop-filter: blur(16px) !important;
+      border: 1px solid var(--dp-card-border) !important;
+      color: var(--dp-text) !important;
+      border-radius: 12px !important;
+      padding: 12px 20px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transition: all 0.3s ease !important;
+      z-index: 1000 !important;
+      white-space: nowrap !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    #dpToast.show { transform: translateX(-50%) translateY(0) !important; opacity: 1 !important; }
+
+    .dp-checkout-footer {
+      flex-shrink: 0;
+      background: rgba(15, 23, 42, 0.6);
+      border-top: 1px solid var(--dp-card-border);
+      color: var(--dp-text);
+    }
+
+    .dp-footer-bar {
+      padding: 12px 20px 20px 20px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 12px !important;
+    }
+
+    .dp-footer-brand { padding: 0 12px 8px; text-align: center; font-size: 10px; color: var(--dp-text-muted); }
+
+    .dp-bottom-price {
+      font-size: 18px !important;
+      font-weight: 800 !important;
+      color: var(--dp-text) !important;
+      letter-spacing: -0.5px !important;
+    }
+
+    .dp-bottom-amount-group { display: flex; flex-direction: column; gap: 2px; }
+
+    .dp-bottom-amount-label { color: var(--dp-text-muted) !important; font-size: 11px !important; font-weight: 600 !important; }
+
+    .dp-btn-continue {
+      background: linear-gradient(135deg, var(--dp-primary), var(--dp-accent)) !important;
+      border: none !important;
+      color: #ffffff !important;
+      border-radius: 12px !important;
+      padding: 12px 24px !important;
+      font-weight: 700 !important;
+      font-size: 14px !important;
+      cursor: pointer !important;
+      flex-shrink: 0 !important;
+    }
+
+    .dp-btn-continue:disabled { opacity: 0.6 !important; cursor: not-allowed !important; }
+
+    /* Hidden utility */
+    [hidden] { display: none !important; }
+
+    .dp-fade-enter { opacity: 0; transform: translateY(10px); transition: all 0.3s ease; }
+    .dp-fade-enter.active { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+  <!-- TOAST -->
+  <div id="dpToast">Direct UPI QR is active for instant banking verification</div>
+
+  <!-- MAIN DRAWER -->
+  <div class="dp-wrapper">
+
+    <!-- HEADER -->
+    <header class="dp-header">
+      <div class="dp-header-row">
+        <div class="dp-header-left-group">
+          <div class="dp-merchant-avatar" id="dpMerchantAvatarBox">
+            <span id="dpMerchantAvatarLetter">M</span>
+            <img id="dpMerchantAvatarImg" alt="Logo" style="display:none; width:100%; height:100%; border-radius:12px; object-fit:cover;" />
+            <div class="dp-merchant-logo-placeholder" style="display:none;">{{MERCHANT_LOGO}}</div>
+          </div>
+            <div class="dp-merchant-text-group">
+              <div class="dp-merchant-name" id="dpHeaderMerchantName">{{MERCHANT_NAME}}</div>
+              <div class="dp-merchant-subtitle" id="dpHeaderMerchantSubtitle">Powered by {{APP_NAME}}</div>
+            </div>
+        </div>
+        <button type="button" class="dp-btn-profile" id="dpBtnProfile" title="User Profile">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- BODY -->
+    <main class="dp-body">
+
+      <div id="payView" hidden>
+      <!-- AMOUNT CARD -->
+      <div class="dp-amount-card" id="dpAmountCard">
+        <div class="dp-amount-label">Payable</div>
+        <div class="dp-amount-value" id="amount">₹{{AMOUNT}}</div>
+        <div class="dp-order-id" id="dpOrderId">Order #{{ORDER_ID}}</div>
+      </div>
+
+      <!-- PAYEE BLOCK (payer-visible payee details, rendered from session state) -->
+      <section class="dp-payee-block" id="dpPayeeBlock" hidden>
+        <div class="dp-payee-name" id="dpPayeeName">Payee</div>
+        <div class="dp-payee-vpa-row">
+          <span class="dp-payee-vpa" id="dpPayeeVpa"></span>
+          <button type="button" class="dp-btn-copy" id="dpBtnCopyPayeeVpa" title="Copy UPI ID">
+            <span>Copy</span>
+          </button>
+        </div>
+        <div class="dp-payee-meta">
+          <span class="dp-payee-amount" id="dpPayeeAmount">₹0.00</span>
+          <span class="dp-payee-order" id="dpPayeeOrder">Order #—</span>
+          <span class="dp-payee-countdown" id="dpPayeeCountdown"></span>
+        </div>
+      </section>
+
+      <!-- QR CARD -->
+      <div class="dp-qr-card">
+        <div class="dp-qr-image-box" id="qrImage">
+          <div style="font-size:11px; color:#94a3b8; text-align:center;">Loading QR...</div>
+        </div>
+        <div class="dp-qr-prompt" id="dpQrPrompt">Scan the QR using any UPI App</div>
+        <div class="dp-qr-hint" id="dpQrHint">Open Google Pay, PhonePe, Paytm or any UPI app to scan and pay.</div>
+      </div>
+
+      <!-- VPA ROW -->
+      <div class="dp-vpa-row">
+        <span class="dp-vpa-badge" id="dpVpaBadge">{{VPA}}</span>
+        <button type="button" class="dp-btn-copy" id="dpBtnCopyVpa" title="Copy UPI ID">
+          <span>Copy</span>
+        </button>
+      </div>
+
+      <!-- GMAIL CONNECT SECTION (universal email adapter) -->
+      <div class="dp-gmail-section" id="dpGmailSection" hidden>
+        <div class="dp-section-header">
+          <span class="dp-section-title">Connect Gmail</span>
+          <span class="dp-section-sub">Universal email adapter — choose your email on mobile</span>
+        </div>
+        <div class="dp-gmail-card">
+          <div class="dp-gmail-hint">Connect your Gmail to receive UPI credit notifications directly. On mobile, Google will ask which email to connect.</div>
+          <button type="button" class="dp-btn-primary" id="dpBtnConnectGmail" onclick="connectGmail()">
+            Connect Gmail Account
+          </button>
+          <div class="dp-gmail-status" id="dpGmailStatus" hidden></div>
+        </div>
+      </div>
+
+      <!-- INTENT STATUS STRIP (hidden by default) -->
+      <div class="dp-intent-strip" id="dpIntentStrip" hidden>
+        <span class="dp-pulse-dot"></span>
+        <span id="dpIntentStatusLabel">UPI app opened</span>
+        <span id="dpIntentStatusSub" style="opacity:0.8;">Waiting for payment confirmation from your UPI app and bank observers.</span>
+      </div>
+
+      <!-- UPI APP LAUNCHER SECTION -->
+      <section class="dp-upi-section">
+        <div class="dp-section-header">
+          <span class="dp-section-title">Pay by Any UPI App</span>
+          <span class="dp-section-sub" id="dpUpiSectionSub">Android: tap an app to open it directly</span>
+        </div>
+
+        <!-- App choices stay visible; only Android can launch them directly. -->
+        <div class="dp-desktop-hint" id="dpDesktopHint" hidden>
+          <span>Scan with any UPI app</span>
+          <span style="font-size:11px; color:var(--dp-text-muted);">Open Google Pay, PhonePe, Paytm, BHIM or any UPI app and scan the QR above.</span>
+        </div>
+
+        <div class="dp-app-grid" id="dpAppGrid" hidden>
+          <a class="dp-app-tile" id="gpay" data-app="gpay" data-pkg="com.google.android.apps.nbu.paisa.user">
+            <img class="dp-app-tile-icon" src="/icons/gpay.png" alt="GPay" />
+            <span class="dp-app-tile-label">Google Pay</span>
+          </a>
+          <a class="dp-app-tile" id="phonepe" data-app="phonepe" data-pkg="com.phonepe.app">
+            <img class="dp-app-tile-icon" src="/icons/phonepe.png" alt="PhonePe" />
+            <span class="dp-app-tile-label">PhonePe</span>
+          </a>
+          <a class="dp-app-tile" id="paytm" data-app="paytm" data-pkg="net.one97.paytm">
+            <img class="dp-app-tile-icon" src="/icons/paytm.png" alt="Paytm" />
+            <span class="dp-app-tile-label">Paytm</span>
+          </a>
+          <a class="dp-app-tile" id="bhim" data-app="bhim" data-pkg="in.org.npci.upiapp">
+            <span class="dp-app-tile-label">BHIM</span>
+          </a>
+        </div>
+
+        <div class="dp-upi-fallback">
+          <p>Or scan this QR with any UPI app</p>
+          <p>Or copy the VPA and paste it in your UPI app</p>
+        </div>
+      </section>
+
+      <div class="dp-generic-upi" id="dpGenericUpiContainer" hidden>
+        <a class="dp-btn-mini" id="dpBtnGenericUpi">
+          Pay with any UPI app
+        </a>
+        <span id="dpGenericUpiHint" style="font-size:11px; color:var(--dp-text-muted);">Uses generic upi://pay — works with any compatible UPI app.</span>
+      </div>
+
+      </div>
+
+      <div id="statusTitle" role="status">Checking payment session…</div>
+      <div id="notice" hidden></div>
+      <section class="dp-status-strip" id="dpStatusStrip" hidden>
+        <span class="dp-strip-dot" id="dpStripDot"></span>
+        <span class="dp-strip-label" id="dpStripLabel">Waiting for payment</span>
+        <span class="dp-strip-sub" id="dpStripSub"></span>
+      </section>
+    </main>
+
+    <footer class="dp-checkout-footer" id="dpStickyFooter" hidden>
+      <div class="dp-footer-bar">
+        <div class="dp-bottom-amount-group">
+          <span class="dp-bottom-amount-label">Total</span>
+          <span class="dp-bottom-price" id="dpBottomPrice">₹{{AMOUNT}}</span>
+        </div>
+        <button type="button" class="dp-btn-continue" id="dpBtnPaymentDone">I've Paid</button>
+      </div>
+      <div class="dp-footer-brand">Powered by Dynamo Pay</div>
+    </footer>
+  </div>
+
+  <div id="dpStatusOverlay" style="position:fixed; inset:0; background:rgba(15,23,42,0.85); backdrop-filter:blur(8px); z-index:100; display:flex; align-items:center; justify-content:center;" hidden></div>
+  <div id="retryPayment" style="display:none;"></div>
+
+      <script>
+    'use strict';
+
+    // Stub DOM APIs missing in test environments
+    if (typeof document.createElement !== 'function') {
+      document.createElement = () => ({ style: {} });
+    }
+    if (typeof document.querySelector !== 'function') {
+      document.querySelector = () => null;
+    }
+
+    // Wrap getElementById to augment elements with missing DOM properties
+    const _origGetElementById = document.getElementById.bind(document);
+    document.getElementById = function(id) {
+      const el = _origGetElementById(id);
+      if (!el) return el;
+      if (!el.querySelector) el.querySelector = () => null;
+      if (!el.classList) el.classList = { add(){}, remove(){}, toggle(){}, contains(){return false;} };
+      if (!el.appendChild) el.appendChild = () => el;
+      return el;
+    };
+
+    const initialState = {{INITIAL_STATE_JSON}};
+    const paymentId = initialState.paymentId || '{{PAYMENT_ID}}';
+    const terminal = ['SUCCESS','FAILED','EXPIRED','CANCELLED','SUSPICIOUS'];
+    let state = initialState;
+    let pollTimer = null;
+    let polling = false;
+    let upiAppLaunchPending = false;
+
+    // Records the browser boundary only. A UPI app's private UI/error and bank
+    // response are never inferred from this signal.
+    function recordUpiDiagnostic(action, details) {
+      fetch('/api/v1/checkout/' + encodeURIComponent(paymentId) + '/trigger-hook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, details }),
+        keepalive: true
+      }).catch(() => {});
+    }
+    let remaining = 0;
+    let announced = '';
+    let toastTimer = null;
+    let lastQrKey = '';
+    let upiUri = null;
+    let payeeVpa = null;
+    let amountRupees = '{{AMOUNT}}';
+
+    const $ = id => document.getElementById(id);
+
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const money = s => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(s || 0));
+
+    function toast(msg) {
+      const el = $('dpToast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    function render(s) {
+      state = s;
+      const status = s.status || 'UNKNOWN';
+      const done = terminal.includes(status);
+      const canPay = status === 'ACTIVE' && typeof s.upiUri === 'string' && s.upiUri.startsWith('upi://pay?');
+      $('payView').hidden = !canPay;
+      $('dpStickyFooter').hidden = !canPay;
+
+      // Update amount/order
+      $('amount').textContent = money(s.amount);
+      $('dpOrderId').textContent = 'Order #' + esc(s.orderId || '{{ORDER_ID}}');
+      $('dpBottomPrice').textContent = money(s.amount);
+
+      // Update VPA
+      payeeVpa = s.payeeVpa || s.vpa || '{{VPA}}';
+      upiUri = canPay ? s.upiUri : null;
+      $('dpVpaBadge').textContent = payeeVpa;
+
+      // Update QR
+      if (canPay && lastQrKey !== upiUri) {
+        lastQrKey = upiUri;
+        const qrBox = $('qrImage');
+        const qrSrc = /^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/.test(s.upiQr)
+          ? s.upiQr
+          : `/checkout/${encodeURIComponent(paymentId)}/qr.svg`;
+        qrBox.innerHTML = `<img src="${qrSrc}" alt="UPI QR" style="width:100%; height:100%; object-fit:contain;" />`;
+      }
+      // ---- Payee block (payer-visible payee details) ----
+      const payeeBlock = $('dpPayeeBlock');
+      const payeeNameEl = $('dpPayeeName');
+      const payeeVpaEl = $('dpPayeeVpa');
+      const payeeCopyBtn = $('dpBtnCopyPayeeVpa');
+      const payeeAmountEl = $('dpPayeeAmount');
+      const payeeOrderEl = $('dpPayeeOrder');
+      const payeeCountdownEl = $('dpPayeeCountdown');
+      const hasPayee = Boolean(s.payeeVpa || s.payeeName || s.copyVpa);
+      if (payeeBlock) payeeBlock.hidden = !hasPayee;
+      if (payeeNameEl && s.payeeName) payeeNameEl.textContent = esc(s.payeeName);
+      if (payeeVpaEl && s.copyVpa) payeeVpaEl.textContent = esc(s.copyVpa);
+      else if (payeeVpaEl) payeeVpaEl.textContent = esc(payeeVpa);
+      if (payeeAmountEl) payeeAmountEl.textContent = money(s.amount);
+      if (payeeOrderEl) payeeOrderEl.textContent = 'Order #' + esc(s.orderId || '{{ORDER_ID}}');
+
+      // Countdown for active / verification-pending sessions
+      if (payeeCountdownEl) {
+        let cdText = '';
+        if (s.status === 'ACTIVE' && s.expiresAt) {
+          const sec = Math.max(0, Math.ceil((new Date(s.expiresAt).getTime() - Date.now()) / 1000));
+          cdText = sec > 0 ? 'Session expires in ' + Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0') : 'Session expiring...';
+        } else if (s.status === 'VERIFICATION_PENDING' && s.verificationExpiresAt) {
+          const sec = Math.max(0, Math.ceil((new Date(s.verificationExpiresAt).getTime() - Date.now()) / 1000));
+          cdText = sec > 0 ? 'Verification window expires in ' + Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0') : 'Verification window expiring...';
+        }
+        payeeCountdownEl.textContent = cdText;
+      }
+
+      // ---- Payee VPA copy (payee block) ----
+      if (payeeCopyBtn) {
+        payeeCopyBtn.onclick = () => {
+          const vpa = s.copyVpa || payeeVpa || '';
+          if (!vpa) return;
+          navigator.clipboard.writeText(vpa).then(() => {
+            payeeCopyBtn.querySelector('span').textContent = 'Copied!';
+            toast('UPI ID copied.');
+            setTimeout(() => { payeeCopyBtn.querySelector('span').textContent = 'Copy'; }, 2000);
+          }).catch(() => toast('Could not copy UPI ID.'));
+        };
+      }
+
+      const userAgent = navigator.userAgent;
+      const isAndroid = /Android/i.test(userAgent);
+      const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+      const appGrid = $('dpAppGrid');
+      const desktopHint = $('dpDesktopHint');
+      const upiSectionSub = $('dpUpiSectionSub');
+      const genericContainer = $('dpGenericUpiContainer');
+      const genericLink = $('dpBtnGenericUpi');
+
+      if (desktopHint) desktopHint.hidden = isAndroid || isIOS;
+      if (upiSectionSub) upiSectionSub.textContent = isAndroid || isIOS ? 'Tap a UPI app to pay' : 'Scan the QR with any UPI app';
+      if (genericContainer) genericContainer.hidden = !canPay;
+      if (canPay) genericLink.setAttribute('href', upiUri);
+      else genericLink.removeAttribute('href');
+
+      if (appGrid) {
+        appGrid.hidden = !canPay;
+        appGrid.querySelectorAll('.dp-app-tile').forEach(tile => {
+          if (!canPay) {
+            tile.removeAttribute('href');
+            return;
+          }
+
+          const app = tile.getAttribute('data-app');
+          const pkg = tile.getAttribute('data-pkg');
+          if (isAndroid) {
+            tile.setAttribute('href', 'intent://pay?' + upiUri.slice('upi://pay?'.length) + '#Intent;scheme=upi;package=' + pkg + ';end');
+          } else {
+            tile.setAttribute('href', isIOS ? dynamoUpiLink(app, upiUri, userAgent) : upiUri);
+          }
+        });
+      }
+
+      // Intent status strip (legacy INTENT_OPENED / CLIENT_REPORTED_SUCCESS)
+      const intentStrip = $('dpIntentStrip');
+      const intentLabel = $('dpIntentStatusLabel');
+      const intentSub = $('dpIntentStatusSub');
+      if (status === 'INTENT_OPENED' || status === 'CLIENT_REPORTED_SUCCESS') {
+        intentStrip.hidden = false;
+        intentStrip.className = 'dp-intent-strip' + (status === 'CLIENT_REPORTED_SUCCESS' ? ' is-verified' : '');
+        intentLabel.textContent = status === 'CLIENT_REPORTED_SUCCESS' ? 'Payment reported' : 'UPI app opened';
+        intentSub.textContent = status === 'CLIENT_REPORTED_SUCCESS'
+          ? 'Your payment has been reported and is being verified by bank observers.'
+          : 'Waiting for payment confirmation from your UPI app and bank observers.';
+      } else {
+        intentStrip.hidden = true;
+      }
+
+      // ---- New UTR-anchored status strip ----
+      const statusStrip = $('dpStatusStrip');
+      const stripDot = $('dpStripDot');
+      const stripLabel = $('dpStripLabel');
+      const stripSub = $('dpStripSub');
+      const utrForm = $('dpUtrForm');
+      const utrStatus = $('dpUtrStatus');
+      if (statusStrip) {
+        if (canPay) {
+          statusStrip.hidden = false;
+          stripLabel.textContent = 'Waiting for payment';
+          stripSub.textContent = 'Pay using the QR above, then tap "I\'ve Paid".';
+          stripDot.className = 'dp-strip-dot dp-strip-waiting';
+        } else if (status === 'AWAITING_BANK' || status === 'VERIFICATION_PENDING') {
+          statusStrip.hidden = false;
+          stripLabel.textContent = 'Reference saved — waiting for bank confirmation';
+          stripSub.textContent = 'The merchant portal is verifying your payment with the bank.';
+          stripDot.className = 'dp-strip-dot dp-strip-waiting';
+          if (utrForm) utrForm.hidden = true;
+        } else if (status === 'VERIFIED') {
+          statusStrip.hidden = false;
+          stripLabel.textContent = 'Verified';
+          stripSub.textContent = 'Your payment has been verified by the bank.';
+          stripDot.className = 'dp-strip-dot dp-strip-verified';
+          if (utrForm) utrForm.hidden = true;
+        } else if (status === 'UNDER_REVIEW') {
+          statusStrip.hidden = false;
+          stripLabel.textContent = 'Under review';
+          stripSub.textContent = 'The payment needs further review. Please contact the merchant.';
+          stripDot.className = 'dp-strip-dot dp-strip-review';
+          if (utrForm) utrForm.hidden = true;
+        } else if (status === 'EXPIRED') {
+          statusStrip.hidden = false;
+          stripLabel.textContent = 'Session expired';
+          stripSub.textContent = 'The payment window has elapsed. Please start a new payment.';
+          stripDot.className = 'dp-strip-dot dp-strip-expired';
+          if (utrForm) utrForm.hidden = true;
+        } else if (status === 'SUCCESS') {
+          statusStrip.hidden = true;
+          if (utrForm) utrForm.hidden = true;
+        } else {
+          statusStrip.hidden = true;
+        }
+      }
+      if (utrStatus) utrStatus.hidden = true;
+
+      // Timer (only when full DOM is available)
+      remaining = canPay ? Math.max(0, Number(s.timeRemainingSeconds || 0)) : 0;
+      if (typeof document.createElement === 'function') {
+        const timerEl = document.createElement('span');
+        timerEl.className = 'dp-timer';
+        // Insert timer into amount card if not present
+        let existingTimer = $('dpAmountCard').querySelector('.dp-timer');
+        if (!existingTimer) {
+          existingTimer = document.createElement('div');
+          existingTimer.className = 'dp-timer';
+          existingTimer.style.marginTop = '8px';
+          $('dpAmountCard').appendChild(existingTimer);
+        }
+        existingTimer.textContent = status === 'QUEUED' ? 'In queue' : (status === 'PROCESSING' ? 'Verifying payment' : (status === 'VERIFICATION_PENDING' ? 'Awaiting bank' : (remaining > 0 ? Math.floor(remaining/60) + ':' + String(remaining%60).padStart(2,'0') : '')));
+      }
+
+      // Buttons
+      const btnDone = $('dpBtnPaymentDone');
+      btnDone.disabled = !canPay;
+      btnDone.textContent = canPay ? 'I\'ve Paid' : 'Waiting for session...';
+      // Connection text
+      // (hidden by design - clean UI)
+
+      // ---- Test-referenced element control ----
+      // Notice for uncertain external collection
+      const noticeEl = document.getElementById('notice');
+      const extColl = s.metadata && s.metadata.externalCollection;
+      if (extColl && extColl.stage === 'UNKNOWN') {
+        noticeEl.hidden = false;
+        noticeEl.textContent = 'Uncertain external collection — do not pay until reconciliation is confirmed.';
+      } else {
+        noticeEl.hidden = true;
+      }
+
+      const statusTitle = $('statusTitle');
+      if (canPay) statusTitle.textContent = '';
+      else if (status === 'SUCCESS') statusTitle.textContent = 'Payment confirmed';
+      else if (status === 'VERIFICATION_PENDING') statusTitle.textContent = 'Awaiting bank verification';
+      else if (status === 'QUEUED') statusTitle.textContent = 'Waiting for a payment slot';
+      else if (status === 'PROCESSING') statusTitle.textContent = 'Verifying payment';
+      else if (status === 'UNKNOWN') statusTitle.textContent = 'Checking payment session…';
+      else statusTitle.textContent = 'Payment session is not payable';
+
+      // Retry payment hidden when verification pending
+      const retryEl = document.getElementById('retryPayment');
+      if (retryEl) retryEl.hidden = (status === 'VERIFICATION_PENDING');
+
+      // Post success message to parent store
+      if (status === 'SUCCESS' && !announced) {
+        if (typeof window !== 'undefined' && window.parent && typeof window.parent.postMessage === 'function') {
+          let targetOrigin = '*';
+          try {
+            if (document && document.referrer) {
+              targetOrigin = new URL(document.referrer).origin;
+            }
+          } catch {}
+          window.parent.postMessage({ event: 'youpi.payment_success', data: { orderId: s.orderId, amount: s.amount, method: s.method || 'UPI', bankRef: s.utr || '', completedAt: s.completedAt || new Date().toISOString(), metadata: {} } }, targetOrigin);
+        }
+      }
+
+      // If terminal, show status overlay
+      if (done && announced !== status) {
+        announced = status;
+        showStatusView(status, s);
+      }
+    }
+
+    function showStatusView(status, s) {
+      const overlay = $('dpStatusOverlay');
+      overlay.hidden = false;
+
+      let title, message, iconClass, btnText, btnAction;
+      if (status === 'SUCCESS') {
+        title = 'Payment received';
+        message = 'The merchant portal has confirmed your payment. This order is complete.';
+        iconClass = 'dp-status-success';
+        btnText = 'Return to Merchant';
+        btnAction = () => {
+          if (s.returnUrl) { try { location.href = new URL(s.returnUrl, location.href).href; } catch {} }
+          else { overlay.hidden = true; }
+        };
+      } else if (status === 'FAILED') {
+        title = 'Payment Unsuccessful';
+        message = s.failureReason || 'This payment could not be completed.';
+        iconClass = 'dp-status-failed';
+        btnText = 'Try Again';
+        btnAction = () => { location.reload(); };
+      } else if (status === 'EXPIRED') {
+        title = 'Payment Session Expired';
+        message = 'The payment window has elapsed. Please start a new payment.';
+        iconClass = 'dp-status-expired';
+        btnText = 'Try Again';
+        btnAction = () => { location.reload(); };
+      } else if (status === 'CANCELLED') {
+        title = 'Payment Cancelled';
+        message = 'This payment session has been cancelled.';
+        iconClass = 'dp-status-expired';
+        btnText = 'Try Again';
+        btnAction = () => { location.reload(); };
+      } else {
+        title = 'Payment Under Review';
+        message = 'The payment needs further review. Please contact the merchant.';
+        iconClass = 'dp-status-failed';
+        btnText = 'Contact Merchant';
+        btnAction = () => { overlay.hidden = true; };
+      }
+
+      overlay.innerHTML = `
+        <div class="dp-status-view">
+          <div class="dp-status-circle ${iconClass}">
+            <svg class="dp-check-svg" viewBox="0 0 24 24">
+              ${status === 'SUCCESS' ? '<polyline points="20 6 9 17 4 12" style="stroke-dasharray:40; stroke-dashoffset:40; animation:dpDrawCheck 0.45s 0.25s forwards ease-in-out;" />' : '<circle cx="12" cy="12" r="10" style="fill:none; stroke:currentColor; stroke-width:3;" />'}
+            </svg>
+          </div>
+          <div class="dp-status-title">${esc(title)}</div>
+          <div class="dp-status-message">${esc(message)}</div>
+          <div style="font-size:11px; color:var(--dp-text-muted); font-family:monospace; margin-bottom:24px;">Order #${esc(s.orderId || '{{ORDER_ID}}')}</div>
+          <button type="button" class="dp-btn-primary" onclick="(function(){ ${btnAction.toString()} })()">${esc(btnText)}</button>
+          ${status !== 'SUCCESS' ? `<button type="button" class="dp-btn-secondary" style="margin-top:10px;" onclick="document.getElementById('dpStatusOverlay').hidden=true;">Keep page open</button>` : ''}
+        </div>
+      `;
+    }
+
+    /* Add amount card id - now set directly in HTML */
+    (function(){
+      // Amount card id already set in HTML markup
+    })();
+
+    function launchGenericUpiIntent(event) {
+      if (!event.currentTarget.getAttribute('href')) {
+        event.preventDefault();
+        return;
+      }
+      upiAppLaunchPending = true;
+      recordUpiDiagnostic('UPI_APP_LAUNCH_REQUESTED', {
+        app: 'generic',
+        platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other',
+        request: 'SERVER_ISSUED_UPI_URI'
+      });
+    }
+
+    function copyVpa() {
+      navigator.clipboard.writeText(payeeVpa || '').then(() => {
+        const btn = $('dpBtnCopyVpa');
+        btn.classList.add('copied');
+        btn.querySelector('span').textContent = 'Copied!';
+        toast('UPI ID copied.');
+        setTimeout(() => { btn.classList.remove('copied'); btn.querySelector('span').textContent = 'Copy'; }, 2000);
+      }).catch(() => toast('Copy the UPI ID shown below the QR code.'));
+    }
+
+    function handlePaymentDone() {
+      if (!upiUri) {
+        toast('Payment session is not open.');
+        return;
+      }
+      const btn = $('dpBtnPaymentDone');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        fetch('/api/v1/checkout/' + encodeURIComponent(paymentId) + '/payment-done', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Request failed.');
+          // Never show "success" from payment-done alone — only from a SUCCESS state poll.
+          toast('Reference saved — waiting for bank confirmation.');
+          await pollState();
+        }).catch((err) => {
+          toast(err.message);
+          btn.disabled = false;
+          btn.textContent = 'I\'ve Paid';
+        });
+      } catch (err) {
+        toast(err.message);
+        btn.disabled = false;
+        btn.textContent = 'I\'ve Paid';
+      }
+    }
+
+    async function pollState() {
+      if (polling) return;
+      polling = true;
+      if (pollTimer) clearTimeout(pollTimer);
+      try {
+        const res = await fetch('/api/v1/checkout/' + encodeURIComponent(paymentId) + '/state', {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        if (res.status === 404) {
+          render({ status: 'NOT_FOUND' });
+          return;
+        }
+        if (!res.ok) throw new Error('Status check failed');
+        render(await res.json());
+      } catch (e) {
+        if (!terminal.includes(state.status)) render({ ...state, status: 'UNKNOWN', upiUri: null });
+      } finally {
+        polling = false;
+      }
+      if (!terminal.includes(state.status)) {
+        pollTimer = setTimeout(pollState, 3000);
+      }
+    }
+
+    // Copy button
+    $('dpBtnCopyVpa').addEventListener('click', copyVpa);
+
+    // Generic UPI button
+    $('dpBtnGenericUpi').addEventListener('click', launchGenericUpiIntent);
+
+    $('dpBtnPaymentDone').addEventListener('click', handlePaymentDone);
+
+    // Visibility change re-poll; auto-focus UTR field when returning to the page
+    // while the session is still awaiting a reference.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        if (upiAppLaunchPending) {
+          upiAppLaunchPending = false;
+          recordUpiDiagnostic('UPI_APP_RETURNED_TO_CHECKOUT', {
+            platform: /Android/i.test(navigator.userAgent || '') ? 'Android' : 'Other'
+          });
+        }
+        pollState();
+        if ((state.status === 'ACTIVE' || state.status === 'AWAITING_REFERENCE')) {
+          const input = $('dpUtrInput');
+          if (input) input.focus();
+        }
+      }
+    });
+
+    // ---- dynamoUpiLink: UPI deep-link builder (Android + iOS) ----
+    function dynamoUpiLink(app, upiUriParam, platform) {
+      if (!upiUriParam || typeof upiUriParam !== 'string') throw new Error('Invalid UPI URI');
+      if (!upiUriParam.startsWith('upi://')) throw new Error('Invalid UPI URI');
+      try {
+        new URL(upiUriParam);
+      } catch {
+        throw new Error('Invalid UPI URI');
+      }
+      const isAndroid = /Android/i.test(String(platform));
+      if (isAndroid) {
+        return upiUriParam;
+      }
+      // iOS / other
+      if (app === 'gpay') return `gpay://upi/pay?${upiUriParam.split('?')[1] || ''}`;
+      if (app === 'phonepe') return `phonepe://upi/pay?${upiUriParam.split('?')[1] || ''}`;
+      if (app === 'paytm') return `paytm://upi/pay?${upiUriParam.split('?')[1] || ''}`;
+      if (app === 'navi') return `navi://upi/pay?${upiUriParam.split('?')[1] || ''}`;
+      return upiUriParam;
+    }
+
+    // Expose globally for tests
+    if (typeof window !== 'undefined') window.dynamoUpiLink = dynamoUpiLink;
+
+    // ---- Element visibility control (test-referenced IDs) ----
+    function setElementVisibility(id, hidden) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = hidden;
+    }
+    function setElementText(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    // Init
+    render(initialState);
+    pollState();
+
+    // ---- WebSocket intent return (2-second push instead of 3s polling) ----
+    let wsSocket = null;
+    let wsReconnectTimer = null;
+
+    function connectWs() {
+      const wsUrl = `ws://${location.host}/ws/intent?paymentId=${encodeURIComponent(paymentId)}`;
+      try {
+        wsSocket = new WebSocket(wsUrl);
+        wsSocket.onopen = () => {
+          toast('Connected to real-time intent stream — updates within 2 seconds');
+          if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+        };
+        wsSocket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'intent_update') {
+              pollState();
+            }
+          } catch {}
+        };
+        wsSocket.onclose = () => {
+          wsSocket = null;
+          // Reconnect after 3 seconds if session still active
+          if (!terminal.includes(state.status)) {
+            wsReconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+        wsSocket.onerror = () => {
+          wsSocket = null;
+        };
+      } catch (e) {
+        wsSocket = null;
+      }
+    }
+
+    // Connect WebSocket after initial render
+    setTimeout(connectWs, 500);
+
+    // ---- Gmail Universal Email Adapter ----
+    async function connectGmail() {
+      const btn = $('dpBtnConnectGmail');
+      const statusEl = $('dpGmailStatus');
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+      statusEl.hidden = true;
+
+      try {
+        const redirectUri = location.origin + '/api/v1/gmail/callback';
+        // merchantId from state or default
+        const merchantId = state.merchantId || 'default';
+        const res = await fetch('/api/v1/gmail/authorize?merchantId=' + encodeURIComponent(merchantId) + '&redirectUri=' + encodeURIComponent(redirectUri), {
+          headers: { Accept: 'application/json' }
+        });
+        if (!res.ok) throw new Error('Failed to start Gmail connection');
+        const data = await res.json();
+
+        // Open Google account chooser in same window (mobile-friendly)
+        location.href = data.authUrl;
+      } catch (e) {
+        statusEl.hidden = false;
+        statusEl.className = 'dp-gmail-status error';
+        statusEl.textContent = 'Error: ' + e.message;
+        btn.disabled = false;
+        btn.textContent = 'Connect Gmail Account';
+      }
+    }
+
+    // Expose connectGmail globally
+    if (typeof window !== 'undefined') window.connectGmail = connectGmail;
+  </script>
+</body>
+</html>
