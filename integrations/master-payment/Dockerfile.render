@@ -1,0 +1,23 @@
+FROM node:22-bookworm-slim AS node
+FROM mongo:7.0-jammy
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+ && apt-get update && apt-get install -y --no-install-recommends redis-server tini \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app/api
+COPY apps/master-payment-api/package*.json ./
+RUN npm ci
+COPY apps/master-payment-api/ .
+RUN npm run build && npm prune --omit=dev
+WORKDIR /app/portal
+COPY apps/master-merchant-portal/package*.json ./
+RUN npm ci
+COPY apps/master-merchant-portal/ .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+COPY integrations/master-payment/render-start.sh integrations/master-payment/render-gateway.mjs /app/
+COPY integrations/master-payment/render-bootstrap.mjs /app/api/
+EXPOSE 10000
+ENTRYPOINT ["tini","-g","--"]
+CMD ["bash","/app/render-start.sh"]
