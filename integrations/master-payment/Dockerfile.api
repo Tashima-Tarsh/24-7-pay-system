@@ -1,0 +1,10 @@
+FROM node:22-bookworm-slim
+WORKDIR /app
+COPY apps/master-payment-api/package*.json ./
+RUN npm ci --workspaces=false
+COPY apps/master-payment-api/ .
+COPY integrations/master-payment/smoke.mjs integrations/master-payment/load.mjs ./
+RUN npm run build
+USER node
+EXPOSE 3000
+CMD ["npm", "start"]
