@@ -16,6 +16,8 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import androidx.work.*
 import com.dynamopay.bridge.workers.ForwardRetryWorker
+import com.sanbookpay.upiintent.UpiIntentEngine
+import com.sanbookpay.upiintent.UpiResponseParser
 
 class MainActivity : AppCompatActivity() {
     private lateinit var app: BridgeApp
@@ -32,14 +34,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSettings: Button
     private lateinit var btnExportLogs: Button
     private lateinit var btnRevoke: Button
-    private lateinit var upiLauncher: UpipayManager
+    private lateinit var upiLauncher: UpiIntentEngine
     private lateinit var upiAppContainer: LinearLayout
     private var activePaymentId: String? = null
     private var activeAppName: String? = null
 
     private val paymentResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val paymentId = activePaymentId
-        val outcome = upiLauncher.handleResult(result.resultCode, result.data, paymentId, activeAppName)
+        val parsed = UpiResponseParser.parseIntentReturn(
+            result.data, paymentId ?: "unknown", paymentId ?: "unknown", null,
+            "ANDROID", activeAppName, "native-return-${paymentId ?: System.currentTimeMillis()}", emptyMap()
+        )
+        val outcome = (parsed as? com.sanbookpay.upiintent.UpiCaptureResult.Returned)?.paymentReturn?.parsedStatus ?: "UNKNOWN"
         Toast.makeText(this, "UPI app returned: $outcome. Waiting for bank confirmation.", Toast.LENGTH_LONG).show()
         if (paymentId != null) {
             apiClient.beginCheckoutVerification(paymentId) { accepted ->
@@ -57,7 +63,7 @@ class MainActivity : AppCompatActivity() {
         eventForwarder = app.eventForwarder
         healthMonitor = app.healthMonitor
         apiClient = ApiClient(this, cryptoHelper, getSecurePrefs())
-        upiLauncher = UpipayManager(this)
+        upiLauncher = UpiIntentEngine(this)
 
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -209,7 +215,7 @@ class MainActivity : AppCompatActivity() {
                 setOnClickListener {
                     activeAppName = app.appName ?: app.packageName
                     try {
-                        upiLauncher.initiatePayment(paymentResult, upiUri, app.packageName)
+                        paymentResult.launch(upiLauncher.createLaunchIntentForApp(upiUri, app.packageName))
                     } catch (_: Exception) {
                         Toast.makeText(this@MainActivity, "Could not open ${app.appName ?: "this UPI app"}.", Toast.LENGTH_LONG).show()
                     }
