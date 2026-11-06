@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500 selection:text-white;
+    font-family: Inter, system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center w-full rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 text-white font-bold text-lg shadow-lg shadow-indigo-500/30 hover:from-indigo-600 hover:to-purple-700 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-60 disabled:pointer-events-none;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center w-full rounded-xl bg-white/5 border border-white/10 px-6 py-4 text-slate-300 font-bold text-lg hover:bg-white/10 hover:text-white hover:scale-[1.02] transition-all duration-200;
+  }
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-500 to-fuchsia-400;
+  }
+  .qr-border {
+    position: relative;
+  }
+  .qr-border::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 18px;
+    padding: 2px;
+    background: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: scan 2s linear infinite;
+    z-index: 10;
+  }
+  .confetti-piece {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: hsl(var(--h), 70%, 60%);
+    animation: confetti var(--duration) ease-out forwards;
+    pointer-events: none;
+    z-index: 50;
+  }
+}
