@@ -89,6 +89,8 @@ object UpiResponseParser {
             )
         }
 
+        val response = extraString(extras, "response")?.let { "?$it" }
+
         // Extract status from extras first.
         var statusValue: String? = null
         for (key in STATUS_KEYS) {
@@ -103,6 +105,8 @@ object UpiResponseParser {
                 ?: parseQueryParam(dataString, "paymentStatus")
         }
 
+        if (statusValue == null && response != null) statusValue = parseQueryParam(response, "status")
+
         // Extract reference/UTR.
         var reference: String? = null
         for (key in REF_KEYS) {
@@ -115,6 +119,8 @@ object UpiResponseParser {
                 ?: parseQueryParam(dataString, "utr")
                 ?: parseQueryParam(dataString, "refId")
         }
+
+        if (reference.isNullOrBlank() && response != null) reference = parseQueryParam(response, "txnRef")
 
         // Normalize status.
         val normalized = normalizeReportedStatus(statusValue, rawResult)

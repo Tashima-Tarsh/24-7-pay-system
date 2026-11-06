@@ -6,8 +6,6 @@
     <string name="status_connected">Connected</string>
     <string name="status_degraded">Degraded</string>
     <string name="status_offline">Offline</string>
-    <string name="permission_notification">Notification Access Required</string>
-    <string name="permission_notification_desc">Dynamo Bridge needs notification access to observe UPI credit alerts from your payment apps.</string>
     <string name="pair_qr_title">Pair with Merchant Dashboard</string>
     <string name="pair_qr_desc">Scan the QR code shown in your merchant dashboard to enroll this device.</string>
     <string name="device_health">Device Health</string>
