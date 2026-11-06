@@ -4,11 +4,11 @@ import android.app.Service
 import android.content.SharedPreferences
 import android.content.Intent
 import android.os.IBinder
-import android.service.notification.NotificationListenerService
+import android.service.notification.NotificationListenerService as AndroidNotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 
-class NotificationListenerService : NotificationListenerService() {
+class NotificationListenerService : AndroidNotificationListenerService() {
     private val eventForwarder: EventForwarder by lazy {
         (applicationContext as BridgeApp).eventForwarder
     }
@@ -28,18 +28,17 @@ class NotificationListenerService : NotificationListenerService() {
         if (sbn == null) return
         val packageName = sbn.packageName ?: return
 
-        // Only observe notifications from payment/banking apps
-        if (!isRelevantPackage(packageName)) return
-
         val notification = sbn.notification ?: return
         val extras = notification.extras ?: return
 
-        val title = extras.getString(android.app.Notification.EXTRA_TITLE)
+        val title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)
         val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString()
             ?: extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString()
 
         // Only process credit notifications
         val combined = "$title $text"
+        LocalDebitEvidence.observe(this, combined, sbn.postTime, packageName)
+        if (!isRelevantPackage(packageName)) return
         val creditMatch = java.util.regex.Pattern.compile(
             "(?i)(credited|received|deposit|payment received|upi/cr)"
         )
