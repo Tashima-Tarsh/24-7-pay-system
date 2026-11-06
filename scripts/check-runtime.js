@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 function sources(dir) {
   return fs.readdirSync(dir,{withFileTypes:true}).flatMap(entry=>{
     const file=path.join(dir,entry.name);
-    if(entry.isDirectory())return ['node_modules','dist','__tests__'].includes(entry.name)?[]:sources(file);
+    if(entry.isDirectory())return ['node_modules','dist','.next','__tests__'].includes(entry.name)?[]:sources(file);
     return entry.name.endsWith('.js')&&!entry.name.endsWith('.test.js')?[file]:[];
   });
 }

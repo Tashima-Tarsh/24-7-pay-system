@@ -1,0 +1,78 @@
+name: Master payment stack
+on:
+  pull_request:
+    paths:
+      - apps/master-payment-api/**
+      - apps/master-merchant-portal/**
+      - packages/master-android-sdk/**
+      - integrations/master-payment/**
+      - docker-compose.master.yml
+      - .env.master.example
+      - .github/workflows/master-payment.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: API build and unit tests
+        working-directory: apps/master-payment-api
+        run: |
+          npm ci --workspaces=false
+          npm run build
+          npm test
+      - name: Start isolated development stack
+        run: |
+          cp .env.master.example .env.master
+          for name in JWT_SECRET TOKEN_SECRET BANK_WEBHOOK_SECRET MASTER_SEED_PASSWORD; do
+            printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" >> .env.master
+          done
+          printf 'RATE_LIMIT_MAX=1500\n' >> .env.master
+          docker compose --env-file .env.master -f docker-compose.master.yml up --build --wait
+      - name: Payment flow and portal smoke checks
+        run: |
+          compose=(docker compose --env-file .env.master -f docker-compose.master.yml)
+          fixture=$("${compose[@]}" exec -T api node dist/seed.js)
+          SMOKE_MERCHANT_API_KEY=$(printf '%s\n' "$fixture" | tail -1 | node -pe 'JSON.parse(require("node:fs").readFileSync(0,"utf8")).apiKey')
+          echo "::add-mask::$SMOKE_MERCHANT_API_KEY"
+          export SMOKE_MERCHANT_API_KEY
+          "${compose[@]}" exec -T -e SMOKE_MERCHANT_API_KEY api node smoke.mjs
+          "${compose[@]}" exec -T -e SMOKE_MERCHANT_API_KEY api node load.mjs
+          curl --fail --silent --show-error --retry 8 --retry-connrefused http://127.0.0.1:3200/login > /dev/null
+          export FIXTURE_PASSWORD=$(sed -n 's/^MASTER_SEED_PASSWORD=//p' .env.master | tail -1)
+          cookie_jar=$(mktemp)
+          trap 'rm -f "$cookie_jar"' EXIT
+          node -e 'process.stdout.write(JSON.stringify({email:"merchant@example.test", password:process.env.FIXTURE_PASSWORD}))' |
+            curl --fail --silent --show-error --cookie-jar "$cookie_jar"               --header 'Content-Type: application/json' --header 'Origin: http://localhost:3200'               --data-binary @- http://localhost:3200/api/backend/auth/login > /dev/null
+          curl --fail --silent --show-error --cookie "$cookie_jar"             http://localhost:3200/api/backend/dashboard/stats > /dev/null
+      - name: Shut down the test stack
+        if: always()
+        run: docker compose --env-file .env.master -f docker-compose.master.yml down --volumes
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/master-android-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build AAR and run SDK tests
+        run: bash ./gradlew :assembleRelease :testDebugUnitTest :sample:assembleDebug --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sanbookpay-master-android-sdk
+          path: packages/master-android-sdk/build/outputs/aar/*.aar
+          if-no-files-found: error
