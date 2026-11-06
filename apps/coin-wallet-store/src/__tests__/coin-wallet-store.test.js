@@ -29,7 +29,7 @@ describe('Coin Top-Up Wallet Demo Store Integration Tests', () => {
     const ppRepo = new PpMerchantPaymentProfileRepository(testDb);
     ppRepo.upsert('00000000-0000-0000-0000-000000000001', {
       payeeVpa: '9082843142@slc',
-      payeeName: 'Sanbook Pay Store',
+      payeeName: '24/7 Pay Store',
       payeeEmail: 'billing@sanbookpay.com',
       mcc: '5411',
       orgid: null,
@@ -357,7 +357,7 @@ describe('Coin Top-Up Wallet Demo Store Integration Tests', () => {
     assert.ok(res.body.includes('ORD-SUCC-123'));
     assert.ok(res.body.includes('499.00'));
     assert.ok(res.body.includes('998877665544'));
-    assert.ok(res.body.includes('VERIFIED BY Dynamo Pay'));
+    assert.ok(res.body.includes('VERIFIED BY 24/7 Pay'));
   });
 
   test('GET /order-suspicious renders held for review security notice', async () => {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sanbook Pay — Sovereign FinTech Merchant Console</title>
+  <title>24/7 Pay | Merchant Console</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -535,7 +535,7 @@
               <button class="code-copy-float" onclick="copyCurrentSnippet()">Copy Snippet</button>
 
               <!-- One-Script -->
-              <pre class="code-content-box" id="code-onescript"><code>&lt;!-- 1. Include the Sanbook Pay One-Script in your page &lt;head&gt; or &lt;body&gt; --&gt;
+              <pre class="code-content-box" id="code-onescript"><code>&lt;!-- 1. Include the 24/7 Pay One-Script in your page &lt;head&gt; or &lt;body&gt; --&gt;
 &lt;script src="http://localhost:7000/youpi.js" data-youpi-key="pk_live_sbk982348a1b9201f8"&gt;&lt;/script&gt;
 
 &lt;!-- 2. Tag any button with [data-youpi-pay] to launch multi-method checkout modal --&gt;
@@ -627,7 +627,7 @@ def create_sanbook_payment():
         <!-- API Endpoint Reference Directory -->
         <div class="sp-card">
           <h3 style="font-size:1.15rem; font-weight:700; margin-bottom:0.5rem;">📚 Authoritative API Endpoint Directory</h3>
-          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Production endpoints exposed by Sanbook Pay Payment Core (Port 6100):</p>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Production endpoints exposed by 24/7 Pay Payment Core (Port 6100):</p>
 
           <div class="data-table-container">
             <table class="data-table">
@@ -1058,14 +1058,8 @@ def create_sanbook_payment():
           </div>
 
           <div style="margin-top:1.5rem; border-top:1px solid var(--border); padding-top:1.25rem;">
-            <h4 style="font-size:1rem; font-weight:700; margin-bottom:0.75rem;">Payment Observers (SMS & Gmail)</h4>
+            <h4 style="font-size:1rem; font-weight:700; margin-bottom:0.75rem;">Payment Observers (Gmail)</h4>
             <div class="sp-grid-2">
-              <div style="background:var(--bg-surface); padding:1rem; border-radius:8px; border:1px solid var(--border);">
-                <div style="font-weight:700; font-size:0.85rem; color:#10b981; margin-bottom:0.25rem;">Android SMS Gateway</div>
-                <p style="font-size:0.78rem; color:var(--text-muted);">Self-hosted Android companion observer listening to real-time bank SMS alerts.</p>
-                <div style="margin-top:0.5rem;"><span class="badge-live">● CONNECTED (Port 6002)</span></div>
-              </div>
-
               <div style="background:var(--bg-surface); padding:1rem; border-radius:8px; border:1px solid var(--border);">
                 <div style="font-weight:700; font-size:0.85rem; color:#38bdf8; margin-bottom:0.25rem;">Gmail Direct API</div>
                 <p style="font-size:0.78rem; color:var(--text-muted);">Google Cloud Pub/Sub and direct Gmail push observation daemon.</p>
@@ -1236,7 +1230,7 @@ def create_sanbook_payment():
             <div class="sp-grid-2">
               <div class="form-group">
                 <label>Merchant Brand Name</label>
-                <input type="text" id="storeBrandName" value="Sanbook Pay Merchant" />
+                <input type="text" id="storeBrandName" value="24/7 Pay Merchant" />
               </div>
               <div class="form-group">
                 <label>Support Email</label>
@@ -1284,22 +1278,11 @@ def create_sanbook_payment():
             </div>
           </div>
 
-          <div class="sp-card">
-            <h3 style="font-size:1.15rem; font-weight:700; margin-bottom:1rem;">Download Companion Companion</h3>
-            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
-              Download the official Android Banking SMS Observer companion app for self-hosted zero-fee UPI collection observation.
-            </p>
-            <a href="/youpi-sms-gateway.apk" class="btn-emerald" style="text-decoration:none; display:inline-block;">
-              📱 Download Android Observer APK
-            </a>
           </div>
         </div>
       </div>
 
-    </main>
-  </div>
-
-  <!-- ========================================================================= -->
+      <!-- ========================================================================= -->
   <!-- MODAL: QUICK PAYMENT LINK CREATOR                                         -->
   <!-- ========================================================================= -->
   <div class="sp-modal-overlay" id="createPaymentLinkModal">

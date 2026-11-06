@@ -1,5 +1,5 @@
 /**
- * Sanbook Pay — Merchant Console Production Frontend Engine
+ * 24/7 Pay — Merchant Console Production Frontend Engine
  * Connects all admin views to authoritative backend APIs.
  */
 
@@ -317,7 +317,7 @@ async function handleSendMoneySubmit(e) {
         beneficiaryId: beneId,
         amount,
         payoutRail: rail,
-        remarks: remarks || 'Sanbook Pay Transfer',
+        remarks: remarks || '24/7 Pay Transfer',
         requireApproval
       })
     });
@@ -990,7 +990,7 @@ function updatePosQrPreview() {
   const amtInput = document.getElementById('posAmountInput');
   const amount = amtInput ? parseFloat(amtInput.value) || 500 : 500;
   const orderId = document.getElementById('posOrderIdInput')?.value?.trim() || currentPosOrderId || generateNewPosOrderId();
-  const note = document.getElementById('posNoteInput')?.value?.trim() || 'Sanbook Pay POS Checkout';
+  const note = document.getElementById('posNoteInput')?.value?.trim() || '24/7 Pay POS Checkout';
   const vpa = getPosActiveVpa();
 
   currentPosAmount = amount;
@@ -1029,7 +1029,7 @@ async function handlePosGenerateSubmit(e) {
   const amount = amtInput ? parseFloat(amtInput.value) : 500;
   const orderId = document.getElementById('posOrderIdInput')?.value?.trim() || generateNewPosOrderId();
   const customerName = document.getElementById('posCustomerName')?.value?.trim() || 'Store Customer';
-  const note = document.getElementById('posNoteInput')?.value?.trim() || 'Sanbook Pay POS';
+  const note = document.getElementById('posNoteInput')?.value?.trim() || '24/7 Pay POS';
 
   logPosTerminal(`[POS] Initiating real payment order ${orderId} for ₹${amount.toFixed(2)}...`);
 
@@ -1246,7 +1246,7 @@ function printPosReceipt() {
         <div class="divider"></div>
         <div class="center" style="font-size:11px;">
           Thank you for your payment!<br>
-          Protected by Sanbook Pay Sovereign Security
+          Protected by 24/7 Pay Sovereign Security
         </div>
         <script>window.onload = function() { window.print(); }</script>
       </body>

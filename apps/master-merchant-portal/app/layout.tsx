@@ -4,8 +4,8 @@ import '@fontsource-variable/inter'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: { default: 'Sanbookpay Merchant', template: '%s · Sanbookpay' },
-  description: 'Manage your Sanbookpay merchant account.',
+  title: { default: '24/7 Pay Merchant', template: '%s · 24/7 Pay' },
+  description: 'Manage your 24/7 Pay merchant account.',
   robots: { index: false, follow: false },
 }
 

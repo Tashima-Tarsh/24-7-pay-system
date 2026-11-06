@@ -45,7 +45,7 @@ export function MerchantShell({ children }: { children: React.ReactNode }) {
   return <div className="min-h-dvh lg:grid lg:grid-cols-[216px_minmax(0,1fr)]">
     <aside className="sticky top-0 z-30 border-b border-outline bg-[#151620] lg:h-dvh lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-5 lg:py-5">
-        <Link href="/dashboard" className="rounded" aria-label="Sanbookpay dashboard"><Mark /></Link>
+        <Link href="/dashboard" className="rounded" aria-label="24/7 Pay dashboard"><Mark /></Link>
         <button className="rounded p-2 text-muted hover:text-ink lg:hidden" onClick={logout} disabled={busy} aria-label="Sign out"><LogOut size={18} /></button>
       </div>
       <nav aria-label="Merchant navigation" className="flex items-center gap-1 overflow-x-auto px-3 pb-2 lg:grid lg:gap-5 lg:px-3 lg:pt-3">

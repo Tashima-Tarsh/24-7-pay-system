@@ -49,14 +49,14 @@ describe('Merchant Admin Integration Tests', () => {
     assert.equal(json.service, 'merchant-admin');
   });
 
-  test('GET / renders premium Dynamo Pay merchant dashboard', async () => {
+  test('GET / renders premium 24/7 Pay merchant dashboard', async () => {
     const res = await get('/');
     assert.equal(res.status, 200);
     assert.ok(res.headers['content-type'].includes('text/html'));
 
     assert.ok(res.text.includes('<!DOCTYPE html>'));
     assert.ok(res.text.includes('name="viewport"'));
-    assert.ok(res.text.includes('Dynamo Pay'));
+    assert.ok(res.text.includes('24/7 Pay'));
     assert.ok(res.text.includes('dp-sidebar'));
     assert.ok(res.text.includes('dp-main'));
     assert.ok(res.text.includes('dp-stats-grid'));
@@ -98,7 +98,7 @@ describe('Merchant Admin Integration Tests', () => {
   });
   test('reserved platform account URL redirects to the platform, not a merchant login',async()=>{const r=await fetch(baseUrl+'/merchant/00000000-0000-0000-0000-000000000001',{redirect:'manual'});assert.equal(r.status,302);assert.equal(r.headers.get('location'),'/platform');});
   test('customer API guide and downloadable specification are publicly available',async()=>{
-    const guide=await get('/developers');assert.equal(guide.status,200);assert.ok(guide.text.includes('Dynamo Pay API'));
+    const guide=await get('/developers');assert.equal(guide.status,200);assert.ok(guide.text.includes('24/7 Pay API'));
     const spec=await get('/developers/openapi.json');assert.equal(spec.status,200);assert.ok(JSON.parse(spec.text).paths['/v1.0/collect/upi']);
     const manual=await get('/dynamo-pay-manual.pdf');assert.equal(manual.status,200);assert.equal(manual.headers['content-type'],'application/pdf');assert.ok(manual.text.startsWith('%PDF-'));
     assert.ok(!guide.text.toLowerCase().includes('sky8'));

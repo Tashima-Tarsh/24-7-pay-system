@@ -37,9 +37,6 @@ async function handleItem(item) {
     case 'email':
       await sendEmail(item.to, item.subject, item.text, item.html);
       break;
-    case 'sms':
-      await sendSms(item.to, item.message);
-      break;
     default:
       dbLog('warn', 'unknown queue item type', { type: item.type });
   }
@@ -109,46 +106,6 @@ async function sendEmail(to, subject, text, html) {
   });
 }
 
-// Universal SMS adapter: works with ANY phone via android-sms-gateway app.
-// Merchant installs android-sms-gateway on their own phone, exposes local HTTP API.
-// No paid gateway, no API key, no per-user code changes.
-// Set SMS_GATEWAY_URL=http://<phone-lan-ip>:9090 in .env
-let smsClient = null;
-
-function getSmsClient() {
-  if (smsClient !== undefined) return smsClient;
-  const smsUrl = process.env.SMS_GATEWAY_URL;
-  if (!smsUrl) {
-    smsClient = null;
-    return null;
-  }
-  smsClient = { baseUrl: smsUrl.replace(/\/$/, '') };
-  return smsClient;
-}
-
-async function sendSms(to, message) {
-  const client = getSmsClient();
-  if (!client) {
-    dbLog('warn', 'sms skipped: SMS_GATEWAY_URL not configured', { to });
-    return;
-  }
-  const payload = JSON.stringify({ phone: to, message });
-  await new Promise((resolve, reject) => {
-    const req = https.request(`${client.baseUrl}/send/sms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-    });
-    req.on('error', reject);
-    req.on('response', (res) => {
-      res.resume();
-      if (res.statusCode >= 200 && res.statusCode < 300) resolve();
-      else reject(new Error(`sms gateway HTTP ${res.statusCode}`));
-    });
-    req.write(payload);
-    req.end();
-  });
-}
-
 function alertMerchant(order, smsEvent) {
   const topic = process.env.NTFY_TOPIC;
   const message = `UPI payment received!\nOrder: ${order.order_id}\nAmount: ₹${order.amount}\nUTR: ${smsEvent.utr}\nSender: ${smsEvent.sender}`;
@@ -163,14 +120,6 @@ function alertMerchant(order, smsEvent) {
       html: `<p>We received ₹${order.amount} (UTR: <b>${smsEvent.utr}</b>) for order <b>${order.order_id}</b>.</p>`,
     });
   }
-
-  if (order.payer_phone) {
-    enqueue({
-      type: 'sms',
-      to: order.payer_phone,
-      message: `UPI Collector: Payment of ₹${order.amount} received for order ${order.order_id}. UTR: ${smsEvent.utr}`,
-    });
-  }
 }
 
-module.exports = { enqueue, alertMerchant, sendNtfy, sendEmail, sendSms, queueDepth: () => QUEUE.length };
+module.exports = { enqueue, alertMerchant, sendNtfy, sendEmail, queueDepth: () => QUEUE.length };

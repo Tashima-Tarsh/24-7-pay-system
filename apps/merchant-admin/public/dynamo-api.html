@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dynamo Pay developer guide</title><style>body{font:16px/1.7 Segoe UI,sans-serif;max-width:900px;margin:32px auto;padding:24px;color:#182c28;background:#f5f6fa}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:24px;border:1px solid #dce4df}a{color:#17664f}</style><h1>Dynamo Pay API - merchant integration</h1><p><a href="/developers/openapi.json" download="dynamo-pay-openapi.json">Download OpenAPI</a> | <a href="/developers/guide.md" download="dynamo-pay-integration.md">Download guide</a></p><pre># Dynamo Pay merchant launch and integration
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>24/7 Pay | Developer Guide</title><style>body{font:16px/1.7 Segoe UI,sans-serif;max-width:900px;margin:32px auto;padding:24px;color:#182c28;background:#f5f6fa}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:24px;border:1px solid #dce4df}a{color:#17664f}</style><h1>24/7 Pay API - merchant integration</h1><p><a href="/developers/openapi.json" download="dynamo-pay-openapi.json">Download OpenAPI</a> | <a href="/developers/guide.md" download="dynamo-pay-integration.md">Download guide</a></p><pre># 24/7 Pay merchant launch and integration
 
 ## One-time setup by Super Admin
 
@@ -33,13 +33,13 @@ Body (amount in INR, at most two decimals):
 {&quot;orderId&quot;:&quot;deposit-1001&quot;,&quot;amount&quot;:&quot;100.00&quot;,&quot;currency&quot;:&quot;INR&quot;,&quot;playerReference&quot;:&quot;player-123&quot;,&quot;returnUrl&quot;:&quot;https://YOUR-GAME-BACKEND/deposit/result&quot;}
 ```
 
-The key determines the merchant. Open the returned checkoutUrl directly. A queued order has no payable QR until activated. Checkout shows the merchant business name, configured brand/logo/accent and Powered by Dynamo Pay; it does not change the actual bank recipient. The return URL must be absolute HTTPS. Browser return/Payment done does not credit a wallet.
+The key determines the merchant. Open the returned checkoutUrl directly. A queued order has no payable QR until activated. Checkout shows the merchant business name, configured brand/logo/accent and Powered by 24/7 Pay; it does not change the actual bank recipient. The return URL must be absolute HTTPS. Browser return/Payment done does not credit a wallet.
 
 GET /v1/payments/{paymentId} with the same bearer key reads status. Retry create with the SAME idempotency key and identical request after a timeout. A changed request returns a conflict. /developers/openapi.json is the downloadable contract. Legacy /v1.0 APIs use separate Client-ID/Client-Secret/Service-Id headers; do not mix contracts.
 
 ## Signed callback and game-wallet credit
 
-Dynamo sends JSON with paymentId, merchantId, orderId, playerReference, amountPaise, INR currency, event/status and actual UTR where supplied. It signs the exact raw bytes with this merchant&#x27;s webhook secret in X-Gateway-Signature: sha256=&lt;hex&gt;; X-Gateway-Delivery-Id stays stable across retries. Verify with constant-time HMAC comparison before parsing/processing. Check expected merchant/order/player, exact integer-paise amount, currency and permitted confirmation source.
+24/7 Pay sends JSON with paymentId, merchantId, orderId, playerReference, amountPaise, INR currency, event/status and actual UTR where supplied. It signs the exact raw bytes with this merchant&#x27;s webhook secret in X-Gateway-Signature: sha256=&lt;hex&gt;; X-Gateway-Delivery-Id stays stable across retries. Verify with constant-time HMAC comparison before parsing/processing. Check expected merchant/order/player, exact integer-paise amount, currency and permitted confirmation source.
 
 In one durable game-database transaction, record the delivery ID and enforce a unique credited payment/order, then credit the mapped player once. Return 2xx only after committing. Both duplicate delivery IDs and a second delivery referring to an already credited payment must be harmless.
 

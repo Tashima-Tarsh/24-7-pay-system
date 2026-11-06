@@ -17,7 +17,7 @@ export function AuthForm({ registration, captchaKey }: { registration: boolean; 
   const [captchaAttempt, setCaptchaAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const heading = registration ? 'Create your account' : 'Sign in to Sanbookpay'
+  const heading = registration ? 'Create your account' : 'Sign in to 24/7 Pay'
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -92,7 +92,7 @@ export function AuthForm({ registration, captchaKey }: { registration: boolean; 
         </>}
       </div>
       {!key && <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted">
-        {registration ? 'Already registered?' : 'New to Sanbookpay?'}
+        {registration ? 'Already registered?' : 'New to 24/7 Pay?'}
         <Link href={registration ? '/login' : '/register'} className={buttonVariants({ variant: 'outline', className: 'min-h-8 px-2 py-1' })}>
           {registration ? 'Sign in' : 'Create account'}
         </Link>

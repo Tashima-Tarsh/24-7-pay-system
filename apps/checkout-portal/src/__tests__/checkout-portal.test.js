@@ -74,7 +74,7 @@ describe('Checkout Portal Integration Tests', () => {
 
       assert.ok(res.text.includes('<!DOCTYPE html>'));
       assert.ok(res.text.includes('name="viewport"'));
-      assert.ok(res.text.includes('Dynamo Pay'));
+      assert.ok(res.text.includes('24/7 Pay'));
       assert.ok(res.text.includes('dp-wrapper'));
       assert.ok(res.text.includes(testPaymentId));
 
@@ -120,12 +120,12 @@ describe('Checkout Portal Integration Tests', () => {
       assert.ok(resLegacy.text.includes('YoupiCheckout'));
     });
 
-    test('GET /checkout/:id includes premium glassmorphism elements, UPI QR, and Dynamo Pay branding', async () => {
+    test('GET /checkout/:id includes premium glassmorphism elements, UPI QR, and 24/7 Pay branding', async () => {
       const res = await get('/checkout/pay_test_uuid_12345');
       assert.equal(res.status, 200);
 
-      // Verify Dynamo Pay branding
-      assert.ok(res.text.includes('Dynamo Pay'));
+      // Verify 24/7 Pay branding
+      assert.ok(res.text.includes('24/7 Pay'));
 
       // Verify the checkout exposes the payment QR and app payment controls.
       assert.ok(res.text.includes('dp-wrapper'));
@@ -138,7 +138,7 @@ describe('Checkout Portal Integration Tests', () => {
       assert.ok(res.text.includes('/icons/phonepe.png'));
       assert.ok(res.text.includes('/icons/paytm.png'));
 
-      // Verify payee VPA present (Dynamo Pay merchant UPI)
+      // Verify payee VPA present (24/7 Pay merchant UPI)
       assert.ok(res.text.includes('9082843142@slc'));
 
       // INVARIANT: No WhatsApp / legacy auth artifacts

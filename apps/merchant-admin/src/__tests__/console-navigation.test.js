@@ -24,7 +24,7 @@ test('every sidebar destination shows one matching content view and API settings
     'v1/admin/console/payments':{payments:[{id:'receipt-4',orderId:'ORDER-REAL',amountPaise:400,status:'SUCCESS',method:'UPI',source:'SESSION',createdAt:new Date().toISOString()}]},'v1/admin/console/refunds':{refunds:[{id:'refund-4',payment_id:'receipt-4',amount_paise:400,status:'PENDING_MANUAL',reason:'Return'}]},'v1/refunds':{refunds:[]},
     'v1/admin/console/splits':{platformFeeBps:500,gstPercent:18,recipients:[]},'v1/admin/console/allocations':{allocations:[]},
     'v1/admin/console/credentials':{merchantId:'merchant-1',clientId:'client-1',clientSecret:'protected-secret',webhookSecret:'protected-webhook'},
-    'v1/admin/merchant-settings':{businessName:'Dynamo merchant'},'v1/admin/upi-accounts':{accounts:[]},
+    'v1/admin/merchant-settings':{businessName:'24/7 Pay merchant'},'v1/admin/upi-accounts':{accounts:[]},
     'v1/settlements':{settlements:[]},'v1/settlements/overview':{},'v1/operations/alerts':{alerts:[]},'v1/admin/observers':{gmail:{status:'STANDBY'},sms:{status:'STANDBY'},android:{devices:[]}}
   };
   const document={getElementById:element,querySelectorAll:q=>q==='.dp-view'?views:q==='[data-page]'?nav:[],addEventListener:(event,fn)=>listeners[event]=fn,body:element('body'),hidden:false};

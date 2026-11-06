@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Customer Account · Dynamo Pay Store</title>
+  <title>24/7 Pay | Customer Account</title>
   <style>
     :root {
       --bg: #090d16;
@@ -154,7 +154,7 @@
 <header>
   <a href="/" class="brand">
     <span class="brand-icon" style="color:#059669;">💳</span>
-    <span>Dynamo Pay Store</span>
+    <span>24/7 Pay Store</span>
   </a>
   <a href="/" class="btn btn-buy" style="padding:0.45rem 1rem; font-size:0.85rem; text-decoration:none;">
     ← Back to Store
@@ -250,7 +250,7 @@
   </div>
 </div>
 
-<!-- Universal Dynamo Pay Integration SDK -->
+<!-- Universal 24/7 Pay Integration SDK -->
 <script src="/youpi.js"></script>
 
 <script>
@@ -312,7 +312,7 @@
             checkoutUrl: data.checkoutUrl,
             order_id: data.orderId,
             amount: price,
-            name: 'Dynamo Pay Store',
+            name: '24/7 Pay Store',
             description: `${packName}`,
             handler: async function(paymentResponse) {
               // Direct instant credit

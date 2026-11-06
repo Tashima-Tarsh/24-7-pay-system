@@ -75,13 +75,13 @@
   }
   async function loadSettings(){
     settings=await api('v1/admin/merchant-settings');
-    $('accountName').textContent=settings.businessName||'Dynamo Pay';$('businessName').value=settings.businessName||'';
+    $('accountName').textContent=settings.businessName||'24/7 Pay';$('businessName').value=settings.businessName||'';
     $('contactEmail').value=settings.contactEmail||'';$('contactPhone').value=settings.contactPhone||'';
   }
   async function credentials(){
     const c=await consoleApi('credentials');
     for(const [id,value] of Object.entries({merchantKey:c.merchantId,clientId:c.clientId,clientSecret:c.clientSecret,webhookSecret:c.webhookSecret,webhookUrl:c.webhookUrl}))$(id).value=value||'';
-    $('integrationCode').textContent=`<script src="${location.origin}/youpi.js" data-youpi-key="${c.publishableKey}"><\/script>\n<button data-youpi-pay data-order-id="ORDER-1001" data-amount="499.00">\n  Pay with Dynamo Pay\n</button>`;
+    $('integrationCode').textContent=`<script src="${location.origin}/youpi.js" data-youpi-key="${c.publishableKey}"><\/script>\n<button data-youpi-pay data-order-id="ORDER-1001" data-amount="499.00">\n  Pay with 24/7 Pay\n</button>`;
   }
   async function refunds(){
     const [local,provider]=await Promise.all([consoleApi('refunds'),api('v1/refunds')]);
@@ -182,7 +182,7 @@
   submit('confirmRefundForm',async()=>{await consoleApi('refunds/'+encodeURIComponent($('confirmRefundId').value)+'/confirm',{bankReference:$('refundBankReference').value});$('confirmRefundDialog').close();toast('Merchant transfer reference recorded.');await refunds();});
   submit('transferForm',async()=>{await consoleApi('allocations/'+encodeURIComponent($('transferPaymentId').value)+'/transfer',{vpa:$('transferRecipient').value,bankReference:$('transferReference').value});$('transferDialog').close();toast('Recipient transfer reference recorded.');await splits();});
   submit('splitForm',async()=>{await consoleApi('splits',{platformFeeBps:Math.round(Number($('platformFee').value)*100),gstPercent:Number($('gstPercent').value),recipients:recipientInputs()});$('splitSaved').textContent='Saved for new verified payments.';toast('Both split settings saved.');});
-  submit('merchantForm',async()=>{await api('v1/admin/merchant-settings',{businessName:$('businessName').value,contactEmail:$('contactEmail').value,contactPhone:$('contactPhone').value,branding:{appName:'Dynamo Pay'},supportEmails:[$('contactEmail').value].filter(Boolean),supportMobiles:[$('contactPhone').value].filter(Boolean)});await loadSettings();toast('Merchant details saved.');});
+  submit('merchantForm',async()=>{await api('v1/admin/merchant-settings',{businessName:$('businessName').value,contactEmail:$('contactEmail').value,contactPhone:$('contactPhone').value,branding:{appName:'24/7 Pay'},supportEmails:[$('contactEmail').value].filter(Boolean),supportMobiles:[$('contactPhone').value].filter(Boolean)});await loadSettings();toast('Merchant details saved.');});
   submit('webhookForm',async()=>{await api('v1/admin/merchant-settings',{webhookUrl:$('webhookUrl').value});toast('Webhook endpoint saved.');await credentials();});
   submit('upiChannelForm',async()=>{await consoleApi('upi-channel',{enabled:$('upiChannelEnabled').checked,minAmountPaise:Math.round(Number($('upiChannelMin').value)*100),maxAmountPaise:Math.round(Number($('upiChannelMax').value)*100),allowedVpas:$('upiChannelVpas').value.split(/[,\n]+/).map(v=>v.trim()).filter(Boolean)});toast('UPI channel settings saved.');});
   submit('upiForm',async()=>{await api('v1/admin/upi-accounts',{upiId:$('upiId').value,payeeName:$('payeeName').value,bankName:$('receivingBankName').value,accountHolderName:$('receivingHolderName').value,accountNumber:$('receivingAccountNumber').value,ifsc:$('receivingIfsc').value});$('upiForm').reset();toast('UPI account added.');await upi();});

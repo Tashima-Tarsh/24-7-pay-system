@@ -3,7 +3,7 @@ import { ArrowUpRight, Command } from 'lucide-react'
 export function Mark() {
   return <div className="flex min-w-fit items-center gap-2.5">
     <span className="grid size-8 place-items-center rounded-md bg-brand text-white"><Command size={16} aria-hidden /></span>
-    <span className="text-[15px] font-semibold tracking-tight">Sanbookpay<span className="ml-0.5 text-indigo-300">.</span></span>
+    <span className="text-[15px] font-semibold tracking-tight">24/7 Pay<span className="ml-0.5 text-indigo-300">.</span></span>
   </div>
 }
 
