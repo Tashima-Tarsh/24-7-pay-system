@@ -16,8 +16,6 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import androidx.work.*
 import com.dynamopay.bridge.workers.ForwardRetryWorker
-import com.sanbookpay.upiintent.UpiIntentEngine
-import com.sanbookpay.upiintent.UpiResponseParser
 
 class MainActivity : AppCompatActivity() {
     private lateinit var app: BridgeApp
@@ -31,27 +29,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvDeviceId: TextView
     private lateinit var tvEventsQueued: TextView
     private lateinit var btnPair: Button
-    private lateinit var btnPermission: Button
     private lateinit var btnSettings: Button
     private lateinit var btnExportLogs: Button
     private lateinit var btnRevoke: Button
-    private lateinit var upiLauncher: UpiIntentEngine
+    private lateinit var upiLauncher: UpipayManager
     private lateinit var upiAppContainer: LinearLayout
-    private lateinit var debitStatus: TextView
-    private val debitEvidence by lazy { LocalDebitEvidence.preferences(this) }
-    private val debitListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        updateDebitStatus()
-    }
     private var activePaymentId: String? = null
     private var activeAppName: String? = null
 
     private val paymentResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val paymentId = activePaymentId
-        val parsed = UpiResponseParser.parseIntentReturn(
-            result.data, paymentId ?: "unknown", paymentId ?: "unknown", null,
-            "ANDROID", activeAppName, "native-return-${paymentId ?: System.currentTimeMillis()}", emptyMap()
-        )
-        val outcome = (parsed as? com.sanbookpay.upiintent.UpiCaptureResult.Returned)?.paymentReturn?.parsedStatus ?: "UNKNOWN"
+        val outcome = upiLauncher.handleResult(result.resultCode, result.data, paymentId, activeAppName)
         Toast.makeText(this, "UPI app returned: $outcome. Waiting for bank confirmation.", Toast.LENGTH_LONG).show()
         if (paymentId != null) {
             apiClient.beginCheckoutVerification(paymentId) { accepted ->
@@ -69,7 +57,7 @@ class MainActivity : AppCompatActivity() {
         eventForwarder = app.eventForwarder
         healthMonitor = app.healthMonitor
         apiClient = ApiClient(this, cryptoHelper, getSecurePrefs())
-        upiLauncher = UpiIntentEngine(this)
+        upiLauncher = UpipayManager(this)
 
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -104,16 +92,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 24)
         }
         layout.addView(tvEventsQueued)
-
-        btnPermission = Button(this).apply {
-            text = "Grant Notification Access"
-            setOnClickListener {
-                startActivity(Intent(
-                    android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
-                ))
-            }
-        }
-        layout.addView(btnPermission)
 
         btnPair = Button(this).apply {
             text = "Scan Pairing QR"
@@ -157,11 +135,8 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(upiAppContainer)
 
-        debitStatus = TextView(this)
-        layout.addView(debitStatus)
-
         val privacyNotice = TextView(this).apply {
-            text = "Dynamo Bridge observes authorized payment alerts for merchant credits and recent payer debits. " +
+            text = "Dynamo Bridge opens your chosen UPI app for checkout. " +
                 "It never collects UPI PINs, passwords, or OTPs."
             textSize = 12f
             setPadding(0, 24, 0, 0)
@@ -202,19 +177,19 @@ class MainActivity : AppCompatActivity() {
             return
         }
         activePaymentId = paymentId
-        updateDebitStatus()
-        showCompatibleUpiApps(paymentId, upiUri!!)
+        showCompatibleUpiApps(upiUri!!)
     }
 
     private fun isCanonicalUpiUri(uri: Uri?): Boolean {
         if (uri?.scheme != "upi" || uri.host != "pay") return false
-        return LocalDebitEvidence.toPaise(uri.getQueryParameter("am")) != null &&
+        val amount = uri.getQueryParameter("am")?.toBigDecimalOrNull() ?: return false
+        return amount > java.math.BigDecimal.ZERO &&
             !uri.getQueryParameter("pa").isNullOrBlank() &&
             !uri.getQueryParameter("pn").isNullOrBlank() &&
             !uri.getQueryParameter("tn").isNullOrBlank()
     }
 
-    private fun showCompatibleUpiApps(paymentId: String, upiUri: Uri) {
+    private fun showCompatibleUpiApps(upiUri: Uri) {
         clearUpiApps()
         val heading = TextView(this).apply {
             text = "Choose your installed UPI app"
@@ -234,14 +209,8 @@ class MainActivity : AppCompatActivity() {
                 setOnClickListener {
                     activeAppName = app.appName ?: app.packageName
                     try {
-                        val launch = upiLauncher.createLaunchIntentForApp(upiUri, app.packageName)
-                        val amountPaise = LocalDebitEvidence.toPaise(upiUri.getQueryParameter("am"))
-                            ?: return@setOnClickListener
-                        LocalDebitEvidence.start(this@MainActivity, paymentId, amountPaise, app.packageName)
-                        paymentResult.launch(launch)
-                        clearUpiApps()
+                        upiLauncher.initiatePayment(paymentResult, upiUri, app.packageName)
                     } catch (_: Exception) {
-                        LocalDebitEvidence.clearPending(this@MainActivity, paymentId)
                         Toast.makeText(this@MainActivity, "Could not open ${app.appName ?: "this UPI app"}.", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -256,23 +225,6 @@ class MainActivity : AppCompatActivity() {
         upiAppContainer.visibility = android.view.View.GONE
     }
 
-    override fun onStart() {
-        super.onStart()
-        debitEvidence.registerOnSharedPreferenceChangeListener(debitListener)
-        updateDebitStatus()
-    }
-
-    override fun onStop() {
-        debitEvidence.unregisterOnSharedPreferenceChangeListener(debitListener)
-        super.onStop()
-    }
-
-    private fun updateDebitStatus() {
-        val source = LocalDebitEvidence.matchedSource(this, activePaymentId)
-        debitStatus.text = source?.let { "Matching debit observed via $it. Waiting for bank confirmation." }
-        debitStatus.visibility = if (source == null) android.view.View.GONE else android.view.View.VISIBLE
-    }
-
     override fun onResume() {
         super.onResume()
         updateStatus()
@@ -283,11 +235,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatus() {
-        val hasPermission = androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this)
-            .contains(packageName)
-        btnPermission.isEnabled = !hasPermission
-        btnPermission.text = if (hasPermission) "✓ Notification Access Granted" else "Grant Notification Access"
-
         if (apiClient.isPaired()) {
             val deviceId = apiClient.getDeviceId() ?: "unknown"
             tvStatus.text = "Status: CONNECTED"

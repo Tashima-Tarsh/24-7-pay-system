@@ -162,7 +162,7 @@ class ApiClient(
         val bodyJson = JSONObject().apply {
             put("deviceId", deviceId)
             put("timestamp", timestamp)
-            put("listenerStatus", "ACTIVE")
+            put("listenerStatus", "DISABLED")
             put("appVersion", "1.0.0")
         }
 
