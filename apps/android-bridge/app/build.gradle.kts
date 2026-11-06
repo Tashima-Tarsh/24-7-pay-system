@@ -7,7 +7,7 @@ android {
     namespace = "com.sanbookpay.sdk"
     compileSdk = 34
     defaultConfig { minSdk = 24; targetSdk = 34 }
-    buildTypes { release { isMinifyEnabled = true; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") } }
+    buildTypes { release { isMinifyEnabled = false; consumerProguardFiles("consumer-rules.pro") } }
 }
 
 dependencies {

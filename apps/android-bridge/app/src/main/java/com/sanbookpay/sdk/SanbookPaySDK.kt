@@ -18,9 +18,19 @@ object SanbookPaySDK {
     fun init(ctx: Context) {
         val cn = android.content.ComponentName(ctx, PaymentConfirmationListener::class.java)
         val flat = Settings.Secure.getString(ctx.contentResolver, "enabled_notification_listeners")
-        if (flat?.contains(cn.flattenToString()) != true) {
-            Toast.makeText(ctx, "Enable Notification Access for payments", Toast.LENGTH_LONG).show()
-            ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+
+        // Check if our specific listener is enabled
+        val isEnabled = flat?.contains(cn.flattenToString()) == true
+
+        if (!isEnabled) {
+            // Show a clear instruction
+            android.widget.Toast.makeText(ctx, "Please enable 'SanbookPay SDK' in Notification Access", android.widget.Toast.LENGTH_LONG).show()
+
+            // Open the exact settings page for the user
+            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(intent)
         }
     }
 
