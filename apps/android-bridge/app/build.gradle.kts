@@ -1,45 +1,18 @@
 plugins {
-    id("com.android.application")
+    id("com.android.library")
     id("org.jetbrains.kotlin.android")
 }
 
 android {
-    namespace = "com.dynamopay.bridge"
+    namespace = "com.sanbookpay.sdk"
     compileSdk = 34
-
-    defaultConfig {
-        applicationId = "com.dynamopay.bridge"
-        minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    defaultConfig { minSdk = 24; targetSdk = 34 }
+    buildTypes { release { isMinifyEnabled = false; consumerProguardFiles("consumer-rules.pro") } }
 }
 
 dependencies {
-    implementation(project(":upi-intent-sdk"))
     implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.activity:activity-ktx:1.8.2")
+    implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.json:json:20231013")
 }
