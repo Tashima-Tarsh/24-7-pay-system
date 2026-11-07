@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test as baseTest, expect } from '@playwright/test';
 import { PlaywrightAiFixture } from '@midscene/web/playwright';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -6,11 +6,11 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.test' });
 
 const BASE_URL = process.env.BASE_URL || 'https://dynamo-pay-d545.onrender.com';
-const MERCHANT_ID = process.env.TEST_MERCHANT_ID || '00000000-0000-000000000001';
+const MERCHANT_ID = process.env.TEST_MERCHANT_ID || '00000000-0000-0000-000000000001';
 const MERCHANT_KEY = process.env.TEST_MERCHANT_KEY || 'whsec_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6';
 
 // Extend Playwright test with Midscene AI fixtures
-const midsceneTest = test.extend(PlaywrightAiFixture());
+const test = baseTest.extend(PlaywrightAiFixture());
 
 const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 const generateUtr = () => Date.now().toString().slice(-12);
