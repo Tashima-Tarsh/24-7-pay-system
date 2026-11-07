@@ -958,8 +958,8 @@
         const duration = 0.5 + Math.random() * 1.0;
         el.style.left = Math.random() * 100 + '%';
         el.style.top = '-10px';
-        el.style.setProperty('--h', h);
-        el.style.setProperty('--duration', duration + 's');
+        el.style['--h'] = h;
+        el.style['--duration'] = duration + 's';
         el.style.animationDelay = (Math.random() * 0.3) + 's';
         container.appendChild(el);
       }
