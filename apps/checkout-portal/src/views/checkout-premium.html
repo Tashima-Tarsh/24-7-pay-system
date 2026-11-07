@@ -1244,7 +1244,7 @@
     let wsReconnectTimer = null;
 
     function connectWs() {
-      const wsUrl = `ws://${location.host}/ws/intent?paymentId=${encodeURIComponent(paymentId)}`;
+      const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/intent?paymentId=${encodeURIComponent(paymentId)}`;
       try {
         wsSocket = new WebSocket(wsUrl);
         wsSocket.onopen = () => {
