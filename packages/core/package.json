@@ -4,6 +4,10 @@
   "description": "Payment core state machine, observation normalizer, and attribution engine for YOUPI PG",
   "type": "module",
   "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./crypto/order-token": "./src/crypto/order-token.js"
+  },
   "scripts": {
     "test": "node --test src/__tests__/**/*.test.js"
   },
