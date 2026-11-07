@@ -1,3 +1,4 @@
+import rateLimit from 'express-rate-limit';
 import {enforcePaymentControls} from '../payment-controls.js';
 import { HttpServer } from '../server.js';
 import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, maskPhone, maskEmail, generateCustomerId, isValidVpa } from '@youpi/common';
@@ -5,6 +6,35 @@ import { isTerminalStatus, toPublicOutcome, PaiseOffsetAllocator } from '@youpi/
 import { isAdminRequest } from '../auth-guard.js';
 
 const DEFAULT_MERCHANT_ID = '00000000-0000-0000-0000-000000000001';
+
+const clientIp = (req) => (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1').toString().replace(/^::ffff:/, '') || '127.0.0.1';
+
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 payment creations per window
+  message: { error: 'Too many payment sessions created, please try again later.' },
+  keyGenerator: (req) => clientIp(req)
+});
+
+async function enforcePaymentLimiter(req, res) {
+  let nextCalled = false;
+  const adaptedReq = { ip: clientIp(req) };
+  const adaptedRes = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    setHeader(name, value) { res.setHeader(name, value); return this; },
+    append(name, value) { res.setHeader(name, value); return this; },
+    get headersSent() { return res.headersSent; },
+    get writableEnded() { return res.writableEnded; },
+    send(body) {
+      const str = typeof body === 'object' ? JSON.stringify(body) : String(body);
+      res.writeHead(this.statusCode || 200, { 'Content-Type': typeof body === 'object' ? 'application/json' : 'text/plain' });
+      res.end(str);
+    }
+  };
+  await paymentLimiter(adaptedReq, adaptedRes, () => { nextCalled = true; });
+  return nextCalled;
+}
 
 function testReceivingVpa(merchantId) {
   const vpa = String(process.env.DYNAMO_TEST_RECEIVING_VPA || '').trim().toLowerCase();
@@ -59,6 +89,7 @@ export function registerPaymentRoutes(server, ctx) {
 
   // POST /api/v1/payments
   server.post('/api/v1/payments', async (req, res) => {
+    if (!(await enforcePaymentLimiter(req, res))) return;
     try {
       const body = await HttpServer.parseBody(req);
       if (body.usePaiseOffset) return HttpServer.json(res,503,{

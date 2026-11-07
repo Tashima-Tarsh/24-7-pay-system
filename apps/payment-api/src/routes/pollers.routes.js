@@ -304,7 +304,8 @@ export function registerPollerRoutes(server, ctx) {
       const activeAccount = ctx.accountRepo
         ? ctx.accountRepo.findActiveForMerchant(device.merchant_id)
         : ctx.db.queryOne('SELECT id FROM payment_receiving_accounts WHERE merchant_id = ? AND is_active = 1 LIMIT 1', [device.merchant_id]);
-      receivingAccountId = activeAccount?.id || '00000000-0000-0000-0000-000000000002';
+      if (!activeAccount) return HttpServer.json(res, 404, { error: 'No active receiving account for merchant' });
+      receivingAccountId = activeAccount.id;
     }
 
     const boundAccount=ctx.db.queryOne('SELECT merchant_id FROM payment_receiving_accounts WHERE id=?',[receivingAccountId]);
