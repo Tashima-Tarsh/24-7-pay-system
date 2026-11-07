@@ -28,5 +28,12 @@ export { GmailService } from './gmail-service.js';
 export { MultiSourceMatchingEngine } from './multi-source-matching-engine.js';
 export { DeviceBindingService } from './device-binding.js';
 export { buildUpiUri, buildPackageIntent, buildPackageIntents, UPI_PACKAGES } from './upi-intent-builder.js';
+export {
+  createSignedOrderToken,
+  verifySignedOrderToken,
+  generateOrderNonce,
+  SECRET_KEY,
+  NONCE_EXPIRY_MS
+} from './crypto/order-token.js';
 
 
