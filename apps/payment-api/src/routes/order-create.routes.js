@@ -7,6 +7,10 @@ import {
   createSignedOrderToken,
   generateOrderNonce
 } from '@youpi/core/crypto/order-token';
+import {
+  randomizeAmount,
+  displayAmount
+} from '@youpi/core/amount/randomizer';
 
 export function registerOrderCreateRoutes(server, ctx) {
   const { sessionRepo, merchantRepo, db, webhookEngine } = ctx;
@@ -16,6 +20,11 @@ export function registerOrderCreateRoutes(server, ctx) {
   // The token is returned to the merchant checkout page and must be presented
   // by the browser when the UPI app returns, enabling the /verify-callback
   // endpoint to authenticate the return.
+  //
+  // Amount Randomization (Phase 4 Deliverable 2):
+  // The user-facing amount (display_amount_paise) is what the merchant requests.
+  // The actual UPI URI uses actual_amount_paise (base + 1-99 paise randomization)
+  // to break round-figure detection by banks.
   server.post('/api/v1/orders', async (req, res) => {
     try {
       const body = await HttpServer.parseBody(req);
@@ -54,16 +63,23 @@ export function registerOrderCreateRoutes(server, ctx) {
       const nonce = generateOrderNonce();
       const now = Date.now();
 
-      // Create order in database
+      // Amount Randomization: store display amount, use randomized actual amount
+      const actualAmountPaise = randomizeAmount(amount);
+      const displayAmountPaise = amount;
+
+      // Create order in database with both display and actual amounts
       const orderId = `ord_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
       try {
         db.execute(
           `INSERT INTO payment_orders (
-            id, merchant_id, amount_paise, payee_vpa, status,
-            nonce, fingerprint_hash, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, 'INITIATED', ?, ?, ?, ?)`,
-          [order_id, merchant_id, amount, payee_vpa, nonce, fpHash, now.toString(), now.toString()]
+            id, merchant_id, amount_paise, display_amount_paise, actual_amount_paise,
+            payee_vpa, status, nonce, fingerprint_hash, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, 'INITIATED', ?, ?, ?, ?)`,
+          [
+            order_id, merchant_id, actualAmountPaise, displayAmountPaise,
+            actualAmountPaise, payee_vpa, nonce, fpHash, now.toString(), now.toString()
+          ]
         );
       } catch (dbErr) {
         console.error('[order-create] DB insert failed:', dbErr.message);
@@ -73,10 +89,10 @@ export function registerOrderCreateRoutes(server, ctx) {
         });
       }
 
-      // Create signed token
+      // Create signed token using display amount (what user sees)
       const token = createSignedOrderToken({
         order_id: order_id,
-        amount_paise: amount,
+        amount_paise: displayAmountPaise,
         payee_vpa: payee_vpa,
         nonce: nonce,
         created_at: now,
@@ -88,9 +104,12 @@ export function registerOrderCreateRoutes(server, ctx) {
       return HttpServer.json(res, 201, {
         order_id: order_id,
         token: token,
-        upi_uri: `upi://pay?pa=${encodeURIComponent(payee_vpa)}&pn=Merchant&am=${(amount / 100).toFixed(2)}&tn=Order${order_id}&cu=INR`,
+        upi_uri: `upi://pay?pa=${encodeURIComponent(payee_vpa)}&pn=Merchant&am=${(actualAmountPaise / 100).toFixed(2)}&tn=Order${order_id}&cu=INR`,
         expires_at: expiresAt,
-        expires_in_ms: 5 * 60 * 1000
+        expires_in_ms: 5 * 60 * 1000,
+        display_amount_paise: displayAmountPaise,
+        actual_amount_paise: actualAmountPaise,
+        display_amount: displayAmount(actualAmountPaise)
       });
     } catch (err) {
       console.error('[order-create] error:', err.message);

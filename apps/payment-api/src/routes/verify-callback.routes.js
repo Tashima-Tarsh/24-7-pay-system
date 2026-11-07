@@ -101,6 +101,27 @@ export function registerVerifyCallbackRoutes(server, ctx) {
         });
       }
 
+      // ---- CHECK 4.5: Verify amount matches actual_amount_paise ----
+      const orderRow = db.queryOne(
+        `SELECT actual_amount_paise FROM payment_orders WHERE id = ?`,
+        [order_id]
+      );
+      if (!orderRow) {
+        return HttpServer.json(res, 404, {
+          verdict: 'REJECTED',
+          reason: 'ORDER_NOT_FOUND',
+          code: 'ORDER_NOT_FOUND'
+        });
+      }
+      const expectedAmount = Number(orderRow.actual_amount_paise) / 100;
+      if (Number(amount) !== expectedAmount) {
+        return HttpServer.json(res, 409, {
+          verdict: 'REJECTED',
+          reason: 'AMOUNT_MISMATCH',
+          code: 'AMOUNT_MISMATCH'
+        });
+      }
+
       // ---- CHECK 5: Verify time delta (8-300 seconds) ----
       const timeInAppMs = returnedAt - appOpenedAt;
       const timeInAppSec = timeInAppMs / 1000;

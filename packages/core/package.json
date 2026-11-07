@@ -6,7 +6,10 @@
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./crypto/order-token": "./src/crypto/order-token.js"
+    "./crypto/order-token": "./src/crypto/order-token.js",
+    "./amount/randomizer": "./src/amount/randomizer.js",
+    "./sender/tracker": "./src/sender/tracker.js",
+    "./audit/logger": "./src/audit/logger.js"
   },
   "scripts": {
     "test": "node --test src/__tests__/**/*.test.js"

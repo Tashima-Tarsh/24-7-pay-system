@@ -35,5 +35,14 @@ export {
   SECRET_KEY,
   NONCE_EXPIRY_MS
 } from './crypto/order-token.js';
+export { VPARoutingEngine } from './vpa/routing-engine.js';
+export { VPAHealthScorer } from './vpa/health-scorer.js';
+export {
+  randomizeAmount,
+  displayAmount,
+  randomizeAndGetDisplay
+} from './amount/randomizer.js';
+export { SenderTracker } from './sender/tracker.js';
+export { AuditLogger } from './audit/logger.js';
 
 

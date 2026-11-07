@@ -601,6 +601,50 @@ export function runMigrations(targetDb) {
   // Create order token / nonce / UTR registry tables
   try { createOrderTables(db); } catch {}
 
+  // Create VPA pool and health events tables
+  try { createVpaPoolTables(db); } catch {}
+
+  // Phase 4 Deliverable 2: Amount Randomization columns
+  try { db.exec("ALTER TABLE payment_orders ADD COLUMN display_amount_paise BIGINT;"); } catch {}
+  try { db.exec("ALTER TABLE payment_orders ADD COLUMN actual_amount_paise BIGINT;"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_display_amount ON payment_orders (display_amount_paise);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_actual_amount ON payment_orders (actual_amount_paise);"); } catch {}
+
+  // Phase 4 Deliverable 3: Sender diversity tracking column
+  try { db.exec("ALTER TABLE payment_orders ADD COLUMN sender_vpa TEXT;"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_sender_vpa ON payment_orders (sender_vpa);"); } catch {}
+
+  // Phase 4 Deliverable 4: pp_audit table (immutable audit log)
+  // Add columns to existing pp_audit table if they don't exist
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN actor_type VARCHAR(20);"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN actor_id BIGINT;"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN action VARCHAR(50);"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN resource_type VARCHAR(30);"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN resource_id BIGINT;"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN ip_address TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN user_agent TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN device_fingerprint VARCHAR(64);"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN request_payload TEXT DEFAULT '{}';"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN response_payload TEXT DEFAULT '{}';"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN outcome VARCHAR(20);"); } catch {}
+  try { db.exec("ALTER TABLE pp_audit ADD COLUMN rejection_reason VARCHAR(100);"); } catch {}
+
+  // Append-only trigger: prevent DELETE and UPDATE on pp_audit
+  try { db.exec(`
+    CREATE TRIGGER IF NOT EXISTS pp_audit_no_delete
+    BEFORE DELETE ON pp_audit
+    BEGIN
+      SELECT RAISE(ABORT, 'pp_audit is append-only');
+    END;
+  `); } catch {}
+  try { db.exec(`
+    CREATE TRIGGER IF NOT EXISTS pp_audit_no_update
+    BEFORE UPDATE ON pp_audit
+    BEGIN
+      SELECT RAISE(ABORT, 'pp_audit is append-only');
+    END;
+  `); } catch {}
+
   return {
     db,
     defaultMerchant
@@ -660,6 +704,54 @@ export function createOrderTables(db) {
   try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_utr_registry_utr ON utr_registry (utr);"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_utr_registry_order ON utr_registry (payment_order_id);"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_utr_registry_session ON utr_registry (payment_session_id);"); } catch {}
+}
+
+/**
+ * Creates VPA pool and health events tables for the VPA pooling
+ * with health scoring feature (Phase 4 Bulletproof Operations).
+ * Called during migration to ensure tables exist for VPA routing
+ * and health scoring.
+ */
+export function createVpaPoolTables(db) {
+  // vpa_pool — per-merchant pool of receiving VPAs with health scoring
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS vpa_pool (
+      id TEXT PRIMARY KEY,
+      merchant_id TEXT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+      vpa VARCHAR(255) NOT NULL,
+      bank_name VARCHAR(100),
+      account_type VARCHAR(20) NOT NULL DEFAULT 'PERSONAL' CHECK (account_type IN ('PERSONAL', 'CURRENT', 'SALARY')),
+      health_score INTEGER NOT NULL DEFAULT 100 CHECK (health_score >= 0 AND health_score <= 100),
+      status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'WARMING', 'COOLING', 'FROZEN', 'RETIRED')),
+      daily_tx_count INTEGER NOT NULL DEFAULT 0 CHECK (daily_tx_count >= 0),
+      daily_inflow_paise BIGINT NOT NULL DEFAULT 0 CHECK (daily_inflow_paise >= 0),
+      unique_senders_24h INTEGER NOT NULL DEFAULT 0 CHECK (unique_senders_24h >= 0),
+      last_transaction_at TEXT,
+      frozen_at TEXT,
+      frozen_reason VARCHAR(255),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      CONSTRAINT uq_merchant_vpa_pool UNIQUE(merchant_id, LOWER(vpa))
+    );
+  `); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_vpa_pool_merchant_status ON vpa_pool (merchant_id, status);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_vpa_pool_routing ON vpa_pool (merchant_id, status, health_score DESC);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_vpa_pool_health ON vpa_pool (health_score) WHERE status IN ('ACTIVE', 'WARMING');"); } catch {}
+
+  // vpa_health_events — audit trail of all health score changes
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS vpa_health_events (
+      id TEXT PRIMARY KEY,
+      vpa_pool_id TEXT NOT NULL REFERENCES vpa_pool(id) ON DELETE CASCADE,
+      event_type VARCHAR(30) NOT NULL CHECK (event_type IN ('VELOCITY_SPIKE', 'SENDER_CONCENTRATION', 'ROUND_FIGURE', 'FREEZE', 'THAW', 'SUCCESSFUL_TX', 'DAILY_RESET', 'MANUAL_THAW')),
+      severity VARCHAR(10) NOT NULL CHECK (severity IN ('INFO', 'WARN', 'CRITICAL')),
+      metadata TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `); } catch {}
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_vpa_health_events_vpa ON vpa_health_events (vpa_pool_id, created_at);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_vpa_health_events_type ON vpa_health_events (event_type);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_vpa_health_events_severity ON vpa_health_events (severity);"); } catch {}
 }
 
 /**
