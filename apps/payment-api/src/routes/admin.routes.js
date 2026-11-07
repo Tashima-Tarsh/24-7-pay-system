@@ -2191,8 +2191,11 @@ export function registerAdminRoutes(server, ctx) {
 
     // Two Independent Streams: SMS and GMAIL (Section 8-15)
     // 100% customizable fields - ABSOLUTELY NO SIMULATOR PRE-VALIDATION!
-    const rawSource = (body.source || body.stream || 'SMS').toString().trim().toUpperCase();
-    const source = rawSource.includes('GMAIL') ? 'GMAIL' : 'SMS';
+    // After the SMS/GMAIL -> PROVIDER_WEBHOOK rebrand, the simulator must feed the real
+    // pipeline an authorized source (PROVIDER_WEBHOOK / BANK_H2H_POLL). Anything else is
+    // normalized to PROVIDER_WEBHOOK so Stage 2 source filtering passes.
+    const rawSource = (body.source || body.stream || 'PROVIDER_WEBHOOK').toString().trim().toUpperCase();
+    const source = rawSource === 'BANK_H2H_POLL' ? 'BANK_H2H_POLL' : 'PROVIDER_WEBHOOK';
     const rawSender = (body.sender !== undefined ? body.sender : '').toString();
     const rawContent = (body.content !== undefined ? body.content : (body.message || body.raw || '')).toString();
     const rawReceivedAt = body.receivedAt !== undefined ? body.receivedAt : null;

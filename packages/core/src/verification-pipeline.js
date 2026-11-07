@@ -722,8 +722,9 @@ export class PaymentVerificationPipeline {
     );
 
     // 5. The observation is not a legitimate bank-originated transaction observation:
-    // PROVIDER_WEBHOOK and BANK_H2H_POLL are by definition legitimate authoritative sources.
-    const isNotLegitimateBank = false;
+    // Content matching a known fraud/injection pattern is never legitimate, even when the
+    // source is PROVIDER_WEBHOOK or BANK_H2H_POLL (e.g. a forged webhook or test injection).
+    const isNotLegitimateBank = FRAUD_PATTERNS.some((pattern) => pattern.test(rawText));
 
     // 6. The observation is being used to falsely satisfy payment verification for that customer's session:
     const targetsCustomerSession = Boolean(session && (

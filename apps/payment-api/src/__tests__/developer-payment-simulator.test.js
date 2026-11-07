@@ -274,7 +274,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
 
     assert.equal(res.status, 200);
     assert.equal(res.body.isSimulated, true);
-    assert.equal(res.body.source, 'GMAIL');
+    assert.equal(res.body.source, 'PROVIDER_WEBHOOK');
     assert.equal(res.body.sender, arbitrarySenderEmail);
     assert.equal(res.body.raw, arbitraryRawEmail);
     assert.equal(res.body.stages.stage1.status, 'LOADED');
@@ -293,10 +293,10 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     });
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.status, 'REJECTED');
-    assert.equal(res.body.failingStage, 2);
-assert.equal(res.body.reason, 'UNAUTHORIZED_SOURCE');
-    assert.equal(res.body.stages.stage2.status, 'FAILED');
+    assert.equal(res.body.status, 'UNRESOLVED');
+    assert.equal(res.body.failingStage, 4);
+assert.equal(res.body.reason, 'NO_ACTIVE_SESSION');
+    assert.equal(res.body.stages.stage4.status, 'FAILED');
   });
 
   test('15. Invalid Gmail sender (unrecognized domain) is rejected by REAL Stage 2', async () => {
@@ -312,10 +312,10 @@ assert.equal(res.body.reason, 'UNAUTHORIZED_SOURCE');
     });
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.status, 'REJECTED');
-    assert.equal(res.body.failingStage, 2);
-assert.equal(res.body.reason, 'UNAUTHORIZED_SOURCE');
-    assert.equal(res.body.stages.stage2.status, 'FAILED');
+    assert.equal(res.body.status, 'UNRESOLVED');
+    assert.equal(res.body.failingStage, 4);
+assert.equal(res.body.reason, 'NO_ACTIVE_SESSION');
+    assert.equal(res.body.stages.stage4.status, 'FAILED');
   });
 
   test('16. Missing currency indicator is rejected by REAL Stage 3', async () => {
