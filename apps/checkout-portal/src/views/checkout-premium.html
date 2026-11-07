@@ -592,7 +592,7 @@
     /* Hidden utility */
     [hidden] { display: none !important; }
 
-    .dp-fade-enter { opacity: 0; transform: translateY(10px); transition: all 0.3s ease; }
+    .dp-fade-enter { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
     .dp-fade-enter.active { opacity: 1; transform: translateY(0); }
   </style>
 </head>
@@ -630,7 +630,7 @@
     <!-- BODY -->
     <main class="dp-body">
 
-      <div id="payView" hidden>
+      <div id="payView">
       <!-- AMOUNT CARD -->
       <div class="dp-amount-card" id="dpAmountCard">
         <div class="dp-amount-label">Payable</div>
@@ -639,7 +639,7 @@
       </div>
 
       <!-- PAYEE BLOCK (payer-visible payee details, rendered from session state) -->
-      <section class="dp-payee-block" id="dpPayeeBlock" hidden>
+      <section class="dp-payee-block" id="dpPayeeBlock">
         <div class="dp-payee-name" id="dpPayeeName">Payee</div>
         <div class="dp-payee-vpa-row">
           <span class="dp-payee-vpa" id="dpPayeeVpa"></span>
@@ -687,7 +687,7 @@
       </div>
 
       <!-- INTENT STATUS STRIP (hidden by default) -->
-      <div class="dp-intent-strip" id="dpIntentStrip" hidden>
+      <div class="dp-intent-strip" id="dpIntentStrip">
         <span class="dp-pulse-dot"></span>
         <span id="dpIntentStatusLabel">UPI app opened</span>
         <span id="dpIntentStatusSub" style="opacity:0.8;">Waiting for payment confirmation from your UPI app and bank observers.</span>
@@ -706,7 +706,7 @@
           <span style="font-size:11px; color:var(--dp-text-muted);">Open Google Pay, PhonePe, Paytm, BHIM or any UPI app and scan the QR above.</span>
         </div>
 
-        <div class="dp-app-grid" id="dpAppGrid" hidden>
+        <div class="dp-app-grid" id="dpAppGrid">
           <a class="dp-app-tile" id="gpay" data-app="gpay" data-pkg="com.google.android.apps.nbu.paisa.user">
             <img class="dp-app-tile-icon" src="/icons/gpay.png" alt="GPay" />
             <span class="dp-app-tile-label">Google Pay</span>
@@ -730,7 +730,7 @@
         </div>
       </section>
 
-      <div class="dp-generic-upi" id="dpGenericUpiContainer" hidden>
+      <div class="dp-generic-upi" id="dpGenericUpiContainer">
         <a class="dp-btn-mini" id="dpBtnGenericUpi">
           Pay with any UPI app
         </a>
