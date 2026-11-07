@@ -44,5 +44,16 @@ export {
 } from './amount/randomizer.js';
 export { SenderTracker } from './sender/tracker.js';
 export { AuditLogger } from './audit/logger.js';
+export { AutoQuarantineEngine } from './quarantine/engine.js';
+export { MerchantTierEnforcer } from './tiers/merchant-tier.js';
+export { GeoTimeRestrictionChecker } from './restrictions/geo-time.js';
+export {
+  encryptField,
+  decryptField,
+  encryptRecordFields,
+  decryptRecordFields,
+  isDataResidencyEnforced
+} from './encryption.js';
+export { DisputeCaseManager } from './dispute-case-manager.js';
 
 

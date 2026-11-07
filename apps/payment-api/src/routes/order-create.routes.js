@@ -11,6 +11,7 @@ import {
   randomizeAmount,
   displayAmount
 } from '@youpi/core/amount/randomizer';
+import { MerchantTierEnforcer } from '@youpi/core/tiers/merchant-tier';
 
 export function registerOrderCreateRoutes(server, ctx) {
   const { sessionRepo, merchantRepo, db, webhookEngine } = ctx;
@@ -21,14 +22,14 @@ export function registerOrderCreateRoutes(server, ctx) {
   // by the browser when the UPI app returns, enabling the /verify-callback
   // endpoint to authenticate the return.
   //
-  // Amount Randomization (Phase 4 Deliverable 2):
-  // The user-facing amount (display_amount_paise) is what the merchant requests.
-  // The actual UPI URI uses actual_amount_paise (base + 1-99 paise randomization)
-  // to break round-figure detection by banks.
+  // Phase 4 Deliverables:
+  //   - Amount Randomization: actual_amount_paise = display_amount_paise + 1-99 paise
+  //   - Merchant Tiering: tier limits enforced at order creation
+  //   - Sender Diversity: sender_vpa stored for concentration tracking
   server.post('/api/v1/orders', async (req, res) => {
     try {
       const body = await HttpServer.parseBody(req);
-      const { merchant_id, amount_paise, payee_vpa, fingerprint_hash } = body;
+      const { merchant_id, amount_paise, payee_vpa, fingerprint_hash, sender_vpa, device_fingerprint } = body;
 
       // Validate required fields
       if (!merchant_id || !amount_paise || !payee_vpa) {
@@ -56,6 +57,23 @@ export function registerOrderCreateRoutes(server, ctx) {
         });
       }
 
+      // Deliverable 7: Enforce merchant tier limits
+      const tierEnforcer = new MerchantTierEnforcer({ db });
+      try {
+        tierEnforcer.enforceTierLimits(merchant_id, amount);
+      } catch (tierErr) {
+        return HttpServer.json(res, 403, {
+          error: tierErr.message,
+          code: tierErr.code || 'TIER_LIMIT_EXCEEDED',
+          tier: tierErr.tier,
+          limitType: tierErr.limitType,
+          limitValue: tierErr.limitValue,
+          requestedAmount: tierErr.requestedAmount,
+          currentVolume: tierErr.currentVolume,
+          currentCount: tierErr.currentCount
+        });
+      }
+
       // Validate fingerprint hash if provided
       const fpHash = fingerprint_hash || '';
 
@@ -74,11 +92,13 @@ export function registerOrderCreateRoutes(server, ctx) {
         db.execute(
           `INSERT INTO payment_orders (
             id, merchant_id, amount_paise, display_amount_paise, actual_amount_paise,
-            payee_vpa, status, nonce, fingerprint_hash, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, 'INITIATED', ?, ?, ?, ?)`,
+            payee_vpa, status, nonce, fingerprint_hash, sender_vpa, device_fingerprint,
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, 'INITIATED', ?, ?, ?, ?, ?)`,
           [
             order_id, merchant_id, actualAmountPaise, displayAmountPaise,
-            actualAmountPaise, payee_vpa, nonce, fpHash, now.toString(), now.toString()
+            actualAmountPaise, payee_vpa, nonce, fpHash, sender_vpa || null,
+            device_fingerprint || null, now.toString(), now.toString()
           ]
         );
       } catch (dbErr) {

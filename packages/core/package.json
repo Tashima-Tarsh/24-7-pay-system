@@ -9,7 +9,14 @@
     "./crypto/order-token": "./src/crypto/order-token.js",
     "./amount/randomizer": "./src/amount/randomizer.js",
     "./sender/tracker": "./src/sender/tracker.js",
-    "./audit/logger": "./src/audit/logger.js"
+    "./audit/logger": "./src/audit/logger.js",
+    "./vpa/routing-engine": "./src/vpa/routing-engine.js",
+    "./vpa/health-scorer": "./src/vpa/health-scorer.js",
+    "./quarantine/engine": "./src/quarantine/engine.js",
+    "./tiers/merchant-tier": "./src/tiers/merchant-tier.js",
+    "./restrictions/geo-time": "./src/restrictions/geo-time.js",
+    "./encryption": "./src/encryption.js",
+    "./dispute-case-manager": "./src/dispute-case-manager.js"
   },
   "scripts": {
     "test": "node --test src/__tests__/**/*.test.js"

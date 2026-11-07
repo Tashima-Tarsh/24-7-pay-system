@@ -645,6 +645,91 @@ export function runMigrations(targetDb) {
     END;
   `); } catch {}
 
+  // Phase 4 Deliverable 7: Merchant tiering
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS merchant_tiers (
+      id INTEGER PRIMARY KEY,
+      name VARCHAR(20) NOT NULL UNIQUE CHECK (name IN ('BASIC', 'VERIFIED', 'PREMIUM')),
+      max_daily_volume_paise BIGINT NOT NULL CHECK (max_daily_volume_paise > 0),
+      max_tx_count_per_day INTEGER NOT NULL CHECK (max_tx_count_per_day > 0),
+      max_single_tx_paise BIGINT NOT NULL CHECK (max_single_tx_paise > 0),
+      vpa_pool_size_required INTEGER NOT NULL DEFAULT 1 CHECK (vpa_pool_size_required > 0),
+      requires_document INTEGER NOT NULL DEFAULT 0 CHECK (requires_document IN (0, 1)),
+      document_type VARCHAR(30),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `); } catch {}
+
+  // Seed default merchant tiers
+  try { db.exec(`
+    INSERT OR IGNORE INTO merchant_tiers (id, name, max_daily_volume_paise, max_tx_count_per_day,
+      max_single_tx_paise, vpa_pool_size_required, requires_document, document_type)
+    VALUES (1, 'BASIC', 5000000, 20, 500000, 3, 0, NULL);
+  `); } catch {}
+  try { db.exec(`
+    INSERT OR IGNORE INTO merchant_tiers (id, name, max_daily_volume_paise, max_tx_count_per_day,
+      max_single_tx_paise, vpa_pool_size_required, requires_document, document_type)
+    VALUES (2, 'VERIFIED', 50000000, 100, 2000000, 10, 1, 'PAN_CARD');
+  `); } catch {}
+  try { db.exec(`
+    INSERT OR IGNORE INTO merchant_tiers (id, name, max_daily_volume_paise, max_tx_count_per_day,
+      max_single_tx_paise, vpa_pool_size_required, requires_document, document_type)
+    VALUES (3, 'PREMIUM', 200000000, 500, 5000000, 25, 1, 'GST_CERT');
+  `); } catch {}
+
+  // Add tier_id to pp_merchants if not exists
+  try { db.exec("ALTER TABLE pp_merchants ADD COLUMN tier_id INTEGER DEFAULT 1 REFERENCES merchant_tiers(id);"); } catch {}
+
+  // Phase 4 Deliverable 6: Law Enforcement request reports
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS le_reports (
+      id TEXT PRIMARY KEY,
+      case_number VARCHAR(100) NOT NULL,
+      agency VARCHAR(100) NOT NULL,
+      officer VARCHAR(100) NOT NULL,
+      target_type VARCHAR(30) NOT NULL,
+      target_id TEXT NOT NULL,
+      report_blob BLOB NOT NULL,
+      report_key TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      retention_until TEXT NOT NULL
+    );
+  `); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_le_reports_case_number ON le_reports (case_number);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_le_reports_agency ON le_reports (agency);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_le_reports_created_at ON le_reports (created_at);"); } catch {}
+
+  // Phase 4 Deliverable 10: Dispute case management
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS dispute_cases (
+      id TEXT PRIMARY KEY,
+      payment_order_id TEXT REFERENCES payment_orders(id) ON DELETE SET NULL,
+      raised_by VARCHAR(20) NOT NULL CHECK (raised_by IN ('USER', 'MERCHANT', 'SYSTEM')),
+      reason VARCHAR(50) NOT NULL CHECK (reason IN ('AMOUNT_MISMATCH', 'NON_RECEIPT', 'UNAUTHORIZED', 'FRAUD')),
+      status VARCHAR(20) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'UNDER_REVIEW', 'RESOLVED', 'ESCALATED')),
+      evidence TEXT DEFAULT '{}',
+      resolution TEXT,
+      resolved_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_dispute_cases_status ON dispute_cases(status);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_dispute_cases_payment_order ON dispute_cases(payment_order_id);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_dispute_cases_raised_by ON dispute_cases(raised_by);"); } catch {}
+
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS dispute_events (
+      id TEXT PRIMARY KEY,
+      case_id TEXT NOT NULL REFERENCES dispute_cases(id) ON DELETE CASCADE,
+      actor VARCHAR(20) NOT NULL,
+      action VARCHAR(30) NOT NULL,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_dispute_events_case_id ON dispute_events(case_id);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_dispute_events_created_at ON dispute_events(created_at);"); } catch {}
+
   return {
     db,
     defaultMerchant
