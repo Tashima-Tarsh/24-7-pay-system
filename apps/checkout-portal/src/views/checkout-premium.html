@@ -927,6 +927,7 @@
     let remaining = 0;
     let announced = '';
     let toastTimer = null;
+    let manualShown = false;
     let lastQrKey = '';
     let upiUri = null;
     let payeeVpa = null;
@@ -1408,9 +1409,13 @@
     // ---- Auto UPI App Return (URL params: Status + txnRef/tr/txnId) ----
     (function handleAutoReturn() {
       try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const upiStatus = urlParams.get('Status') || urlParams.get('status');
-        const txnRef = urlParams.get('txnRef') || urlParams.get('tr') || urlParams.get('txnId');
+        const search = window.location.search || '';
+        const params = {};
+        search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) {
+          params[decodeURIComponent(k)] = decodeURIComponent(v);
+        });
+        const upiStatus = params['Status'] || params['status'];
+        const txnRef = params['txnRef'] || params['tr'] || params['txnId'];
         if (upiStatus && txnRef) {
           fetch('/api/v1/payments/' + encodeURIComponent(paymentId) + '/client-return', {
             method: 'POST',
@@ -1437,8 +1442,7 @@
     })();
 
     // ---- 60s delay before showing manual UTR entry ----
-    let manualShown = false;
-    if (status === 'ACTIVE' || status === 'INITIATED') {
+    if (state.status === 'ACTIVE' || state.status === 'INITIATED') {
       setTimeout(function () {
         manualShown = true;
         const btn = $('dpBtnManualUtr');
