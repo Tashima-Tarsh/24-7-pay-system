@@ -594,6 +594,98 @@
 
     .dp-fade-enter { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
     .dp-fade-enter.active { opacity: 1; transform: translateY(0); }
+
+    /* Manual UTR Entry Form */
+    .dp-utr-section { margin-top: 16px; }
+    .dp-utr-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--dp-card-border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+    .dp-utr-title { font-size: 13px; font-weight: 700; color: var(--dp-text); display: block; margin-bottom: 4px; }
+    .dp-utr-sub { font-size: 11px; color: var(--dp-text-muted); display: block; margin-bottom: 12px; }
+    .dp-utr-input {
+      width: 100%;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--dp-card-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--dp-text);
+      font-size: 16px;
+      font-family: monospace;
+      text-align: center;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+    }
+    .dp-utr-input:focus { outline: none; border-color: var(--dp-primary); }
+    .dp-btn-verify {
+      width: 100%;
+      background: var(--dp-primary);
+      border: none;
+      color: #fff;
+      border-radius: 10px;
+      padding: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .dp-btn-verify:disabled { opacity: 0.5; cursor: not-allowed; }
+    .dp-utr-hint { font-size: 11px; color: var(--dp-text-muted); margin-top: 8px; display: block; }
+
+    /* Verifying Overlay */
+    .dp-verifying-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.7);
+      backdrop-filter: blur(6px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dp-verifying-card {
+      background: var(--dp-card);
+      border: 1px solid var(--dp-card-border);
+      border-radius: 20px;
+      padding: 24px;
+      text-align: center;
+      max-width: 280px;
+      width: 90%;
+    }
+    .dp-verifying-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(99,102,241,0.2);
+      border-top-color: var(--dp-primary);
+      border-radius: 50%;
+      animation: dpSpin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes dpSpin { to { transform: rotate(360deg); } }
+    .dp-verifying-text { font-size: 15px; font-weight: 700; color: var(--dp-text); display: block; margin-bottom: 6px; }
+    .dp-verifying-sub { font-size: 12px; color: var(--dp-text-muted); display: block; }
+
+    /* Confetti */
+    .dp-confetti {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      pointer-events: none;
+    }
+    .confetti-piece {
+      position: absolute;
+      top: -10px;
+      width: 8px;
+      height: 16px;
+      background: hsl(var(--h), 70%, 60%);
+      animation: confettiFall var(--duration) linear forwards;
+      opacity: 1;
+    }
+    @keyframes confettiFall {
+      to { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -746,7 +838,36 @@
         <span class="dp-strip-label" id="dpStripLabel">Waiting for payment</span>
         <span class="dp-strip-sub" id="dpStripSub"></span>
       </section>
-    </main>
+
+      <!-- Manual UTR Entry Form (shown after 60s wait) -->
+      <section class="dp-utr-section" id="dpUtrSection" hidden>
+        <div class="dp-utr-card">
+          <span class="dp-utr-title">Enter UTR Reference</span>
+          <span class="dp-utr-sub">12-digit UTR from your bank SMS</span>
+          <form id="dpUtrForm">
+            <input type="text" id="dpUtrInput" maxlength="12" placeholder="123456789012"
+              class="dp-utr-input" />
+            <button type="submit" id="dpBtnManualVerify" class="dp-btn-verify">
+              Verify &amp; Complete
+            </button>
+          </form>
+          <span class="dp-utr-hint">Countdown: <span id="dpVerifyCountdown" hidden>60s</span></span>
+        </div>
+      </section>
+
+      <!-- Verifying Overlay -->
+      <div class="dp-verifying-overlay" id="dpVerifyingOverlay" hidden>
+        <div class="dp-verifying-card">
+          <div class="dp-verifying-spinner"></div>
+          <span class="dp-verifying-text">Verifying with bank…</span>
+          <span class="dp-verifying-sub" id="dpVerifySub">Confirming your UTR. This may take up to 15 minutes.</span>
+        </div>
+      </div>
+
+      <!-- Confetti Container -->
+      <div id="dpConfetti" class="dp-confetti" hidden></div>
+
+      <div id="statusTitle" role="status">Checking payment session…</div>
 
     <footer class="dp-checkout-footer" id="dpStickyFooter" hidden>
       <div class="dp-footer-bar">
@@ -822,6 +943,29 @@
       el.classList.add('show');
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    function confetti() {
+      const container = $('dpConfetti');
+      if (!container) return;
+      container.hidden = false;
+      const colors = [220, 280, 320, 340, 30, 60, 180];
+      for (let i = 0; i < 40; i++) {
+        const el = document.createElement('div');
+        el.className = 'confetti-piece';
+        const h = colors[Math.floor(Math.random() * colors.length)];
+        const duration = 0.5 + Math.random() * 1.0;
+        el.style.left = Math.random() * 100 + '%';
+        el.style.top = '-10px';
+        el.style.setProperty('--h', h);
+        el.style.setProperty('--duration', duration + 's');
+        el.style.animationDelay = (Math.random() * 0.3) + 's';
+        container.appendChild(el);
+      }
+      setTimeout(() => {
+        container.hidden = true;
+        container.innerHTML = '';
+      }, 2000);
     }
 
     function render(s) {
@@ -975,11 +1119,33 @@
         } else if (status === 'SUCCESS') {
           statusStrip.hidden = true;
           if (utrForm) utrForm.hidden = true;
+          confetti();
         } else {
           statusStrip.hidden = true;
         }
       }
       if (utrStatus) utrStatus.hidden = true;
+
+      // ---- Verifying Overlay (shown during manual verification) ----
+      const verifyingOverlay = $('dpVerifyingOverlay');
+      if (verifyingOverlay) {
+        if (status === 'MANUAL_VERIFICATION_PENDING' || status === 'VERIFYING') {
+          verifyingOverlay.hidden = false;
+          if ($('payView')) $('payView').hidden = true;
+        } else {
+          verifyingOverlay.hidden = true;
+        }
+      }
+
+      // ---- UTR Form Visibility ----
+      const utrSection = $('dpUtrSection');
+      if (utrSection) {
+        if ((status === 'ACTIVE' || status === 'AWAITING_REFERENCE') && manualShown) {
+          utrSection.hidden = false;
+        } else {
+          utrSection.hidden = true;
+        }
+      }
 
       // Timer (only when full DOM is available)
       remaining = canPay ? Math.max(0, Number(s.timeRemainingSeconds || 0)) : 0;
@@ -1238,6 +1404,111 @@
     // Init
     render(initialState);
     pollState();
+
+    // ---- Auto UPI App Return (URL params: Status + txnRef/tr/txnId) ----
+    (function handleAutoReturn() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const upiStatus = urlParams.get('Status') || urlParams.get('status');
+        const txnRef = urlParams.get('txnRef') || urlParams.get('tr') || urlParams.get('txnId');
+        if (upiStatus && txnRef) {
+          fetch('/api/v1/payments/' + encodeURIComponent(paymentId) + '/client-return', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'idempotency-key': 'return_' + paymentId + '_' + txnRef
+            },
+            body: JSON.stringify({
+              sourcePlatform: 'WEB_CHECKOUT',
+              parsedStatus: upiStatus.toUpperCase(),
+              upiTransactionReference: txnRef,
+              eventTimestamp: new Date().toISOString()
+            })
+          }).then(function () {
+            // Clear URL params so it doesn't re-fire on refresh
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }).catch(function (err) {
+            console.error('Failed to report client return:', err);
+          });
+        }
+      } catch (e) {
+        console.error('Auto return handler error:', e);
+      }
+    })();
+
+    // ---- 60s delay before showing manual UTR entry ----
+    let manualShown = false;
+    if (status === 'ACTIVE' || status === 'INITIATED') {
+      setTimeout(function () {
+        manualShown = true;
+        const btn = $('dpBtnManualUtr');
+        if (btn) btn.hidden = false;
+        const strip = $('dpStatusStrip');
+        if (strip) {
+          strip.hidden = false;
+          stripLabel.textContent = 'Waiting for payment';
+          stripSub.textContent = 'Still waiting? Enter your UTR to verify manually.';
+          stripDot.className = 'dp-strip-dot dp-strip-waiting';
+        }
+      }, 60000);
+    }
+
+    // ---- Manual UTR form submission ----
+    const utrForm = $('dpUtrForm');
+    if (utrForm) {
+      utrForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const input = $('dpUtrInput');
+        const utrVal = (input && input.value) || '';
+        if (!/^\d{12}$/.test(utrVal)) {
+          toast('Please enter a valid 12-digit UTR number.');
+          return;
+        }
+        const btn = $('dpBtnManualVerify');
+        btn.disabled = true;
+        btn.textContent = 'Verifying…';
+        fetch('/api/v1/payments/' + encodeURIComponent(paymentId) + '/manual-verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-merchant-id': '00000000-0000-0000-000000000001'
+          },
+          body: JSON.stringify({ utr: utrVal, merchantId: '00000000-0000-0000-000000000001' })
+        }).then(function (res) {
+          if (!res.ok) throw new Error(res.status === 409 ? 'UTR already used.' : 'Verification failed.');
+          return res.json();
+        }).then(function (data) {
+          // Show verifying state
+          const statusStrip = $('dpStatusStrip');
+          if (statusStrip) {
+            statusStrip.hidden = false;
+            stripLabel.textContent = 'Verifying with bank…';
+            stripSub.textContent = 'This may take up to 15 minutes.';
+            stripDot.className = 'dp-strip-dot dp-strip-waiting';
+          }
+          // Start 60s countdown
+          let remaining = 60;
+          const countdownEl = $('dpVerifyCountdown');
+          if (countdownEl) countdownEl.hidden = false;
+          const cdTimer = setInterval(function () {
+            remaining--;
+            if (countdownEl) countdownEl.textContent = remaining + 's';
+            if (remaining <= 0) {
+              clearInterval(cdTimer);
+              if (countdownEl) countdownEl.hidden = true;
+              // Poll status after countdown
+              pollState();
+            }
+          }, 1000);
+          // Also poll immediately
+          pollState();
+        }).catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = 'Verify & Complete';
+          toast(err.message || 'Verification failed.');
+        });
+      });
+    }
 
     // ---- WebSocket intent return (2-second push instead of 3s polling) ----
     let wsSocket = null;
