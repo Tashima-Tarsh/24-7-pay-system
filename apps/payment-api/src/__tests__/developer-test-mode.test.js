@@ -138,7 +138,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawSms,
         sender: 'VM-HDFCBK',
         paymentSessionId: s1.id
@@ -172,7 +172,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'GMAIL',
+        source: 'PROVIDER_WEBHOOK',
         message: rawGmail,
         sender: 'alerts@hdfcbank.net',
         paymentSessionId: s2.id
@@ -200,7 +200,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawWrongAmount,
         sender: 'VM-HDFCBK',
         paymentSessionId: s3.id
@@ -226,7 +226,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawNoCredit,
         sender: 'VM-HDFCBK',
         paymentSessionId: s4.id
@@ -252,7 +252,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawNoCurrency,
         sender: 'VM-HDFCBK',
         paymentSessionId: s5.id
@@ -278,7 +278,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawNoRef,
         sender: 'VM-HDFCBK',
         paymentSessionId: s6.id
@@ -305,7 +305,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawValid,
         sender: 'VM-HDFCBK',
         receivedAt: pastTimestamp,
@@ -333,7 +333,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res1 = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawMsg,
         sender: 'VM-HDFCBK',
         receivedAt: fixedTime,
@@ -346,7 +346,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res2 = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawMsg,
         sender: 'VM-HDFCBK',
         receivedAt: fixedTime,
@@ -377,7 +377,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawSuspicious,
         sender: customer.mobileNumber,
         paymentSessionId: s9.id
@@ -407,7 +407,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const smsRes = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: rawCustomSms,
         sender: 'VM-HDFCBK',
         paymentSessionId: s10.id
@@ -421,7 +421,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const gmailRes = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'GMAIL',
+        source: 'PROVIDER_WEBHOOK',
         message: rawCustomGmail,
         sender: 'alerts@hdfcbank.net',
         paymentSessionId: s11.id
@@ -461,7 +461,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const pipeline = apiInstance.app.context.pipeline;
 
     const attackResult = pipeline.process({
-      source: 'SMS',
+      source: 'PROVIDER_WEBHOOK',
       rawText: 'A/C XX1234 credited by Rs 499.00 CR. Ref 999888777666.',
       sender: badCustomer.mobileNumber,
       paymentSessionId: s12.id,
@@ -486,7 +486,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: 'A/C XX1234 credited by Rs 499.00 CR. Ref 123456789012.',
         sender: 'VM-HDFCBK'
       }

@@ -32,7 +32,7 @@ test('UPI app links preserve the exact session amount, payee and reference',()=>
   assert.equal(window.dynamoUpiLink('paytm',state.upiUri,'Android'),state.upiUri);
   assert.equal(window.dynamoUpiLink('navi',state.upiUri,'Android'),state.upiUri);
   assert.equal(window.dynamoUpiLink('generic',state.upiUri,'Android'),state.upiUri);
-  assert.ok(window.dynamoUpiLink('gpay',state.upiUri,'iPhone').startsWith('gpay://upi/pay?'));
+  assert.ok(window.dynamoUpiLink('gpay',state.upiUri,'iPhone').startsWith('upi://pay?'));
   assert.throws(()=>window.dynamoUpiLink('gpay','https://malicious.example','Android'));
 });
 test('queued sessions disable payment actions and never launch a UPI app',()=>{

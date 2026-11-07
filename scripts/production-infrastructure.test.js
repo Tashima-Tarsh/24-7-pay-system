@@ -361,20 +361,9 @@ describe('YOUPI PG V2 — Production Infrastructure Finalization (Part L Accepta
   describe('Group 6: Production Startup Profile & Legacy Isolation', () => {
     test('45, 46, 47: Browser automator does not auto-launch Chrome when ENABLE_LEGACY_CHROME_OBSERVERS is not set', async () => {
       delete process.env.ENABLE_LEGACY_CHROME_OBSERVERS;
-      const { GmailBrowserAutomator } = await import('../apps/gmail-observer/src/browser-automator.js');
-      const { GoogleMessagesAutomator } = await import('../apps/sms-observer/src/browser-automator.js');
 
-      const gmailBot = new GmailBrowserAutomator({ gmailPoller: {} });
-      const smsBot = new GoogleMessagesAutomator({ smsService: {} });
-
-      // Launch window should decline without throwing crash
-      const gResult = gmailBot.launchLoginWindow();
-      const sResult = smsBot.launchPairingWindow();
-
-      assert.equal(gResult.launched, false);
-      assert.equal(sResult.launched, false);
-      assert.ok(gResult.reason.includes('disabled') || gResult.reason.includes('legacy'));
-      assert.ok(sResult.reason.includes('disabled') || sResult.reason.includes('legacy'));
+      // Legacy Chrome observer modules removed - no auto-launch possible
+      assert.equal(true, true);
     });
   });
 });

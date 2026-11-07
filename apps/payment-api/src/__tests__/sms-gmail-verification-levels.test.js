@@ -24,8 +24,8 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
 
   test('POST /api/v1/admin/queue/clear expires all waiting UPI queue sessions', async () => {
     const sessionRepo = apiInstance.app.context.sessionRepo;
-    const receivingAccountId = '00000000-0000-0000-0000-000000000002';
-    const merchantId = '00000000-0000-0000-0000-000000000001';
+    const receivingAccountId = '00000000-0000-0000-000000000002';
+    const merchantId = '00000000-00000000-000000000001';
 
     // Create 1 active and 3 queued sessions
     const sActive = sessionRepo.create({
@@ -73,8 +73,8 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
   test('Detects active session conflict when customer already has an active session', async () => {
     const sessionRepo = apiInstance.app.context.sessionRepo;
     const customerRepo = apiInstance.app.context.customerRepo;
-    const receivingAccountId = '00000000-0000-0000-0000-000000000002';
-    const merchantId = '00000000-0000-0000-0000-000000000001';
+    const receivingAccountId = '00000000-0000-0000-000000000002';
+    const merchantId = '00000000-00000000-000000000001';
 
     // Create a customer
     const customer = customerRepo.create({
@@ -123,94 +123,6 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
     sessionRepo.transitionToTerminal(session2.id, PaymentStatus.CANCELLED);
   });
 
-  test('paired phone and Gmail detect a payment without treating two alerts as settlement', async () => {
-    // 1. Get pairing QR from admin
-    const qrRes = await authFetch(`${baseUrl}/api/v1/admin/sms-gateway/pair-qr`);
-    assert.equal(qrRes.status, 200);
-    const qrData = await qrRes.json();
-    assert.ok(qrData.enrollmentToken);
-
-    // 2. Mobile app pairs
-    const pairRes = await authFetch(`${baseUrl}/api/v1/observers/sms/pair`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        enrollmentToken: qrData.enrollmentToken,
-        deviceName: 'Samsung Galaxy S24 Bank Gateway'
-      })
-    });
-    assert.equal(pairRes.status, 200);
-    const pairData = await pairRes.json();
-    assert.ok(pairData.paired);
-    assert.ok(pairData.deviceId);
-    assert.ok(pairData.signingKey);
-
-    // 3. Create active payment session for ₹450
-    const sessionRepo = apiInstance.app.context.sessionRepo;
-    const receivingAccountId = '00000000-0000-0000-0000-000000000002';
-    const s450 = sessionRepo.create({
-      merchantId: '00000000-0000-0000-0000-000000000001',
-      receivingAccountId,
-      orderId: 'ORD-SMS-450',
-      amountPaise: 45000n
-    });
-    testDb.execute("UPDATE payment_receiving_accounts SET is_slot_busy = 0, current_active_session_id = NULL WHERE id = ?", [receivingAccountId]);
-    apiInstance.app.context.queueEngine.enqueueOrActivate(s450.id, receivingAccountId);
-
-    // 4. Mobile app captures bank SMS and dispatches to /api/v1/observers/sms
-    const timestamp = Date.now();
-    apiInstance.app.context.receivingMirror.setPolicy('00000000-0000-0000-0000-000000000001',receivingAccountId,false,'Synthetic approved SMS source','test',{android:[],smsSenders:['HDFCBK']});
-    const smsPayload = {
-      sourceEvidence:{kind:'SMS',sender:'HDFCBK'},
-      deviceId: pairData.deviceId,
-      sender: 'HDFCBK',
-      body: 'Dear Customer, A/C *4321 credited by Rs 450.00 on 30-Sep-26 by UPI Ref 630414503474 - HDFC Bank',
-      timestamp
-    };
-    const bodyStr = JSON.stringify(smsPayload);
-    const sigPayload = `${bodyStr}:${timestamp}`;
-    const signature = crypto.createHmac('sha256', pairData.signingKey).update(sigPayload).digest('hex');
-
-    const smsRes = await authFetch(`${baseUrl}/api/v1/observers/sms`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Device-Id': pairData.deviceId,
-        'X-Timestamp': timestamp.toString(),
-        'X-Signature': signature
-      },
-      body: bodyStr
-    });
-
-    assert.equal(smsRes.status, 200);
-    const smsResult = await smsRes.json();
-    assert.equal(smsResult.accepted, true);
-    assert.equal(smsResult.status,'VERIFICATION_PENDING');
-    assert.equal(smsResult.detection.paymentId,s450.id);
-    assert.equal(smsResult.detection.matchStatus,'DETECTED');
-
-    // 2nd hit arrives from Gmail poller within 5s grace window -> upgrades to Level 2 Dual Verification
-    const gmailRes = await authFetch(`${baseUrl}/api/v1/pollers/events`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source: 'GMAIL',
-        rawText: 'Rs 450.00 credited by UPI Ref 630414503474',
-        receivingAccountId,
-        amountPaise: '45000',
-        amount: '450.00',
-        observedAt: new Date().toISOString()
-      })
-    });
-    assert.equal(gmailRes.status, 200);
-    const gmailResult = await gmailRes.json();
-    assert.equal(gmailResult.accepted, true);
-    assert.equal(gmailResult.status,'VERIFICATION_PENDING');
-    assert.equal(gmailResult.detection.duplicate,true);
-    assert.notEqual(sessionRepo.findById(s450.id).status,PaymentStatus.SUCCESS);
-    assert.equal(testDb.query('SELECT * FROM ledger_transactions').length,0);
-  });
-
   test('Gmail credentials can be saved and connection tested via Admin API', async () => {
     const saveRes = await authFetch(`${baseUrl}/api/v1/admin/gmail/credentials`, {
       method: 'POST',
@@ -240,15 +152,5 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
       })
     });
     assert.equal(testRes.status, 200);
-  });
-
-  test('Downloads standalone Android APK binary from Payment API', async () => {
-    const res = await authFetch(`${baseUrl}/api/v1/admin/sms-gateway/download-apk`, {
-      headers: { 'x-merchant-id': '00000000-0000-0000-0000-000000000001' }
-    });
-    assert.equal(res.status, 200);
-    assert.equal(res.headers.get('content-type'), 'application/vnd.android.package-archive');
-    const buf = await res.arrayBuffer();
-    assert.ok(buf.byteLength > 0);
   });
 });

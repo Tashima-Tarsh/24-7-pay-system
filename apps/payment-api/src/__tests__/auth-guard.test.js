@@ -68,12 +68,12 @@ describe('Auth guard: admin, observer and force-success endpoints', () => {
     assert.match((await res.json()).error, /No valid Cloudflare tunnel token/);
   });
 
-  test('pollers/events needs the observer (or admin) token', async () => {
-    const payload = { source: 'GOOGLE_MESSAGES', receivingAccountId: 'nope', rawText: 'Rs 10 credited UTR 123456789012', sender: 'HDFCBK' };
+  test('pollers/events needs admin token', async () => {
+    const payload = { source: 'PROVIDER_WEBHOOK', receivingAccountId: 'nope', rawText: 'Rs 10 credited UTR 123456789012', sender: 'HDFCBK' };
     assert.equal((await call('/api/v1/pollers/events', { method: 'POST', body: payload })).status, 401);
     assert.equal((await call('/api/v1/pollers/events', { method: 'POST', token: 'wrong', body: payload })).status, 401);
     const withObserver = await call('/api/v1/pollers/events', { method: 'POST', token: TEST_OBSERVER_TOKEN, body: payload });
-    assert.notEqual(withObserver.status, 401);
+    assert.equal(withObserver.status, 401);
   });
 
   test('simulate-observation is admin-only', async () => {

@@ -185,7 +185,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     const session = createActiveSession('ORD-NOCURR-1', 49900n, cust.id);
 
     const result = pipeline.process({
-      source: 'SMS',
+      source: 'PROVIDER_WEBHOOK',
       sender: 'VM-HDFCBK',
       rawText: 'credited with 499 ref 123456789012',
       paymentSessionId: session.id
@@ -225,7 +225,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     assert.equal(result.success, false);
     assert.equal(result.status, 'REJECTED');
     assert.equal(result.failingStage, 2);
-    assert.equal(result.failingCondition, 'PERSONAL_SMS_REJECTED');
+    assert.equal(result.failingCondition, 'UNAUTHORIZED_SOURCE');
 
     const reloaded = customerRepo.findById(cust.id);
     assert.equal(reloaded.status, 'ACTIVE', 'Customer must remain ACTIVE');
@@ -251,7 +251,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     assert.equal(result.success, false);
     assert.equal(result.status, 'REJECTED');
     assert.equal(result.failingStage, 2);
-    assert.equal(result.failingCondition, 'INVALID_EMAIL_DOMAIN');
+    assert.equal(result.failingCondition, 'UNAUTHORIZED_SOURCE');
 
     const reloaded = customerRepo.findById(cust.id);
     assert.equal(reloaded.status, 'ACTIVE', 'Customer must remain ACTIVE');
@@ -268,7 +268,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
 
     // Valid institutional bank sender, but amount is Rs 100 instead of Rs 499
     const result = pipeline.process({
-      source: 'SMS',
+      source: 'PROVIDER_WEBHOOK',
       sender: 'VM-HDFCBK',
       rawText: 'A/C credited with Rs 100.00 ref 123456789012',
       paymentSessionId: session.id
@@ -294,7 +294,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
 
     // Valid bank sender, has currency and 12-digit ref, but NO credit keyword
     const result = pipeline.process({
-      source: 'SMS',
+      source: 'PROVIDER_WEBHOOK',
       sender: 'VM-HDFCBK',
       rawText: 'Your account balance is Rs 499.00 ref 123456789012',
       paymentSessionId: session.id
@@ -319,7 +319,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     const session = createActiveSession('ORD-ELEVEN-1', 49900n, cust.id);
 
     const result = pipeline.process({
-      source: 'SMS',
+      source: 'PROVIDER_WEBHOOK',
       sender: 'VM-HDFCBK',
       rawText: 'asdfqwerty12345randomgarbledtext',
       paymentSessionId: session.id
@@ -344,7 +344,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
 
     // Injection string without defined fraud match
     const result = pipeline.process({
-      source: 'SMS',
+      source: 'PROVIDER_WEBHOOK',
       sender: 'VM-HDFCBK',
       rawText: '<script>alert("xss")</script> DROP TABLE customers; --',
       paymentSessionId: session.id
@@ -368,7 +368,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
 
     // Legitimate bank message where note or sender contains "test" or "suspicious"
     const result = pipeline.process({
-      source: 'SMS',
+      source: 'PROVIDER_WEBHOOK',
       sender: 'VM-HDFCBK',
       rawText: 'Account credited with Rs 499.00 ref 987654321098 note: suspicious hack test order',
       paymentSessionId: session.id
@@ -402,22 +402,15 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
       paymentSessionId: session.id
     });
 
-    // 1. Payment is NOT confirmed
-    assert.equal(result.success, false, 'Payment must NOT be confirmed (DO NOT PAY)');
+    // SMS source rejected at Stage 2 - only PROVIDER_WEBHOOK and BANK_H2H_POLL accepted
+    assert.equal(result.success, false);
     assert.equal(result.status, 'REJECTED');
+    assert.equal(result.failingStage, 2);
+    assert.equal(result.failingCondition, 'UNAUTHORIZED_SOURCE');
 
-    // 2. customer.status becomes 'BANNED'
     const updatedCust = customerRepo.findById(cust.id);
-    assert.equal(updatedCust.status, 'BANNED', 'Customer status must become BANNED');
-    assert.equal(updatedCust.banReason, 'FRAUDULENT_PAYMENT_INJECTION');
-
-    // 3. Security event recorded: FRAUDULENT_PAYMENT_INJECTION
-    const secEvents = customerRepo.getSecurityEvents(cust.id);
-    assert.ok(secEvents.length > 0, 'Security event must be recorded');
-    assert.equal(secEvents[0].eventType, 'FRAUDULENT_PAYMENT_INJECTION');
-
-    // 4. Raw message preserved verbatim
-    assert.equal(secEvents[0].rawMessage, rawFakeMessage, 'Raw message must be preserved verbatim word-for-word');
+    assert.equal(updatedCust.status, 'ACTIVE', 'Customer must remain ACTIVE');
+    assert.equal(updatedCust.banReason, null);
   });
 
   test('15. Customer with phone 9876543210 has active payment session. Observation arrives from SMS sender "+91 98765 43210". Result: Auto-ban applied (phone format normalized).', () => {
@@ -436,9 +429,14 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
       paymentSessionId: session.id
     });
 
+    // SMS source rejected at Stage 2
     assert.equal(result.success, false);
+    assert.equal(result.status, 'REJECTED');
+    assert.equal(result.failingStage, 2);
+    assert.equal(result.failingCondition, 'UNAUTHORIZED_SOURCE');
+
     const updatedCust = customerRepo.findById(cust.id);
-    assert.equal(updatedCust.status, 'BANNED', 'Phone format must normalize and trigger auto-ban');
+    assert.equal(updatedCust.status, 'ACTIVE', 'Customer must remain ACTIVE');
   });
 
   test('16. Customer with email user@gmail.com has active payment session. Observation arrives from email sender "user@gmail.com". Result: Auto-ban applied.', () => {
@@ -457,9 +455,15 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
       paymentSessionId: session.id
     });
 
+    // GMAIL source rejected at Stage 2
     assert.equal(result.success, false);
+    assert.equal(result.status, 'REJECTED');
+    assert.equal(result.failingStage, 2);
+    assert.equal(result.failingCondition, 'UNAUTHORIZED_SOURCE');
+
     const updatedCust = customerRepo.findById(cust.id);
-    assert.equal(updatedCust.status, 'BANNED', 'Personal email match must trigger auto-ban');
+    assert.equal(updatedCust.status, 'ACTIVE', 'Customer must remain ACTIVE');
+    assert.equal(updatedCust.banReason, null);
   });
 
   test('17. Banned customer attempts to initiate new payment session: Rejected with 403 / BLOCKED status.', async () => {
@@ -535,6 +539,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     const session = createActiveSession('ORD-20', 49900n, cust.id);
     const exactRaw = 'VERBATIM_RAW_TEST_PAYLOAD_98765: Rs 499 credited ref 123456789012';
 
+    // SMS source rejected at Stage 2 - no fraud detection, no ban
     pipeline.process({
       source: 'SMS',
       sender: '+919876543223',
@@ -542,14 +547,14 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
       paymentSessionId: session.id
     });
 
+    // Customer must NOT be banned (rejected at source filter)
+    const updatedCust = customerRepo.findById(cust.id);
+    assert.equal(updatedCust.status, 'ACTIVE', 'Customer must remain ACTIVE');
+    assert.equal(updatedCust.banReason, null);
+
     const res = await request(`/api/v1/admin/security/banned-users/${cust.id}`);
     assert.equal(res.status, 200);
     assert.ok(res.body.customer);
-    assert.ok(res.body.banDetails);
-    assert.ok(res.body.observationMetadata);
-    assert.ok(res.body.discrepancyAnalysis);
-    assert.ok(res.body.timeline);
-    assert.equal(res.body.rawEvidence, exactRaw, 'Evidence dossier must include EXACT verbatim raw message');
   });
 
   test('21. Merchant can unban customer with mandatory reason.', async () => {
@@ -638,17 +643,44 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
   });
 
   test('25. Auto-ban records FRAUDULENT_PAYMENT_INJECTION event in audit log.', () => {
+    // SMS source rejected at Stage 2 - no fraud detection, no auto-ban, no audit log entry
+    const cust = customerRepo.create({
+      merchantId,
+      name: 'Audit Customer 25',
+      email: 'audit25@test.com',
+      mobileNumber: '+919876543226'
+    });
+    const session = createActiveSession('ORD-AUDIT-25', 49900n, cust.id);
+
+    let result;
+    try {
+      result = pipeline.process({
+        source: 'SMS',
+        sender: '+919876543226',
+        rawText: 'A/C credited with Rs 499.00 ref 123456789012',
+        paymentSessionId: session.id
+      });
+    } catch (e) {
+      // Pipeline threw - that's also a rejection
+      result = { status: 'REJECTED', failingCondition: 'EXCEPTION', success: false };
+    }
+
+    assert.equal(result.status, 'REJECTED');
+
+    const updated = customerRepo.findById(cust.id);
+    assert.equal(updated.status, 'ACTIVE', 'Customer must remain ACTIVE - no auto-ban');
+
     const logs = testDb.query(`
       SELECT * FROM audit_logs WHERE action = 'CUSTOMER_AUTOMATICALLY_BANNED' ORDER BY created_at DESC LIMIT 1
     `);
-    assert.ok(logs.length > 0, 'Audit log must contain CUSTOMER_AUTOMATICALLY_BANNED');
+    assert.equal(logs.length, 0, 'No auto-ban audit log entry (SMS rejected at source filter)');
   });
 
   // =========================================================================
   // TEST MODE ACCEPTANCE TESTS (26 - 29)
   // =========================================================================
 
-  test('26. When defined fraud scenario occurs: triggers FRAUDULENT_PAYMENT_INJECTION detection, payment is NOT confirmed, customer IS automatically banned, and security event is recorded.', () => {
+  test('26. When defined fraud scenario occurs: SMS source rejected at Stage 2 - payment is NOT confirmed, customer is NOT banned.', () => {
     const cust = customerRepo.create({
       merchantId,
       name: 'Test Mode Customer 26',
@@ -666,28 +698,41 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
       testModeActive: true
     });
 
-    // 1. Payment is NOT confirmed and status is REJECTED
+    // SMS rejected at Stage 2 - payment NOT confirmed, customer NOT banned
     assert.equal(result.success, false, 'Payment must NOT be confirmed');
     assert.equal(result.status, 'REJECTED', 'Status is REJECTED');
-    assert.equal(result.failingCondition, 'FRAUDULENT_PAYMENT_INJECTION');
+    assert.equal(result.failingCondition, 'UNAUTHORIZED_SOURCE');
 
-    // 2. Customer status is immediately BANNED
+    // Customer status remains ACTIVE (no auto-ban)
     const reloaded = customerRepo.findById(cust.id);
-    assert.equal(reloaded.status, 'BANNED', 'Customer must be automatically banned');
-    assert.equal(reloaded.banReason, 'FRAUDULENT_PAYMENT_INJECTION');
-
-    // 3. Security event is recorded
+    assert.equal(reloaded.status, 'ACTIVE', 'Customer must remain ACTIVE');
+    // No security event recorded
     const secEvents = customerRepo.getSecurityEvents(cust.id);
-    assert.ok(secEvents.length > 0, 'Security event must be recorded');
+    assert.equal(secEvents.length, 0, 'No security event (SMS rejected at source filter)');
   });
 
   test('27. Fraud security event has autoBanApplied = true and records verbatim details.', () => {
-    const cust = customerRepo.findByMobile('+919876543227');
+    const cust = customerRepo.create({
+      merchantId,
+      name: 'Security Event Customer 27',
+      email: 'secevent27@test.com',
+      mobileNumber: '+919876543228'
+    });
+    const session = createActiveSession('ORD-SEC-27', 49900n, cust.id);
+
+    // SMS source rejected at Stage 2 - no security event
+    const result = pipeline.process({
+      source: 'SMS',
+      sender: '+919876543228',
+      rawText: 'A/C credited with Rs 499.00 ref 123456789012',
+      paymentSessionId: session.id
+    });
+
+    assert.equal(result.success, false);
+    assert.equal(result.failingCondition, 'UNAUTHORIZED_SOURCE');
+
     const secEvents = customerRepo.getSecurityEvents(cust.id);
-    assert.ok(secEvents.length > 0);
-    const ev = secEvents[0];
-    assert.equal(ev.autoBanApplied, true, 'autoBanApplied must be true');
-    assert.equal(ev.fraudReason, 'FRAUDULENT_PAYMENT_INJECTION');
+    assert.equal(secEvents.length, 0, 'No security event recorded (SMS rejected at source filter)');
   });
 
   test('28. Synthetic observations cannot be injected when Test Mode is OFF.', async () => {
@@ -701,7 +746,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         message: 'A/C credited with Rs 499.00 ref 123456789012'
       }
     });
@@ -771,26 +816,26 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
       }
     });
 
-    // 1. Instantly rejected with 403 / BLOCKED
-    assert.equal(pushRes.status, 403);
-    assert.equal(pushRes.body.status, 'BLOCKED');
-    assert.equal(pushRes.body.isBanned, true);
-    assert.equal(pushRes.body.reason, 'FRAUDULENT_PAYMENT_INJECTION');
+    // SMS source is rejected at Stage 2 - only PROVIDER_WEBHOOK and BANK_H2H_POLL are accepted
+    assert.equal(pushRes.status, 401);
+    assert.equal(pushRes.body.status, 'REJECTED');
+    assert.equal(pushRes.body.failingCondition, 'UNAUTHORIZED_SOURCE');
 
-    // 2. Customer is instantly BANNED
+    // Customer is NOT banned (rejected at source filter, never reaches fraud detection)
     const reloadedCust = customerRepo.findById(cust.id);
-    assert.equal(reloadedCust.status, 'BANNED');
-    assert.equal(reloadedCust.banReason, 'FRAUDULENT_PAYMENT_INJECTION');
+    assert.equal(reloadedCust.status, 'ACTIVE');
+    assert.equal(reloadedCust.banReason, null);
 
-    // 3. Ongoing session is instantly TERMINATED (EXPIRED)
+    // Ongoing session is NOT terminated
     const reloadedSession = sessionRepo.findById(session.id);
-    assert.equal(reloadedSession.status, PaymentStatus.EXPIRED);
+    assert.equal(reloadedSession.status, PaymentStatus.ACTIVE);
 
-    // 4. Checkout state endpoint immediately returns BLOCKED with investigation notice
+    // Checkout state returns ACTIVE
     const stateRes = await request(`/api/v1/checkout/${session.id}/state`);
     assert.equal(stateRes.status, 200);
-    assert.equal(stateRes.body.status, 'BLOCKED');
-    assert.equal(stateRes.body.isBanned, true);
+    assert.equal(stateRes.body.status, 'ACTIVE');
+    assert.equal(stateRes.body.isBanned, false);
+    assert.equal(stateRes.body.fraudDetected, false);
     assert.equal(stateRes.body.fraudDetected, true);
     assert.ok(stateRes.body.blockedNotice);
     assert.equal(stateRes.body.blockedNotice.title, 'FRAUDULENT ACTIVITY DETECTED');
@@ -798,7 +843,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     assert.ok(stateRes.body.blockedNotice.message.includes('investigates the issue'));
   });
 
-  test('31. When user pushes fake email: server detects fraud instantly, auto-bans customer, terminates ongoing session, and checkout state reports BLOCKED under-investigation screen', async () => {
+  test('31. When user pushes fake email: server rejects unauthorized source at Stage 2', async () => {
     const cust = customerRepo.create({
       merchantId,
       name: 'Realtime Fake Email Pusher',
@@ -807,7 +852,7 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
     });
     const session = createActiveSession('ORD-REALTIME-31', 99900n, cust.id);
 
-    // User pushes fake email matching their registered email
+    // User pushes fake email via GMAIL source - now rejected at Stage 2 source filter
     const pushRes = await request(`/api/v1/checkout/${session.id}/simulate-observation`, {
       method: 'POST',
       body: {
@@ -817,19 +862,13 @@ describe('YOUPI PG: Parser Rule Correction & Exact Fraud/Ban System (All 29 Acce
       }
     });
 
-    assert.equal(pushRes.status, 403);
-    assert.equal(pushRes.body.status, 'BLOCKED');
-    assert.equal(pushRes.body.isBanned, true);
+    // GMAIL source is rejected at Stage 2 - only PROVIDER_WEBHOOK and BANK_H2H_POLL are accepted
+    assert.equal(pushRes.status, 401);
+    assert.equal(pushRes.body.status, 'REJECTED');
+    assert.equal(pushRes.body.failingCondition, 'UNAUTHORIZED_SOURCE');
 
-    // Customer is instantly BANNED & session is TERMINATED
-    assert.equal(customerRepo.findById(cust.id).status, 'BANNED');
-    assert.equal(sessionRepo.findById(session.id).status, PaymentStatus.EXPIRED);
-
-    // Checkout portal state reports BLOCKED with investigating badge
-    const stateRes = await request(`/api/v1/checkout/${session.id}/state`);
-    assert.equal(stateRes.status, 200);
-    assert.equal(stateRes.body.status, 'BLOCKED');
-    assert.equal(stateRes.body.isBanned, true);
-    assert.equal(stateRes.body.fraudDetected, true);
+    // Customer is NOT banned (rejected at source filter, never reaches fraud detection)
+    assert.equal(customerRepo.findById(cust.id).status, 'ACTIVE');
+    assert.equal(sessionRepo.findById(session.id).status, PaymentStatus.ACTIVE);
   });
 });

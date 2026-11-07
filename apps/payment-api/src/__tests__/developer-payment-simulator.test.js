@@ -187,7 +187,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'credited with Rs 499.00 Ref 123456789012'
       }
@@ -221,7 +221,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'credited with Rs 250.00 Ref 998877665544'
       }
@@ -243,7 +243,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: arbitrarySender,
         content: arbitraryRawContent,
         receivedAt: arbitraryTimestamp
@@ -266,7 +266,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'GMAIL',
+        source: 'PROVIDER_WEBHOOK',
         sender: arbitrarySenderEmail,
         content: arbitraryRawEmail
       }
@@ -286,7 +286,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: '+918888888888', // Ordinary personal phone number not matching customer
         content: 'A/C XX1234 credited with Rs 499.00 CR. Ref 123456789012'
       }
@@ -295,7 +295,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     assert.equal(res.status, 200);
     assert.equal(res.body.status, 'REJECTED');
     assert.equal(res.body.failingStage, 2);
-    assert.equal(res.body.reason, 'PERSONAL_SMS_REJECTED');
+assert.equal(res.body.reason, 'UNAUTHORIZED_SOURCE');
     assert.equal(res.body.stages.stage2.status, 'FAILED');
   });
 
@@ -305,7 +305,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'GMAIL',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'test@gmail.com', // Not authorized bank domain
         content: 'INR 499 credited CR 123456789012'
       }
@@ -314,7 +314,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     assert.equal(res.status, 200);
     assert.equal(res.body.status, 'REJECTED');
     assert.equal(res.body.failingStage, 2);
-    assert.equal(res.body.reason, 'INVALID_EMAIL_DOMAIN');
+assert.equal(res.body.reason, 'UNAUTHORIZED_SOURCE');
     assert.equal(res.body.stages.stage2.status, 'FAILED');
   });
 
@@ -324,7 +324,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'A/C credited with 499.00 CR. Ref 123456789012' // Missing Rs/₹/INR
       }
@@ -350,7 +350,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       const res = await request('/api/v1/admin/dev/simulator/inject', {
         method: 'POST',
         body: {
-          source: 'SMS',
+          source: 'PROVIDER_WEBHOOK',
           sender: 'HDFCBK',
           content: text
         }
@@ -367,7 +367,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'A/C transfer of Rs 499.00. Ref 123456789012' // Missing credit indicator
       }
@@ -385,7 +385,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'A/C credited with Rs 499.00 CR. Ref short123' // Missing 12-digit reference
       }
@@ -417,7 +417,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'A/C credited with Rs 400.00 CR. Ref 776655443322'
       }
@@ -450,7 +450,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'A/C credited with Rs 350.00 CR. Ref 887766554433',
         receivedAt: pastTime
@@ -484,7 +484,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'A/C credited with Rs 350.00 CR. Ref 112233445566',
         receivedAt: futureTime
@@ -519,7 +519,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: `A/C credited with Rs 199.00 CR. Ref ${ref}`,
         receivedAt: nowIso
@@ -544,7 +544,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId1B,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: `A/C credited with Rs 199.00 CR. Ref ${ref}`,
         receivedAt: nowIso
@@ -571,7 +571,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId2,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: `A/C credited with Rs 299.00 CR. Ref ${ref}`,
         receivedAt: new Date(Date.now() + 2000).toISOString()
@@ -607,7 +607,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
       method: 'POST',
       body: {
         paymentSessionId: sessId,
-        source: 'SMS',
+        source: 'PROVIDER_WEBHOOK',
         sender: 'HDFCBK',
         content: 'A/C XX9999 credited with Rs 799.00 CR. Ref 554433221100'
       }

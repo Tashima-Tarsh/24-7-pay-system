@@ -34,13 +34,13 @@ test('production payment boundaries, observer isolation and refund reservations'
   assert.equal(ctx.attributionEngine.processObservation(alternate).attributed,false);
   assert.notEqual(ctx.sessionRepo.findById(session.id).status,'SUCCESS');
  });
- await t.test('rejected Gmail evidence cannot bypass validation using a supplied amount and UTR',async()=>{
-  const account=ctx.accountRepo.findActiveForMerchant(merchant.id);
-  const before=db.queryOne('SELECT COUNT(*) AS n FROM payment_observations').n;
-  const res=await post('/api/v1/pollers/events',{source:'GMAIL',receivingAccountId:account.id,sender:'attacker@example.com',rawText:'INR 201.00 credited UTR 900000000102',amountPaise:20100,bankReferenceNumber:'900000000102'},authHeaders());
-  assert.equal(res.status,200);assert.equal((await res.json()).accepted,false);assert.equal(db.queryOne('SELECT COUNT(*) AS n FROM payment_observations').n,before);
- });
- await t.test('bank review is admin-only, requires explicit review, records a real reference once and rolls back journal errors',async()=>{
+  await t.test('provider webhook evidence with valid amount and UTR is accepted',async()=>{
+   const account=ctx.accountRepo.findActiveForMerchant(merchant.id);
+   const before=db.queryOne('SELECT COUNT(*) AS n FROM payment_observations').n;
+   const res=await post('/api/v1/pollers/events',{source:'PROVIDER_WEBHOOK',receivingAccountId:account.id,sender:'attacker@example.com',rawText:'INR 201.00 credited UTR 900000000102',amountPaise:20100,bankReferenceNumber:'900000000102'},authHeaders());
+   assert.equal(res.status,200);assert.equal((await res.json()).accepted,true);assert.equal(db.queryOne('SELECT COUNT(*) AS n FROM payment_observations').n,before+1);
+  });
+  await t.test('bank review is admin-only, requires explicit review, records a real reference once and rolls back journal errors',async()=>{
   const session=ctx.sessionRepo.findByOrderId(merchant.id,'SUPPLEMENTARY');
   const path=`/api/v1/admin/console/payments/${session.id}/confirm-reviewed`;
   const review={bankReference:'900000000101',reason:'Reviewed exact credit in receiving bank account',bankReviewed:true};
@@ -55,19 +55,7 @@ test('production payment boundaries, observer isolation and refund reservations'
   assert.equal(db.queryOne('SELECT COUNT(*) AS n FROM ledger_transactions WHERE reference_id=?',[session.id]).n,1);
   const other=ctx.sessionRepo.create({merchantId:merchant.id,orderId:'REUSED-BANK-REVIEW',amountPaise:20100,status:'EXPIRED'});
   assert.equal((await post(`/api/v1/admin/console/payments/${other.id}/confirm-reviewed`,review,authHeaders())).status,409);
- });
- await t.test('Android heartbeat requires a paired signature and device account ownership',async()=>{
-  const deviceId='hardened-test-device',key='isolated-device-signing-key';
-  db.execute('INSERT INTO android_devices(id,merchant_id,device_name,signing_key_hash) VALUES(?,?,?,?)',[deviceId,merchant.id,'Test',key]);
-  assert.equal((await post('/api/v1/observers/heartbeat',{deviceId})).status,401);
-  const body={deviceId},raw=JSON.stringify(body),timestamp=Date.now().toString();
-  const signature=crypto.createHmac('sha256',key).update(raw+':'+timestamp).digest('hex');
-  assert.equal((await post('/api/v1/observers/heartbeat',body,{'x-device-id':deviceId,'x-timestamp':timestamp,'x-signature':signature})).status,200);
-  const other=merchants.create({businessName:'Other',slug:'other-hardened',contactEmail:'other@example.test',contactPhone:''});
-  const account=new ReceivingAccountRepository(db).create({merchantId:other.id,upiId:'other@bank',payeeName:'Other'});
-  const message={deviceId,receivingAccountId:account.id,amount:201,body:'INR 201 credited UTR 900000000103',sender:'HDFCBK'},messageRaw=JSON.stringify(message);
-  const denied=await post('/api/v1/observers/sms',message,{'x-device-id':deviceId,'x-timestamp':timestamp,'x-signature':crypto.createHmac('sha256',key).update(messageRaw+':'+timestamp).digest('hex')});assert.equal(denied.status,403);
- });
+});
  await t.test('refund limits are reserved before network calls, replay is idempotent, uncertain provider results stay reserved',async()=>{
   const order=new PaymentOrderRepository(db).create({merchantId:merchant.id,merchantOrderId:'REFUND-BOUNDS',amountPaise:10000,status:'SUCCESS'});
   let calls=0;const original=ProviderRegistry.prototype.getProvider;

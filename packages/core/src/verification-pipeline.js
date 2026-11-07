@@ -129,7 +129,7 @@ export class PaymentVerificationPipeline {
     // [ STAGE 1 ]: Load + Normalize + Preserve Raw Evidence
     // =========================================================================
     const rawNormalizedSource = (input.source || 'PROVIDER_WEBHOOK').toUpperCase();
-    const source = rawNormalizedSource === 'BANK_H2H_POLL' ? 'BANK_H2H_POLL' : 'PROVIDER_WEBHOOK';
+    const source = rawNormalizedSource;
     const messageId = input.messageId || (isTest
       ? `TEST-${crypto.randomUUID().slice(0, 8)}`
       : `OBS-${crypto.randomUUID().slice(0, 8)}`);

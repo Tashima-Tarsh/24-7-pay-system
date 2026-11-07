@@ -2050,6 +2050,15 @@ export function registerCheckoutRoutes(server, ctx) {
       return;
     }
 
+    if (result.status === 'REJECTED' && result.failingCondition === 'UNAUTHORIZED_SOURCE') {
+      HttpServer.json(res, 401, {
+        status: 'REJECTED',
+        failingCondition: 'UNAUTHORIZED_SOURCE',
+        error: 'Unauthorized observation source. Only PROVIDER_WEBHOOK and BANK_H2H_POLL are accepted as authoritative proof of payment.'
+      });
+      return;
+    }
+
     HttpServer.json(res, 200, {
       success: result.success,
       status: result.status,

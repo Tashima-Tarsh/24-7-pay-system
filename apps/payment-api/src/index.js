@@ -536,8 +536,6 @@ export function createPaymentApp(customDb = null, options = {}) {
     dynamoWebhooks,
     paiseOffsetAllocator,
     vpaRotationGuard,
-    dynamoGmail,
-    dynamoSMS,
     superAdminRepo,
     merchantUserRepo,
     roleRepo,
@@ -551,8 +549,7 @@ export function createPaymentApp(customDb = null, options = {}) {
     connectionHealthEventRepo: connectionHealthEventRepository,
     adminAuditEventRepo: adminAuditEventRepository,
     callbackOutboxRepo: callbackOutboxRepository,
-    callbackDeliveryAttemptRepo: callbackDeliveryAttemptRepository,
-    upiMirrorObservationRepo: upiMirrorObservationRepository
+    callbackDeliveryAttemptRepo: callbackDeliveryAttemptRepository
   };
 
   // Smart Routing Engine (created after context is available)

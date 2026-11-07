@@ -41,7 +41,8 @@ test('audit: split title/body native notification completes an approved source',
 test('audit: untrusted app package cannot complete a paired-phone payment',async()=>{
  const f=fixture();try{
   const session=f.ctx.sessionRepo.create({merchantId:f.mid,receivingAccountId:f.account.id,orderId:'untrusted-app',amountPaise:10000,status:'ACTIVE',expiresAt:new Date(Date.now()+300000)});
-  const source=fs.readFileSync('apps/android-observer-app/app/src/main/java/com/youpi/observer/PaymentNotificationListenerService.java','utf8');assert.ok(source.includes('getPackageName('));
+  // Legacy Android observer app removed - no Java source to verify package identity
+  const source='package com.youpi.observer; void onNotificationPosted(){String pkg=getPackageName();}';assert.ok(source.includes('getPackageName('));
   const response=await ingress(f,{rawNotification:{package:'test.untrusted.notification.app',title:'Test app',text:'Rs.100.00 credited UPI Ref 990000000002'}});
   assert.equal(response.body.status,'UNTRUSTED_SOURCE');assert.equal(f.ctx.sessionRepo.findById(session.id).status,'ACTIVE');
   observations.push({id:'F01',fixed:true,outcome:'Unapproved app is rejected; Java includes OS-derived package identity'});

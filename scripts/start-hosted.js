@@ -20,16 +20,15 @@ if(!fs.existsSync(loginFile)){
   fs.mkdirSync(path.dirname(loginFile),{recursive:true,mode:0o700});
   fs.writeFileSync(loginFile,JSON.stringify({email:process.env.INITIAL_ADMIN_EMAIL,passwordHash:hashPassword(process.env.INITIAL_ADMIN_PASSWORD)}),{flag:'wx',mode:0o600});
 }
-const [{startServer},{startCheckoutServer},{startAdminServer},{startGmailObserver}]=await Promise.all([import('../apps/payment-api/src/index.js'),import('../apps/checkout-portal/src/index.js'),import('../apps/merchant-admin/src/index.js'),import('../apps/gmail-observer/src/index.js')]);
+const [{startServer},{startCheckoutServer},{startAdminServer}]=await Promise.all([import('../apps/payment-api/src/index.js'),import('../apps/checkout-portal/src/index.js'),import('../apps/merchant-admin/src/index.js')]);
 const servers=[];
 const api=await startServer();servers.push(api);
 const checkout=await startCheckoutServer();servers.push(checkout);
 const admin=await startAdminServer();servers.push(admin);
-const gmail=await startGmailObserver(null,{autoStart:true});servers.push(gmail);
 const gateway=http.createServer((req,res)=>{
   let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);res.end();return;}
   if(pathname==='/_ready'){
-    try{api.app.context.db.queryOne('SELECT 1 AS ok');res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({status:'UP',services:4}));}
+    try{api.app.context.db.queryOne('SELECT 1 AS ok');res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({status:'UP',services:3}));}
     catch{res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({status:'DATABASE_UNAVAILABLE'}));}
     return;
   }

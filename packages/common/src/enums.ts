@@ -42,10 +42,13 @@ export enum SellingMode {
 }
 
 /**
- * Observation channel sources feeding the payment detection engine (2-Layer: SMS + Gmail).
+ * Observation channel sources feeding the payment detection engine.
+ * Only PROVIDER_WEBHOOK and BANK_H2H_POLL are accepted as authoritative proof.
  * Android observer layer is completely removed.
  */
 export enum ObserverSource {
+  PROVIDER_WEBHOOK = 'PROVIDER_WEBHOOK',
+  BANK_H2H_POLL = 'BANK_H2H_POLL',
   GMAIL = 'GMAIL',
   GOOGLE_MESSAGES = 'GOOGLE_MESSAGES',
   ANDROID_OBSERVER = 'ANDROID_OBSERVER',

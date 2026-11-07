@@ -81,12 +81,10 @@ test('app tiles use native links with the exact server-issued payment details', 
   const { element, apps, state } = checkout('Mozilla/5.0 (Linux; Android 10) Mobile');
   assert.equal(element('dpAppGrid').hidden, false);
   for (const app of apps) {
-    assert.equal(app.getAttribute('href'),
-      'intent://pay?' + state.upiUri.slice('upi://pay?'.length) +
-      '#Intent;scheme=upi;package=' + app.dataset.pkg + ';end');
+    assert.equal(app.getAttribute('href'), state.upiUri);
   }
   const iphone = checkout('Mozilla/5.0 (iPhone)');
-  assert.equal(iphone.apps[0].getAttribute('href'), iphone.state.upiUri.replace('upi://pay?', 'gpay://upi/pay?'));
+  assert.equal(iphone.apps[0].getAttribute('href'), iphone.state.upiUri);
   const desktop = checkout('Mozilla/5.0 (Windows NT 10.0)');
   assert.equal(desktop.apps[0].getAttribute('href'), desktop.state.upiUri);
 });
