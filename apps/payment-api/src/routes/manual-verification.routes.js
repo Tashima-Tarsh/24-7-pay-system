@@ -85,9 +85,15 @@ export function registerManualVerificationRoutes(server, ctx) {
 
       // Record the UTR as an observation (for matching later)
       if (obsRepo) {
+        // Resolve receiving account: use session's account, or fall back to merchant's default
+        let receivingAccountId = session.receivingAccountId;
+        if (!receivingAccountId && accountRepo) {
+          const account = accountRepo.findActiveForMerchant(session.merchantId);
+          receivingAccountId = account?.id || null;
+        }
         obsRepo.create({
           id: `obs_manual_${crypto.randomUUID()}`,
-          receivingAccountId: session.receivingAccountId || null,
+          receivingAccountId: receivingAccountId || '',
           source: ObserverSource.MANUAL_UTR_ENTRY,
           amountPaise: Number(session.amountPaise),
           observedAt: new Date(),
