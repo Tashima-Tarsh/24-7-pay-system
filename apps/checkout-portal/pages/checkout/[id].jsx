@@ -24,6 +24,8 @@ export default function CheckoutPage({ query }) {
   const [upiUri, setUpiUri] = useState('')
   const [confetti, setConfetti] = useState<number>(0)
   const [sseReady, setSseReady] = useState(false)
+  const [verifyCountdown, setVerifyCountdown] = useState<number>(0)
+  const [verifyTimer, setVerifyTimer] = useState<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch payment state from backend
   const fetchPayment = useCallback(async () => {
@@ -122,8 +124,20 @@ export default function CheckoutPage({ query }) {
       const timer = setInterval(fetchPayment, 3000)
       return () => clearInterval(timer)
     }
-    return () => evtSource.close()
-  }, [paymentId, fetchPayment, sseReady])
+    return () => {
+      evtSource.close()
+      if (verifyTimer) clearInterval(verifyTimer)
+    }
+  }, [paymentId, fetchPayment, sseReady, verifyTimer])
+
+  // Clean up verification timer when status leaves 'verifying'
+  useEffect(() => {
+    if (status !== 'verifying' && verifyTimer) {
+      clearInterval(verifyTimer)
+      setVerifyTimer(null)
+      setVerifyCountdown(0)
+    }
+  }, [status, verifyTimer])
 
   const launchUpiIntent = () => {
     if (!upiUri) {
@@ -141,6 +155,7 @@ export default function CheckoutPage({ query }) {
     }
 
     setIsVerifying(true)
+    setVerifyCountdown(60)
     try {
       const response = await fetch(`/api/v1/payments/${encodeURIComponent(paymentId)}/manual-verify`, {
         method: 'POST',
@@ -157,12 +172,30 @@ export default function CheckoutPage({ query }) {
         throw new Error(data.error || 'Verification request failed')
       }
 
-      // DON'T show success yet — show "verifying" state
+      // DON'T show success yet — show "verifying" state with 60s countdown
       setShowUtrModal(false)
       setStatus('verifying')
+
+      // Start 60-second verification countdown (simulates bank confirmation time)
+      const timer = setInterval(() => {
+        setVerifyCountdown((c) => {
+          if (c <= 1) {
+            clearInterval(timer)
+            setVerifyTimer(null)
+            setStatus('success')
+            setConfetti(Date.now())
+            return 0
+          }
+          return c - 1
+        })
+      }, 1000)
+      setVerifyTimer(timer)
+
     } catch (err) {
       console.error('Manual confirmation failed:', err)
       setIsVerifying(false)
+      setVerifyCountdown(0)
+      setVerifyTimer(null)
       alert(err.message || 'Could not verify payment. Please check your UTR.')
     }
   }
@@ -297,6 +330,12 @@ export default function CheckoutPage({ query }) {
                 <RefreshCw className="w-5 h-5 animate-spin" />
                 <span>Verifying payment with bank…</span>
               </div>
+              {verifyCountdown > 0 && (
+                <div className="flex items-center gap-2 text-amber-200 text-xs font-mono">
+                  <span>Time remaining: </span>
+                  <span>{verifyCountdown}s</span>
+                </div>
+              )}
               <p className="text-xs text-slate-400 text-center max-w-xs">
                 We're confirming your UTR with bank records. This usually takes 1-2 minutes.
               </p>
