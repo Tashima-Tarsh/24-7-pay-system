@@ -33,6 +33,11 @@ const gateway=http.createServer((req,res)=>{
     return;
   }
   if(pathname==='/store'||pathname.startsWith('/store/')||pathname.startsWith('/wallet')||pathname.startsWith('/order-')){res.writeHead(404);res.end('Demo store is disabled.');return;}
+  if(req.method==='POST'&&(pathname==='/v1/payments'||pathname==='/v1/refunds')){
+    res.writeHead(401,{'Content-Type':'application/json'});
+    res.end(JSON.stringify({error:'Unauthorized',code:'AUTH_REQUIRED'}));
+    return;
+  }
   const target=/^\/(checkout|pay\/|qr\/|youpi\.js|sdk\/|icons\/)/.test(pathname)?checkout.port:/^\/(api\/platform\/|api\/v1\/|v1\.0\/|health$)/.test(pathname)?api.port:admin.port;
   const remote=(req.socket.remoteAddress||'').replace(/^::ffff:/,'');
   // Render appends its edge client address; ignore caller-supplied Cloudflare headers.
