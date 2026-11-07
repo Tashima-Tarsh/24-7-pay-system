@@ -598,10 +598,68 @@ export function runMigrations(targetDb) {
     }
   } catch {}
 
+  // Create order token / nonce / UTR registry tables
+  try { createOrderTables(db); } catch {}
+
   return {
     db,
     defaultMerchant
   };
+}
+
+/**
+ * Creates payment order and nonce tables for the UPI token verification flow.
+ * Called during migration to ensure tables exist for /api/v1/orders and
+ * /api/v1/payments/:id/verify-callback.
+ */
+export function createOrderTables(db) {
+  // payment_orders — order records created via /api/v1/orders
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS payment_orders (
+      id TEXT PRIMARY KEY,
+      merchant_id TEXT NOT NULL,
+      amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+      payee_vpa TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'SUCCESS', 'FAILED', 'EXPIRED', 'CANCELLED')),
+      nonce TEXT NOT NULL UNIQUE,
+      fingerprint_hash TEXT,
+      utr TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      verified_at TEXT
+    );
+  `); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_merchant ON payment_orders (merchant_id);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_status ON payment_orders (status);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_nonce ON payment_orders (nonce);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_utr ON payment_orders (utr);"); } catch {}
+
+  // payment_nonces — one-time-use nonces for order token validation
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS payment_nonces (
+      id TEXT PRIMARY KEY,
+      nonce TEXT NOT NULL UNIQUE,
+      used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1)),
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `); } catch {}
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_nonces_nonce ON payment_nonces (nonce);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_nonces_used ON payment_nonces (used);"); } catch {}
+
+  // utr_registry — one-time UTR enforcement
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS utr_registry (
+      id TEXT PRIMARY KEY,
+      utr TEXT NOT NULL UNIQUE,
+      payment_order_id TEXT,
+      payment_session_id TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `); } catch {}
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_utr_registry_utr ON utr_registry (utr);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_utr_registry_order ON utr_registry (payment_order_id);"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_utr_registry_session ON utr_registry (payment_session_id);"); } catch {}
 }
 
 /**

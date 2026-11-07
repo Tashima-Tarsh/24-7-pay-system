@@ -1406,38 +1406,81 @@
     render(initialState);
     pollState();
 
-    // ---- Auto UPI App Return (URL params: Status + txnRef/tr/txnId) ----
-    (function handleAutoReturn() {
+    // ---- Order Token Storage & UPI App Return Verification ----
+    (function handleOrderTokenAndReturn() {
       try {
-        const search = (window.location && window.location.search) || '';
-        const params = {};
-        search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) {
-          params[decodeURIComponent(k)] = decodeURIComponent(v);
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const orderId = urlParams.get('order');
+        const upiUri = urlParams.get('upi_uri');
+
+        // Store token and orderId in sessionStorage (survives UPI app switch)
+        if (token) sessionStorage.setItem('order_token', token);
+        if (orderId) sessionStorage.setItem('order_id', orderId);
+        if (upiUri) sessionStorage.setItem('upi_uri', upiUri);
+
+        // Capture device fingerprint
+        const fingerprint = (navigator.userAgent + navigator.platform + navigator.language + (screen.width + 'x' + screen.height) + (navigator.hardwareConcurrency || 'unknown')).split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0).toString(16);
+
+        let appOpenedAt = null;
+
+        // Detect UPI app open/return via visibilitychange
+        document.addEventListener('visibilitychange', function () {
+          if (document.hidden) {
+            appOpenedAt = Date.now();
+          } else if (appOpenedAt) {
+            // User returned from UPI app
+            const params = new URLSearchParams(window.location.search);
+            const txnRef = params.get('txnRef') || params.get('tr') || params.get('txnId');
+            const responseCode = params.get('responseCode') || params.get('status');
+
+            if (txnRef && responseCode === '00') {
+              const tokenVal = sessionStorage.getItem('order_token');
+              if (!tokenVal) {
+                console.error('No order token in sessionStorage');
+                return;
+              }
+
+              const returnedAt = Date.now();
+
+              fetch('/api/v1/payments/' + encodeURIComponent(paymentId) + '/verify-callback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  token: tokenVal,
+                  utr: txnRef,
+                  responseCode: responseCode,
+                  amount: parseInt(amount || '0'),
+                  fingerprint: fingerprint,
+                  returnedAt: returnedAt,
+                  appOpenedAt: appOpenedAt
+                })
+              }).then(function (res) {
+                if (res.ok) {
+                  return res.json();
+                }
+                throw new Error('Verify callback failed: ' + res.status);
+              }).then(function (data) {
+                if (data.verdict === 'SUCCESS') {
+                  // Clear URL params so it doesn't re-fire on refresh
+                  window.history.replaceState({}, document.title, window.location.pathname);
+                  // Reload to show success state
+                  pollState();
+                } else {
+                  toast('Payment verification failed: ' + (data.reason || 'unknown reason'));
+                }
+              }).catch(function (err) {
+                console.error('Verify callback failed:', err);
+                toast('Verification request failed.');
+              });
+            }
+          }
         });
-        const upiStatus = params['Status'] || params['status'];
-        const txnRef = params['txnRef'] || params['tr'] || params['txnId'];
-        if (upiStatus && txnRef) {
-          fetch('/api/v1/payments/' + encodeURIComponent(paymentId) + '/client-return', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'idempotency-key': 'return_' + paymentId + '_' + txnRef
-            },
-            body: JSON.stringify({
-              sourcePlatform: 'WEB_CHECKOUT',
-              parsedStatus: upiStatus.toUpperCase(),
-              upiTransactionReference: txnRef,
-              eventTimestamp: new Date().toISOString()
-            })
-          }).then(function () {
-            // Clear URL params so it doesn't re-fire on refresh
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }).catch(function (err) {
-            console.error('Failed to report client return:', err);
-          });
-        }
       } catch (e) {
-        console.error('Auto return handler error:', e);
+        console.error('Order token/return handler error:', e);
       }
     })();
 
