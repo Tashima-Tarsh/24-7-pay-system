@@ -1409,7 +1409,7 @@
     // ---- Auto UPI App Return (URL params: Status + txnRef/tr/txnId) ----
     (function handleAutoReturn() {
       try {
-        const search = window.location.search || '';
+        const search = (window.location && window.location.search) || '';
         const params = {};
         search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) {
           params[decodeURIComponent(k)] = decodeURIComponent(v);
