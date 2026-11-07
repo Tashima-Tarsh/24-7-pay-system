@@ -2191,8 +2191,8 @@ export function registerAdminRoutes(server, ctx) {
 
     // Two Independent Streams: SMS and GMAIL (Section 8-15)
     // 100% customizable fields - ABSOLUTELY NO SIMULATOR PRE-VALIDATION!
-    const rawSource = (body.source || body.stream || 'SMS').toString().trim().toUpperCase();
-    const source = rawSource.includes('GMAIL') ? 'GMAIL' : 'SMS';
+    const rawSource = (body.source || body.stream || 'PROVIDER_WEBHOOK').toString().trim().toUpperCase();
+    const source = rawSource;
     const rawSender = (body.sender !== undefined ? body.sender : '').toString();
     const rawContent = (body.content !== undefined ? body.content : (body.message || body.raw || '')).toString();
     const rawReceivedAt = body.receivedAt !== undefined ? body.receivedAt : null;
