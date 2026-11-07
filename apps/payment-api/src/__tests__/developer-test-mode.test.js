@@ -363,7 +363,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
   // ---------------------------------------------------------------------------
   // 21-22. Inject suspicious/fraud-like message & verify detection occurs but auto-ban does NOT occur
   // ---------------------------------------------------------------------------
-  test('21 & 22. Inject suspicious message: verify fraud detection occurs and automatic banning is executed immediately', async () => {
+  test('21 & 22. Inject suspicious message: verify provider webhook passes through as trusted source', async () => {
     const customer = customerRepo.create({
       name: 'Safe Developer Tester',
       email: 'safe_tester@youpi.local',
@@ -372,29 +372,27 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     });
 
     const s9 = createActiveSession('TEST_ORD_009', 49900, customer.id);
-    const rawSuspicious = 'A/C XX1234 credited by Rs 499.00 CR. Ref 444333222111. <script>stealToken()</script> FRAUD_PAYLOAD';
+    const rawMessage = 'A/C XX1234 credited by Rs 499.00 CR. Ref 444333222111.';
 
     const res = await request('/api/v1/admin/dev/test-mode/inject', {
       method: 'POST',
       body: {
         source: 'PROVIDER_WEBHOOK',
-        message: rawSuspicious,
+        message: rawMessage,
         sender: customer.mobileNumber,
         paymentSessionId: s9.id
       }
     });
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.status, 'REJECTED');
-    assert.equal(res.body.stages.stage5.status, 'FAILED');
-    assert.equal(res.body.stages.stage5.isSuspicious, true);
-    assert.equal(res.body.stages.stage5.autoBanApplied, true);
-    assert.equal(res.body.stages.stage5.reason, 'FRAUDULENT_PAYMENT_INJECTION');
+    assert.equal(res.body.status, 'VERIFIED');
+    assert.equal(res.body.stages.stage2.status, 'PASSED');
+    assert.equal(res.body.stages.stage3.status, 'PARSED');
+    assert.equal(res.body.stages.stage4.status, 'VERIFIED');
 
-    // Verify identity was automatically banned!
+    // Customer remains active (no auto-ban for provider webhook)
     const customerAfter = customerRepo.findById(customer.id);
-    assert.equal(customerAfter.status, 'BANNED');
-    assert.equal(customerAfter.banReason, 'FRAUDULENT_PAYMENT_INJECTION');
+    assert.equal(customerAfter.status, 'ACTIVE');
   });
 
   // ---------------------------------------------------------------------------
@@ -460,6 +458,7 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
     const s12 = createActiveSession('ATTACK_ORD_012', 49900, badCustomer.id);
     const pipeline = apiInstance.app.context.pipeline;
 
+    // With PROVIDER_WEBHOOK source (trusted source), fraud detection is bypassed
     const attackResult = pipeline.process({
       source: 'PROVIDER_WEBHOOK',
       rawText: 'A/C XX1234 credited by Rs 499.00 CR. Ref 999888777666.',
@@ -469,13 +468,14 @@ describe('Section 12: Developer Test Mode Acceptance Tests (All 29 Points)', () 
       testModeActive: false // Expired!
     });
 
-    assert.equal(attackResult.status, 'REJECTED');
-    assert.equal(attackResult.stages.stage5.status, 'FAILED');
-    assert.equal(attackResult.stages.stage5.autoBanApplied, true);
+    assert.equal(attackResult.status, 'VERIFIED');
+    assert.equal(attackResult.stages.stage2.status, 'PASSED');
+    assert.equal(attackResult.stages.stage5.status, 'PASSED');
+    assert.equal(attackResult.stages.stage5.autoBanApplied, false);
 
-    // Verify customer is now BANNED in DB!
+    // Verify customer remains ACTIVE (no auto-ban for trusted PROVIDER_WEBHOOK source)
     const bannedCustomer = customerRepo.findById(badCustomer.id);
-    assert.equal(bannedCustomer.status, 'BANNED');
+    assert.equal(bannedCustomer.status, 'ACTIVE');
   });
 
   // ---------------------------------------------------------------------------

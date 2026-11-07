@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { Database } from '@youpi/db';
 import { PaymentStatus, PaymentMethod } from '@youpi/common';
 import { startServer } from '../index.js';
-import { authFetch } from '../../../../scripts/test-support.js';
+import { authFetch, seedActivePaymentProfile } from '../../../../scripts/test-support.js';
 
 describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', () => {
   let apiInstance;
@@ -15,6 +15,7 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
     testDb = new Database({ inMemory: true });
     apiInstance = await startServer(6208, testDb);
     baseUrl = `http://localhost:${apiInstance.port}`;
+    seedActivePaymentProfile(testDb, '00000000-0000-0000-0000-000000000001');
   });
 
   after(async () => {
@@ -24,8 +25,10 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
 
   test('POST /api/v1/admin/queue/clear expires all waiting UPI queue sessions', async () => {
     const sessionRepo = apiInstance.app.context.sessionRepo;
-    const receivingAccountId = '00000000-0000-0000-000000000002';
-    const merchantId = '00000000-00000000-000000000001';
+    const receivingAccountRepo = apiInstance.app.context.receivingAccountRepo;
+    const accounts = receivingAccountRepo.findAll();
+    const receivingAccountId = accounts[0]?.id || '00000000-0000-0000-0000-000000000002';
+    const merchantId = '00000000-0000-0000-0000-000000000001';
 
     // Create 1 active and 3 queued sessions
     const sActive = sessionRepo.create({
@@ -73,8 +76,10 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
   test('Detects active session conflict when customer already has an active session', async () => {
     const sessionRepo = apiInstance.app.context.sessionRepo;
     const customerRepo = apiInstance.app.context.customerRepo;
-    const receivingAccountId = '00000000-0000-0000-000000000002';
-    const merchantId = '00000000-00000000-000000000001';
+    const receivingAccountRepo = apiInstance.app.context.receivingAccountRepo;
+    const accounts = receivingAccountRepo.findAll();
+    const receivingAccountId = accounts[0]?.id || '00000000-0000-0000-0000-000000000002';
+    const merchantId = '00000000-0000-0000-0000-000000000001';
 
     // Create a customer
     const customer = customerRepo.create({

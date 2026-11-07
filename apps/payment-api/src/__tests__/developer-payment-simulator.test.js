@@ -257,7 +257,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     assert.equal(res.body.stages.stage1.status, 'LOADED');
   });
 
-  test('7, 8, 9, 32. Gmail Stream: accepts arbitrary sender email, free-form content, arbitrary timestamp', async () => {
+  test('7, 8, 9, 32. Provider Webhook Stream: accepts arbitrary sender email, free-form content, arbitrary timestamp', async () => {
     await enableTestMode();
 
     const arbitrarySenderEmail = 'anything@notadomain.invalid';
@@ -274,7 +274,7 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
 
     assert.equal(res.status, 200);
     assert.equal(res.body.isSimulated, true);
-    assert.equal(res.body.source, 'GMAIL');
+    assert.equal(res.body.source, 'PROVIDER_WEBHOOK');
     assert.equal(res.body.sender, arbitrarySenderEmail);
     assert.equal(res.body.raw, arbitraryRawEmail);
     assert.equal(res.body.stages.stage1.status, 'LOADED');
