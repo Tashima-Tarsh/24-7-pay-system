@@ -51,6 +51,42 @@ export default function CheckoutPage({ query }) {
     fetchPayment()
   }, [fetchPayment])
 
+  // ADD THIS: Handle UPI App Return (Pure Intent Flow)
+  useEffect(() => {
+    if (!paymentId || status === 'success') return
+
+    const urlParams = new URLSearchParams(window.location.search)
+    const upiStatus = urlParams.get('Status') || urlParams.get('status')
+    const txnRef = urlParams.get('txnRef') || urlParams.get('tr') || urlParams.get('txnId')
+
+    // If the UPI app returned with a status, report it to the server
+    if (upiStatus && txnRef) {
+      const reportClientReturn = async () => {
+        try {
+          await fetch(`/api/v1/payments/${encodeURIComponent(paymentId)}/client-return`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'idempotency-key': `return_${paymentId}_${txnRef}` // Prevents double-firing
+            },
+            body: JSON.stringify({
+              sourcePlatform: 'WEB_CHECKOUT',
+              parsedStatus: upiStatus.toUpperCase(),
+              upiTransactionReference: txnRef,
+              eventTimestamp: new Date().toISOString()
+            })
+          })
+          // Clear URL params so it doesn't re-fire on refresh
+          window.history.replaceState({}, document.title, window.location.pathname)
+        } catch (err) {
+          console.error('Failed to report client return:', err)
+        }
+      }
+
+      reportClientReturn()
+    }
+  }, [paymentId, status])
+
   // SSE for real-time status updates
   useEffect(() => {
     if (!paymentId) return
