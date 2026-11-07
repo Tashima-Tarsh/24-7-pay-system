@@ -7,38 +7,40 @@ import {
   RefreshCw,
   CheckCircle2,
   Phone,
-  Smartphone,
   QrCode,
   AlertCircle,
+  X
 } from 'lucide-react'
 
 export default function CheckoutPage({ query }) {
   const router = useRouter()
   const paymentId = query.id
-  const [status, setStatus] = useState<'waiting' | 'success' | 'error' | 'loading' | 'verifying'>('loading')
-  const [amount, setAmount] = useState('2.00')
+  
+  const [status, setStatus] = useState('loading') // 'loading' | 'waiting' | 'verifying' | 'success' | 'error'
+  const [amount, setAmount] = useState('0.00')
   const [utr, setUtr] = useState('')
-  const [manualUtr, setManualUtr] = useState('')
-  const [showUtrModal, setShowUtrModal] = useState(false)
-  const [isVerifying, setIsVerifying] = useState(false)
   const [upiUri, setUpiUri] = useState('')
-  const [confetti, setConfetti] = useState<number>(0)
-  const [sseReady, setSseReady] = useState(false)
-  const [verifyCountdown, setVerifyCountdown] = useState<number>(0)
-  const [verifyTimer, setVerifyTimer] = useState<ReturnType<typeof setInterval> | null>(null)
+  const [confetti, setConfetti] = useState(0)
+  
+  // Manual verification states
+  const [showManualConfirm, setShowManualConfirm] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [showUtrModal, setShowUtrModal] = useState(false)
+  const [manualUtr, setManualUtr] = useState('')
 
   // Fetch payment state from backend
   const fetchPayment = useCallback(async () => {
     if (!paymentId) return
     try {
       const res = await fetch(`/api/v1/checkout/${encodeURIComponent(paymentId)}/state`, {
-        headers: { Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
       })
       if (!res.ok) throw new Error('Payment not found')
       const data = await res.json()
-      setAmount(data?.amount || '2.00')
+      setAmount(data?.amount || '0.00')
       setUpiUri(data?.upiUri || '')
-      if (data?.status === 'SUCCESS' || data?.status === 'VERIFIED') {
+      
+      if (data?.status === 'SUCCESS' || data?.status === 'VERIFIED' || data?.status === 'CLIENT_REPORTED_SUCCESS') {
         setStatus('success')
         setUtr(data?.utr || data?.bankReferenceNumber || 'UNKNOWN')
         setConfetti(Date.now())
@@ -58,7 +60,7 @@ export default function CheckoutPage({ query }) {
     fetchPayment()
   }, [fetchPayment])
 
-  // ADD THIS: Handle UPI App Return (Pure Intent Flow)
+  // 1. Handle Auto UPI App Return (URL Params)
   useEffect(() => {
     if (!paymentId || status === 'success') return
 
@@ -72,7 +74,7 @@ export default function CheckoutPage({ query }) {
         try {
           await fetch(`/api/v1/payments/${encodeURIComponent(paymentId)}/client-return`, {
             method: 'POST',
-            headers: {
+            headers: { 
               'Content-Type': 'application/json',
               'idempotency-key': `return_${paymentId}_${txnRef}` // Prevents double-firing
             },
@@ -89,65 +91,51 @@ export default function CheckoutPage({ query }) {
           console.error('Failed to report client return:', err)
         }
       }
-
       reportClientReturn()
     }
   }, [paymentId, status])
 
-  // SSE for real-time status updates
+  // 2. SSE for real-time status updates
   useEffect(() => {
     if (!paymentId) return
     const evtSource = new EventSource(`/api/v1/checkout/${encodeURIComponent(paymentId)}/stream`)
-    evtSource.onopen = () => setSseReady(true)
     evtSource.onmessage = (e) => {
       try {
         const update = JSON.parse(e.data)
-        if (update.type === 'payment_status' || update.type === 'status') {
-          const newStatus = update.payload?.status || update.status
-          if (newStatus === 'SUCCESS' || newStatus === 'VERIFIED' || newStatus === 'paid') {
-            setStatus('success')
-            setUtr(update.payload?.utr || update.payload?.bankReferenceNumber || 'UNKNOWN')
-            setConfetti(Date.now())
-          } else if (newStatus === 'FAILED' || newStatus === 'EXPIRED') {
-            setStatus('error')
-          } else if (newStatus === 'MANUAL_VERIFICATION_PENDING' || newStatus === 'VERIFYING') {
-            setStatus('verifying')
-          } else {
-            setStatus('waiting')
-          }
+        const newStatus = update.payload?.status || update.status
+        if (newStatus === 'SUCCESS' || newStatus === 'VERIFIED' || newStatus === 'CLIENT_REPORTED_SUCCESS' || newStatus === 'paid') {
+          setStatus('success')
+          setUtr(update.payload?.utr || update.payload?.bankReferenceNumber || 'UNKNOWN')
+          setConfetti(Date.now())
+        } else if (newStatus === 'FAILED' || newStatus === 'EXPIRED') {
+          setStatus('error')
+        } else if (newStatus === 'MANUAL_VERIFICATION_PENDING' || newStatus === 'VERIFYING') {
+          setStatus('verifying')
         }
       } catch {}
     }
     evtSource.onerror = () => {
-      // SSE failed — fall back to polling
       evtSource.close()
-      const timer = setInterval(fetchPayment, 3000)
-      return () => clearInterval(timer)
     }
-    return () => {
-      evtSource.close()
-      if (verifyTimer) clearInterval(verifyTimer)
-    }
-  }, [paymentId, fetchPayment, sseReady, verifyTimer])
+    return () => evtSource.close()
+  }, [paymentId])
 
-  // Clean up verification timer when status leaves 'verifying'
+  // 3. Show manual button ONLY after 60 seconds of waiting
   useEffect(() => {
-    if (status !== 'verifying' && verifyTimer) {
-      clearInterval(verifyTimer)
-      setVerifyTimer(null)
-      setVerifyCountdown(0)
+    if (status === 'waiting') {
+      const timer = setTimeout(() => {
+        setShowManualConfirm(true)
+      }, 60000) // 60 seconds
+      return () => clearTimeout(timer)
     }
-  }, [status, verifyTimer])
+  }, [status])
 
   const launchUpiIntent = () => {
-    if (!upiUri) {
-      toastError('UPI intent not available yet')
-      return
-    }
-    // Trigger UPI deep link intent
+    if (!upiUri) return
     window.location.href = upiUri
   }
 
+  // 4. Handle Manual UTR Submission
   const handleManualConfirm = async () => {
     if (!/^\d{12}$/.test(manualUtr)) {
       alert('Please enter a valid 12-digit UTR number.')
@@ -155,59 +143,33 @@ export default function CheckoutPage({ query }) {
     }
 
     setIsVerifying(true)
-    setVerifyCountdown(60)
     try {
       const response = await fetch(`/api/v1/payments/${encodeURIComponent(paymentId)}/manual-verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           utr: manualUtr,
-          merchantId: '00000000-0000-0000-000000000001'
+          merchantId: '00000000-00000000-000000000001' // Update if dynamic
         })
       })
 
       const data = await response.json()
-
       if (!response.ok) {
         throw new Error(data.error || 'Verification request failed')
       }
-
-      // DON'T show success yet — show "verifying" state with 60s countdown
+      
       setShowUtrModal(false)
-      setStatus('verifying')
-
-      // Start 60-second verification countdown (simulates bank confirmation time)
-      const timer = setInterval(() => {
-        setVerifyCountdown((c) => {
-          if (c <= 1) {
-            clearInterval(timer)
-            setVerifyTimer(null)
-            setStatus('success')
-            setConfetti(Date.now())
-            return 0
-          }
-          return c - 1
-        })
-      }, 1000)
-      setVerifyTimer(timer)
-
+      setStatus('verifying') // Show verifying state while backend checks
     } catch (err) {
       console.error('Manual confirmation failed:', err)
       setIsVerifying(false)
-      setVerifyCountdown(0)
-      setVerifyTimer(null)
       alert(err.message || 'Could not verify payment. Please check your UTR.')
     }
   }
 
-  const openCheckoutInNewTab = () => {
-    if (!paymentId) return
-    window.open(`/checkout/${paymentId}`, '_blank')
-  }
-
   const renderConfetti = () => {
     if (!confetti) return null
-    const colors = [220, 280, 320, 340, 30, 60, 180] // indigo/purple/emerald hues
+    const colors = [220, 280, 320, 340, 30, 60, 180]
     const pieces = Array.from({ length: 40 }, (_, i) => {
       const h = colors[Math.floor(Math.random() * colors.length)]
       const duration = 0.5 + Math.random() * 1.0
@@ -227,7 +189,7 @@ export default function CheckoutPage({ query }) {
         />
       )
     })
-    return <div className="pointer-events-none w-full h-full top-0 left-0 z-50">{pieces}</div>
+    return <div className="pointer-events-none fixed inset-0 z-50">{pieces}</div>
   }
 
   return (
@@ -240,45 +202,47 @@ export default function CheckoutPage({ query }) {
       </div>
 
       <div className="relative z-10 flex flex-col h-screen w-full max-w-md mx-auto px-6 py-12">
-        {/* Header */}
         <header className="flex items-center gap-2 mb-10">
           <Lock className="w-5 h-5 text-white/80" />
           <span className="text-sm font-semibold text-white tracking-wider uppercase">Secured by 24/7 Pay</span>
         </header>
 
-        {/* Main content */}
         <main className="flex-1 flex flex-col items-center justify-center space-y-8 animate-scale-in">
           {/* Status indicator */}
           <div className="flex flex-col items-center gap-3 animate-fade-in">
-            {status === 'loading' ? (
+            {status === 'loading' && (
               <div className="flex items-center gap-2 text-slate-400 text-sm">
                 <RefreshCw className="w-4 h-4 animate-spin" />
                 <span>Loading payment…</span>
               </div>
-            ) : status === 'waiting' ? (
+            )}
+            {status === 'waiting' && (
               <div className="flex items-center gap-2 text-indigo-400 text-sm font-medium">
                 <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
                 <span>Waiting for payment…</span>
               </div>
-            ) : status === 'success' ? (
+            )}
+            {status === 'verifying' && (
+              <div className="flex flex-col items-center gap-2 text-amber-400 text-sm font-medium">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                <span>Verifying with bank...</span>
+                <p className="text-xs text-slate-400 text-center max-w-xs mt-1">Confirming your UTR. This usually takes 1-2 minutes.</p>
+              </div>
+            )}
+            {status === 'success' && (
               <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
                 <CheckCircle2 className="w-5 h-5 animate-pulse" />
                 <span>Payment Successful</span>
               </div>
-            ) : status === 'verifying' ? (
-              <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                <span>Verifying payment with bank…</span>
-              </div>
-            ) : (
+            )}
+            {status === 'error' && (
               <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
                 <AlertCircle className="w-5 h-5" />
-                <span>Payment failed</span>
+                <span>Payment failed or expired</span>
               </div>
             )}
           </div>
 
-          {/* UTR display (success only) */}
           {status === 'success' && utr && (
             <div className="glass-card px-6 py-3 rounded-xl text-center animate-fade-in" style={{ animationDelay: '0.4s' }}>
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">UTR Reference</span>
@@ -289,60 +253,6 @@ export default function CheckoutPage({ query }) {
             </div>
           )}
 
-          {/* Manual UTR entry modal */}
-          {showUtrModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-              <div className="bg-white/10 border border-white/20 rounded-2xl p-6 max-w-md w-full backdrop-blur-md shadow-2xl">
-                <h3 className="text-white font-semibold text-lg mb-4">Enter UTR Reference</h3>
-                <p className="text-slate-300 text-sm mb-4">Enter the 12-digit UTR from your bank SMS to verify manually.</p>
-                <input
-                  type="text"
-                  value={manualUtr}
-                  onChange={(e) => setManualUtr(e.target.value.replace(/\D/g, ''))}
-                  maxLength={12}
-                  placeholder="123456789012"
-                  className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white text-lg font-mono mb-4 focus:outline-none focus:border-amber-400"
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setShowUtrModal(false); setManualUtr('') }}
-                    className="flex-1 py-3 rounded-xl bg-white/10 border border-white/20 text-slate-400 font-medium hover:bg-white/20 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleManualConfirm}
-                    disabled={isVerifying}
-                    className="flex-1 py-3 rounded-xl bg-amber-500 border border-amber-400 text-white font-bold hover:bg-amber-400 disabled:opacity-50 transition-colors"
-                  >
-                    {isVerifying ? 'Verifying…' : 'Verify with Bank'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Verifying state indicator */}
-          {status === 'verifying' && (
-            <div className="flex flex-col items-center gap-3 animate-fade-in">
-              <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                <span>Verifying payment with bank…</span>
-              </div>
-              {verifyCountdown > 0 && (
-                <div className="flex items-center gap-2 text-amber-200 text-xs font-mono">
-                  <span>Time remaining: </span>
-                  <span>{verifyCountdown}s</span>
-                </div>
-              )}
-              <p className="text-xs text-slate-400 text-center max-w-xs">
-                We're confirming your UTR with bank records. This usually takes 1-2 minutes.
-              </p>
-            </div>
-          )}
-
-          {/* Amount - Massive typography */}
           <div className="text-center animate-fade-in" style={{ animationDelay: '0.2s' }}>
             <span className="text-slate-500 text-xs font-semibold uppercase tracking-widest">Amount to Pay</span>
             <div className="mt-1">
@@ -350,7 +260,6 @@ export default function CheckoutPage({ query }) {
             </div>
           </div>
 
-          {/* QR Code */}
           <div className="relative animate-fade-in" style={{ animationDelay: '0.6s' }}>
             <div className="qr-border w-64 h-64 rounded-2xl bg-white/5 p-2 border border-white/10 shadow-2xl flex items-center justify-center">
               {upiUri ? (
@@ -375,7 +284,7 @@ export default function CheckoutPage({ query }) {
           {/* Web fallback button */}
           {status !== 'success' && status !== 'verifying' && (
             <button
-              onClick={openCheckoutInNewTab}
+              onClick={() => window.open(`/checkout/${paymentId}`, '_blank')}
               className="mt-6 w-full py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-400 font-medium hover:bg-white/10 hover:text-white transition-colors"
             >
               Open in browser
@@ -393,45 +302,78 @@ export default function CheckoutPage({ query }) {
           )}
         </main>
 
-        {/* Success confetti overlay */}
         {renderConfetti()}
 
-        {/* Sticky bottom mobile intent button */}
+        {/* Adaptive Sticky Bottom Footer */}
         <div className="fixed bottom-0 left-0 right-0 z-50 p-4">
           <div className="max-w-md mx-auto">
-            <button
-              onClick={launchUpiIntent}
-              className={`w-full rounded-2xl px-6 py-5 text-white font-bold text-lg shadow-2xl flex items-center justify-center gap-2 transition-all duration-200 ${
-                status === 'success'
-                  ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/40'
-                  : status === 'verifying'
-                    ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/40'
-                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-[1.02] shadow-indigo-500/30'
-              }`}
-            >
-              {status === 'success' ? (
-                <>
-                  <CheckCircle2 className="w-5 h-5" />
-                  Paid via UPI
-                </>
-              ) : status === 'verifying' ? (
-                <>
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  Verifying with Bank…
-                </>
-              ) : (
-                <>
-                  <Phone className="w-5 h-5" />
-                  Pay ₹{amount} via UPI App
-                </>
-              )}
-            </button>
-            {status !== 'success' && status !== 'verifying' && (
-              <p className="mt-2 text-center text-xs text-slate-500">
-                Or scan the QR above with your UPI app
-              </p>
+            
+            {status === 'waiting' && (
+              <>
+                <button
+                  onClick={launchUpiIntent}
+                  className={`w-full rounded-2xl px-6 py-5 text-white font-bold text-lg shadow-2xl flex items-center justify-center gap-2 transition-all duration-200 ${
+                    status === 'success'
+                      ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/40'
+                      : status === 'verifying'
+                        ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/40'
+                        : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-[1.02] shadow-indigo-500/30'
+                  }`}
+                >
+                  {status === 'success' ? (
+                    <>
+                      <CheckCircle2 className="w-5 h-5" />
+                      Paid via UPI
+                    </>
+                  ) : status === 'verifying' ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Verifying with Bank…
+                    </>
+                  ) : (
+                    <>
+                      <Phone className="w-5 h-5" />
+                      Pay ₹{amount} via UPI App
+                    </>
+                  )}
+                </button>
+                
+                {/* ONLY SHOWS AFTER 60 SECONDS */}
+                {showManualConfirm && (
+                  <button
+                    onClick={() => setShowUtrModal(true)}
+                    className="w-full mt-3 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-200 border flex items-center justify-center gap-2 bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    I have already paid
+                  </button>
+                )}
+              </>
             )}
-            </button>
+
+            {status === 'verifying' && (
+              <div className="w-full rounded-2xl px-6 py-4 text-white font-bold text-lg shadow-2xl flex items-center justify-center gap-2 bg-amber-500 shadow-amber-500/40">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                Verifying with Bank…
+              </div>
+            )}
+
+            {status === 'success' && (
+              <button className="w-full rounded-2xl px-6 py-4 text-white font-bold text-lg shadow-2xl flex items-center justify-center gap-2 bg-emerald-500 shadow-emerald-500/40 cursor-default">
+                <CheckCircle2 className="w-5 h-5" />
+                Payment Successful
+              </button>
+            )}
+            
+            {status === 'error' && (
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full rounded-2xl px-6 py-4 text-white font-bold text-lg shadow-2xl flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 transition-colors"
+              >
+                <RefreshCw className="w-5 h-5" />
+                Try Again
+              </button>
+            )}
             {status !== 'success' && (
               <p className="mt-2 text-center text-xs text-slate-500">
                 Or scan the QR above with your UPI app
@@ -439,12 +381,56 @@ export default function CheckoutPage({ query }) {
             )}
           </div>
         </div>
+
+        {/* UTR Verification Modal */}
+        {showUtrModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-white">Verify Payment</h3>
+                <button
+                  onClick={() => setShowUtrModal(false)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <p className="text-sm text-slate-400 mb-4">
+                Enter the <span className="text-indigo-400 font-semibold">12-digit UTR</span> from your bank or UPI app success screen to verify your payment.
+              </p>
+              
+              <input
+                type="text"
+                maxLength={12}
+                placeholder="e.g., 319283746501"
+                value={manualUtr}
+                onChange={(e) => setManualUtr(e.target.value.replace(/\D/g, ''))} // Only allow numbers
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-center text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+              />
+              
+              <button
+                onClick={handleManualConfirm}
+                disabled={isVerifying || manualUtr.length !== 12}
+                className={`w-full rounded-xl px-6 py-3 text-white font-bold transition-all duration-200 flex items-center justify-center gap-2 ${
+                  isVerifying || manualUtr.length !== 12
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/30'
+                }`}
+              >
+                {isVerifying ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Verify & Complete'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
-}
-
-function toastError(msg) {
-  // Minimal toast fallback — uses browser alert if sonner not available
-  alert(msg)
 }
