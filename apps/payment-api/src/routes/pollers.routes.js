@@ -14,6 +14,23 @@ const __dirname = path.dirname(__filename);
 /** Upper bound on a single bank notification body accepted by the verification pipeline. */
 const MAX_OBSERVATION_TEXT_CHARS = 64 * 1024;
 
+/** Simple in-memory rate limiter for APK download: max 5 requests per 15 minutes per IP. */
+const APK_DOWNLOAD_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const APK_DOWNLOAD_RATE_LIMIT_MAX = 5;
+const apkDownloadHits = new Map(); // ip -> { count, resetAt }
+
+function checkApkDownloadRateLimit(ip) {
+  const now = Date.now();
+  let entry = apkDownloadHits.get(ip);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + APK_DOWNLOAD_RATE_LIMIT_WINDOW_MS };
+    apkDownloadHits.set(ip, entry);
+  }
+  entry.count += 1;
+  const allowed = entry.count <= APK_DOWNLOAD_RATE_LIMIT_MAX;
+  return { allowed, remaining: Math.max(0, APK_DOWNLOAD_RATE_LIMIT_MAX - entry.count), resetAt: entry.resetAt };
+}
+
 /**
  * Registers observation intake routes for SMS Gateway (Android Native Observer)
  * and Automated Observers (Gmail Direct API / Web Observers).
@@ -590,6 +607,36 @@ export function registerPollerRoutes(server, ctx) {
 
   // GET /api/v1/admin/sms-gateway/download-apk & GET /youpi-sms-gateway.apk
   const serveApk = async (req, res) => {
+    // --- Rate limit: max 5 requests per 15 minutes per IP ---
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    const rateLimit = checkApkDownloadRateLimit(clientIp);
+    if (!rateLimit.allowed) {
+      res.writeHead(429, {
+        'Content-Type': 'application/json',
+        'Retry-After': Math.ceil((rateLimit.resetAt - Date.now()) / 1000) || '1',
+      });
+      res.end(JSON.stringify({ error: 'Too many requests', code: 'APK_DOWNLOAD_RATE_LIMITED', retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000) || 1 }));
+      return;
+    }
+
+    // --- Entitlement check: require x-merchant-id header with a known merchant ---
+    const merchantId = req.headers['x-merchant-id'];
+    if (!merchantId) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing x-merchant-id header', code: 'MERCHANT_ID_REQUIRED' }));
+      return;
+    }
+    let merchantExists = false;
+    try {
+      const row = ctx.db.queryOne('SELECT id FROM merchants WHERE id = ?', [merchantId]);
+      if (row) merchantExists = true;
+    } catch {}
+    if (!merchantExists) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Merchant not found', code: 'MERCHANT_NOT_FOUND' }));
+      return;
+    }
+
     const apkLocations = [
       path.resolve(__dirname, '../../public/youpi-sms-gateway.apk'),
       path.resolve(__dirname, '../../../merchant-admin/public/youpi-sms-gateway.apk'),

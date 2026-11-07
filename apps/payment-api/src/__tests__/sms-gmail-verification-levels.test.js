@@ -243,7 +243,9 @@ describe('2-Level Verification (SMS Gateway + Gmail) & Queue Management Tests', 
   });
 
   test('Downloads standalone Android APK binary from Payment API', async () => {
-    const res = await authFetch(`${baseUrl}/api/v1/admin/sms-gateway/download-apk`);
+    const res = await authFetch(`${baseUrl}/api/v1/admin/sms-gateway/download-apk`, {
+      headers: { 'x-merchant-id': '00000000-0000-0000-0000-000000000001' }
+    });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('content-type'), 'application/vnd.android.package-archive');
     const buf = await res.arrayBuffer();

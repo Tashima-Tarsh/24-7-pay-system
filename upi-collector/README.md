@@ -62,12 +62,12 @@ Set `NTFY_TOPIC=your-topic` in `.env`. Uses public ntfy.sh by default.
 ## Endpoint contract
 
 ### POST /api/v1/upi/notify
-Headers: `x-device-key`, `x-sig` (hex HMAC-SHA256 of the RAW body with `WH_SECRET`)
+Headers: `x-device-key`, `x-ts` (ISO8601 timestamp), `x-sig` (hex HMAC-SHA256 of `${RAW_BODY}:${TIMESTAMP}` with `WH_SECRET`)
 Body: `{ "sender":"HDFCBK", "body":"<raw sms>", "ts":"<iso8601>", "device_id":"..." }`
 
 Order of checks:
 1. `x-device-key` constant-time compare → 401
-2. HMAC constant-time compare → 401
+2. HMAC constant-time compare over `${rawBody}:${x-ts}` → 401 (this binds the signature to its timestamp, eliminating replay)
 3. sender against allowlist (`HDFCBK ICICIB AXISBK SBIINB KOTAKB IDBIBK YESBNK`) → 422 `sender_not_allowed`
 4. parse amount (decimal, 2dp) + UTR (12-digit) + VPA. Unparseable → store as `unparsed`, 200, no fulfil
 5. respond `200 {"status":"accepted"}` in under 3s, then process on async queue
@@ -96,7 +96,7 @@ Returns `{ ok, last_sms_at, queue_depth }`.
 - `express.raw({ type: '*/*' })` on notify route so HMAC sees bytes
 - helmet, express-rate-limit (60/min notify, 10/min admin), 64KB body cap
 - `.env` in `.gitignore`; secrets from `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-- HMAC of body only (timestamp not included), but `ts` older than 5 min is rejected
+- HMAC of `${rawBody}:${x-ts}` (timestamp-bound signature eliminates replay window)
 
 ## Phone-side setup (do not execute here)
 

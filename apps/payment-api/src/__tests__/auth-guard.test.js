@@ -135,9 +135,9 @@ describe('Auth guard: admin, observer and force-success endpoints', () => {
     assert.equal(second.status, 409);
   });
 
-  test('the APK download stays public', async () => {
+  test('the APK download requires authentication', async () => {
     const apk = await call('/api/v1/admin/sms-gateway/download-apk');
-    assert.notEqual(apk.status, 401);
+    assert.equal(apk.status, 401);
   });
 
   test('a malformed Host header does not crash the server', async () => {

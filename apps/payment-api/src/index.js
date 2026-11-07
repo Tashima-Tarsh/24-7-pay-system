@@ -840,6 +840,25 @@ export function startServer(port = null, customDb = null) {
       console.error(`[Payment API] Missing required environment variables in production: ${missing.join(', ')}`);
       process.exit(1);
     }
+
+    // Reject weak or default admin passwords in production.
+    const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || '';
+    const weakDefaults = ['qwertyuiop90', 'password', 'admin123', '<GENERATE_SECURE_32_CHAR_STRING>', ''];
+    if (weakDefaults.includes(adminPassword)) {
+      console.error('[Payment API] CRITICAL: INITIAL_ADMIN_PASSWORD is a weak default or placeholder value in production.');
+      console.error('[Payment API] Set a strong, unique password via INITIAL_ADMIN_PASSWORD and restart.');
+      process.exit(1);
+    }
+
+    // Hard fail-safe: verification bypass flags are strictly forbidden in production.
+    const bypassFlags = ['SKIP_MFA', 'SKIP_EMAIL_VERIFY', 'SKIP_MOBILE_VERIFY'];
+    for (const flag of bypassFlags) {
+      const val = process.env[flag];
+      if (val === '1' || val === 'true' || val === 'true') {
+        console.error(`[Payment API] CRITICAL: Security bypass flag ${flag} is strictly forbidden in production.`);
+        process.exit(1);
+      }
+    }
   }
 
   const app = createPaymentApp(customDb);

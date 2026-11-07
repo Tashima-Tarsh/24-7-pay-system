@@ -2,10 +2,13 @@ import { getAdminToken, getObserverToken, safeEqual } from '@youpi/common';
 import { HttpServer } from './server.js';
 
 /** Admin-prefixed routes that are intentionally public (static APK download for pairing). */
-const PUBLIC_ADMIN_PATHS = new Set(['/api/v1/admin/sms-gateway/download-apk']);
+const PUBLIC_ADMIN_PATHS = new Set([]);
 
 /** Admin-prefixed routes the local observer processes call with the observer token. */
 const OBSERVER_ADMIN_PATHS = new Set(['/api/v1/admin/gmail/credentials']);
+
+/** APK download route: requires a valid bearer token (admin OR observer) plus entitlement + rate limit checked in the route handler. */
+const DOWNLOAD_TOKEN_PATHS = new Set(['/api/v1/admin/sms-gateway/download-apk']);
 
 /** SSE cannot send headers from EventSource, so these accept `?token=` on GET. */
 const QUERY_TOKEN_PATHS = new Set(['/api/v1/admin/stream']);
@@ -28,6 +31,7 @@ function requiredLevel(method, pathname) {
   if(/^\/api\/v1\/(collections|payouts|beneficiaries|banking|settlements|ledger|reconciliation|refunds|split-settlements|operations)(?:\/|$)/.test(pathname))return 'admin';
   if (pathname.startsWith('/api/v1/admin/')) {
     if (PUBLIC_ADMIN_PATHS.has(pathname)) return null;
+    if (DOWNLOAD_TOKEN_PATHS.has(pathname)) return 'download'; // lightweight: admin OR observer token
     if (OBSERVER_ADMIN_PATHS.has(pathname)) return 'observer';
     return 'admin';
   }
@@ -60,7 +64,8 @@ export function authGuard(req, res, pathname, url) {
 
   const ok = presented && (
     safeEqual(presented, getAdminToken()) ||
-    (level === 'observer' && safeEqual(presented, getObserverToken()))
+    (level === 'observer' && safeEqual(presented, getObserverToken())) ||
+    (level === 'download' && (safeEqual(presented, getAdminToken()) || safeEqual(presented, getObserverToken())))
   );
   if (ok) return false;
 

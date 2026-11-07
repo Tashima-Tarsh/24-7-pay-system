@@ -16,23 +16,28 @@ async function verifyDeviceKey(provided) {
   return timingSafeEqual(provided, expected);
 }
 
-async function verifyHmac(rawBody, providedSig) {
+async function verifyHmac(rawBody, providedSig, ts) {
   const expected = process.env.WH_SECRET;
   if (!expected) return false;
-  const computed = crypto.createHmac('sha256', expected).update(rawBody).digest('hex');
+  // HMAC is computed over the combined payload: rawBody:timestamp
+  // This cryptographically binds the signature to its specific timestamp,
+  // eliminating the replay window.
+  if (!ts) return false;
+  const computed = crypto.createHmac('sha256', expected).update(`${rawBody}:${ts}`).digest('hex');
   return timingSafeEqual(computed, providedSig);
 }
 
 async function verifyMiddleware(req, res, next) {
   const deviceKey = req.headers['x-device-key'];
   const sig = req.headers['x-sig'];
+  const ts = req.headers['x-ts'];
 
   if (!deviceKey || !(await verifyDeviceKey(deviceKey))) {
     return res.status(401).json({ error: 'invalid_device_key' });
   }
 
   const rawBody = req.rawBody || req.body;
-  if (!sig || !(await verifyHmac(rawBody, sig))) {
+  if (!sig || !(await verifyHmac(rawBody, sig, ts))) {
     return res.status(401).json({ error: 'invalid_hmac' });
   }
 
