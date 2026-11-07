@@ -223,7 +223,7 @@
   <header>
     <div class="brand-group">
       <a href="#overview" onclick="switchSection('overview'); return false;" class="brand-title">
-        <span style="color:#10b981; font-size:1.4rem;">⬡</span> SANBOOK PAY
+        <span style="color:#10b981; font-size:1.4rem;">⬡</span> 24/7 PAY
       </a>
       <div class="brand-badge">
         <span class="pulse-indicator"></span> LIVE PRODUCTION
@@ -569,7 +569,7 @@
               <!-- Node.js -->
               <pre class="code-content-box" id="code-nodejs" style="display:none;"><code>import fetch from 'node-fetch';
 
-async function createSanbookPayment() {
+async function createPayment() {
   const response = await fetch('http://localhost:6100/api/v1/payments', {
     method: 'POST',
     headers: {
@@ -1520,8 +1520,8 @@ def create_sanbook_payment():
       }
 
       // Notify controller engine
-      if (typeof window.onSanbookPaySectionSwitch === 'function') {
-        window.onSanbookPaySectionSwitch(sectionId);
+      if (typeof window.onPaySectionSwitch === 'function') {
+        window.onPaySectionSwitch(sectionId);
       }
     }
 

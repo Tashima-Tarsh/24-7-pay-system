@@ -82,7 +82,7 @@ async function loadOverviewData() {
       }
     }
   } catch (err) {
-    console.error('[SanbookPay Overview] Failed to load:', err);
+    console.error('[24/7 Pay Overview] Failed to load:', err);
   }
 }
 
@@ -1003,7 +1003,7 @@ function updatePosQrPreview() {
   if (ordDisp) ordDisp.textContent = `Order: ${orderId}`;
 
   // Authentic UPI Intent URL specification
-  currentPosUpiUri = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=Sanbook+Pay&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(note)}&tr=${encodeURIComponent(orderId)}`;
+  currentPosUpiUri = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=24%2F7+Pay&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(note)}&tr=${encodeURIComponent(orderId)}`;
 
   const qrContainer = document.getElementById('posQrSvgWrap');
   if (qrContainer) {
@@ -1283,7 +1283,7 @@ function initQrTerminal() {
 }
 
 // Global dispatcher hook called by switchSection
-window.onSanbookPaySectionSwitch = function(sectionId) {
+window.onPaySectionSwitch = function(sectionId) {
   if (sectionId === 'overview') loadOverviewData();
   if (sectionId === 'qrTerminal') initQrTerminal();
   if (sectionId === 'collections') loadCollectionsData();
