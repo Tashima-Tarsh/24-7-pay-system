@@ -99,6 +99,7 @@ import { registerCallbackWalletRoutes } from './routes/callback-wallet.routes.js
 import { createUpiSimpleService } from './services/upi-simple.js';
 import { registerUpiSimpleRoutes } from './routes/upi-simple.routes.js';
 import { registerUpiIntentRoutes } from './routes/upi-intent.routes.js';
+import { registerManualVerificationRoutes } from './routes/manual-verification.routes.js';
 import { getWhatsAppBerryService, WhatsAppBerryService } from './services/whatsapp-berry.service.js';
 import { ReceiptNotificationService } from './services/receipt-notification.service.js';
 import { NotificationDeliveryService } from './services/notification-delivery.service.js';
@@ -601,6 +602,9 @@ registerHyperswitchRoutes(server, context);
 
   // Universal UPI Intent Return API (Phase 1 & 3)
   registerUpiIntentRoutes(server, context);
+
+  // Manual UTR verification API
+  registerManualVerificationRoutes(server, context);
 
   // Super Admin authentication routes
   registerSuperAdminRoutes(server, context);
