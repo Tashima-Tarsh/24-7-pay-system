@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import crypto from 'crypto';
 
 // Test Configuration
 const MERCHANT_ID = process.env.TEST_MERCHANT_ID || '00000000-0000-0000-0000-000000000001';
@@ -15,9 +16,9 @@ test.describe('Pure UPI Intent Return E2E Flow', () => {
   let paymentId: string;
   let checkoutUrl: string;
 
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ request, }) => {
     // STEP 1: Create Payment Intent via Pure API
-    const orderId = `E2E_ORD_${Date.now()}`;
+    const orderId = `E2E_ORD_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     const response = await request.post(`${BASE_URL}/api/v1/payments/intents`, {
       headers: authHeaders,
       data: {
