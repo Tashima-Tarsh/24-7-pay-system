@@ -105,6 +105,27 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     return res.body;
   }
 
+  test('Synthetic provider injection is unavailable outside isolated tests', async () => {
+    await enableTestMode();
+    const previous = process.env.NODE_ENV;
+    const previousDevTools = process.env.YOUPI_ALLOW_DEV_TOOLS;
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.YOUPI_ALLOW_DEV_TOOLS = 'true';
+      const res = await request('/api/v1/admin/dev/simulator/inject', {
+        method: 'POST',
+        body: { source: 'PROVIDER_WEBHOOK', content: 'Rs 499 credited ref 123456789012' }
+      });
+      assert.equal(res.status, 403);
+      assert.ok(res.body.error);
+      assert.equal(res.body.success, false);
+    } finally {
+      process.env.NODE_ENV = previous;
+      if (previousDevTools === undefined) delete process.env.YOUPI_ALLOW_DEV_TOOLS;
+      else process.env.YOUPI_ALLOW_DEV_TOOLS = previousDevTools;
+    }
+  });
+
   test('34. Security: Unauthorized users and customers cannot call simulator endpoints', async () => {
     // 1. Missing merchant header -> 401
     const unauthRes = await request('/api/v1/admin/dev/simulator/customers', {
@@ -280,13 +301,13 @@ describe('Feature 65: Developer Payment Simulator Integration & Acceptance Suite
     assert.equal(res.body.stages.stage1.status, 'LOADED');
   });
 
-  test('14. Invalid SMS sender (personal mobile not matching customer) is rejected by REAL Stage 2', async () => {
+  test('14. SMS is rejected by REAL Stage 2', async () => {
     await enableTestMode();
 
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'PROVIDER_WEBHOOK',
+        source: 'SMS',
         sender: '+918888888888', // Ordinary personal phone number not matching customer
         content: 'A/C XX1234 credited with Rs 499.00 CR. Ref 123456789012'
       }
@@ -299,13 +320,13 @@ assert.equal(res.body.reason, 'UNAUTHORIZED_SOURCE');
     assert.equal(res.body.stages.stage2.status, 'FAILED');
   });
 
-  test('15. Invalid Gmail sender (unrecognized domain) is rejected by REAL Stage 2', async () => {
+  test('15. Gmail is rejected by REAL Stage 2', async () => {
     await enableTestMode();
 
     const res = await request('/api/v1/admin/dev/simulator/inject', {
       method: 'POST',
       body: {
-        source: 'PROVIDER_WEBHOOK',
+        source: 'GMAIL',
         sender: 'test@gmail.com', // Not authorized bank domain
         content: 'INR 499 credited CR 123456789012'
       }

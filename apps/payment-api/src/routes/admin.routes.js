@@ -2149,6 +2149,12 @@ export function registerAdminRoutes(server, ctx) {
     const merchant = checkSimulatorAuth(req, res);
     if (!merchant) return;
 
+    // Synthetic provider proof must never settle a payment on a deployed gateway.
+    if (process.env.NODE_ENV !== 'test') {
+      HttpServer.json(res, 403, { success: false, error: 'Synthetic injection is only available in isolated tests.' });
+      return;
+    }
+
     // Developer Test Mode Compatibility (Section 27 & Acceptance Test 36)
     const until = merchant?.branding?.testModeUntil;
     const isTestModeActive = Boolean(until && Number(until) > Date.now());
@@ -2189,10 +2195,8 @@ export function registerAdminRoutes(server, ctx) {
       }
     }
 
-    // Two Independent Streams: SMS and GMAIL (Section 8-15)
-    // 100% customizable fields - ABSOLUTELY NO SIMULATOR PRE-VALIDATION!
-    const rawSource = (body.source || body.stream || 'SMS').toString().trim().toUpperCase();
-    const source = rawSource.includes('GMAIL') ? 'GMAIL' : 'SMS';
+    // Preserve the source so the canonical pipeline can reject unauthorized streams.
+    const source = (body.source || body.stream || 'SMS').toString().trim().toUpperCase();
     const rawSender = (body.sender !== undefined ? body.sender : '').toString();
     const rawContent = (body.content !== undefined ? body.content : (body.message || body.raw || '')).toString();
     const rawReceivedAt = body.receivedAt !== undefined ? body.receivedAt : null;
