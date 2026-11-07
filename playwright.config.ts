@@ -1,5 +1,4 @@
 import { defineConfig, devices } from '@playwright/test';
-import { midsceneSetup } from '@midscene/web/playwright';
 
 export default defineConfig({
   testDir: './e2e',
@@ -24,5 +23,3 @@ export default defineConfig({
     },
   ],
 });
-
-midsceneSetup();
