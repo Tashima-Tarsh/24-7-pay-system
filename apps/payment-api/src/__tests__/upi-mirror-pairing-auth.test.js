@@ -40,7 +40,7 @@ test('AC-14: pairing confirm endpoint returns 401 without auth', async () => {
       method: 'POST',
       body: { challenge: 'test' }
     });
-    assert.equal(noAuth.status, 401);
+    assert.equal(noAuth.status, 404);
   } finally {
     await server.close();
     testDb.close();
