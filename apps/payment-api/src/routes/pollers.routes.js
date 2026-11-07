@@ -1,11 +1,10 @@
-import {isCurrentAndroidRelease} from '@youpi/common';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HttpServer } from '../server.js';
 import { ObservationNormalizer, BankSmsParser, BankEmailParser, generateQrSvg } from '@youpi/core';
-import { toRupeesString, toPaise, verifyHmac, resolveRuntimeUrls, resolveSecret, safeEqual, hasBearer, getObserverToken } from '@youpi/common';
+import { toRupeesString, toPaise, verifyHmac, resolveRuntimeUrls, resolveSecret, safeEqual, hasBearer } from '@youpi/common';
 import { isAdminRequest } from '../auth-guard.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,23 +12,6 @@ const __dirname = path.dirname(__filename);
 
 /** Upper bound on a single bank notification body accepted by the verification pipeline. */
 const MAX_OBSERVATION_TEXT_CHARS = 64 * 1024;
-
-/** Simple in-memory rate limiter for APK download: max 5 requests per 15 minutes per IP. */
-const APK_DOWNLOAD_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const APK_DOWNLOAD_RATE_LIMIT_MAX = 5;
-const apkDownloadHits = new Map(); // ip -> { count, resetAt }
-
-function checkApkDownloadRateLimit(ip) {
-  const now = Date.now();
-  let entry = apkDownloadHits.get(ip);
-  if (!entry || now > entry.resetAt) {
-    entry = { count: 0, resetAt: now + APK_DOWNLOAD_RATE_LIMIT_WINDOW_MS };
-    apkDownloadHits.set(ip, entry);
-  }
-  entry.count += 1;
-  const allowed = entry.count <= APK_DOWNLOAD_RATE_LIMIT_MAX;
-  return { allowed, remaining: Math.max(0, APK_DOWNLOAD_RATE_LIMIT_MAX - entry.count), resetAt: entry.resetAt };
-}
 
 /**
  * Registers observation intake routes for SMS Gateway (Android Native Observer)
@@ -50,9 +32,7 @@ export function registerPollerRoutes(server, ctx) {
 
   // GET /api/v1/pollers/active-window (Enables deep intelligent DOM scanning for active amounts and dual-layer verification)
   server.get('/api/v1/pollers/active-window', async (req, res) => {
-    // Observer-only. This returns every in-flight session with its exact amount and VPA,
-    // which is precisely the oracle needed to craft a matching synthetic bank observation.
-    if (!isAdminRequest(req) && !hasBearer(req, getObserverToken())) {
+    if (!isAdminRequest(req)) {
       HttpServer.json(res, 401, { error: 'Unauthorized', code: 'AUTH_REQUIRED' });
       return;
     }
@@ -262,7 +242,6 @@ export function registerPollerRoutes(server, ctx) {
   };
 
   server.post('/api/v1/pollers/android/pair', handleAndroidPair);
-  server.post('/api/v1/observers/sms/pair', handleAndroidPair);
 
   // --- ANDROID SMS GATEWAY OBSERVATION INGESTION ---
   const handleAndroidSmsEvents = async (req, res) => {
@@ -458,7 +437,6 @@ export function registerPollerRoutes(server, ctx) {
   };
 
   server.post('/api/v1/pollers/android/events', handleAndroidSmsEvents);
-  server.post('/api/v1/observers/sms', handleAndroidSmsEvents);
 
   // --- ANDROID HEARTBEAT HANDLER ---
   const handleAndroidHeartbeat = async (req, res) => {
@@ -482,7 +460,6 @@ export function registerPollerRoutes(server, ctx) {
 
   server.post('/api/v1/pollers/android/heartbeat', handleAndroidHeartbeat);
   server.post('/api/v1/pollers/heartbeat', handleAndroidHeartbeat);
-  server.post('/api/v1/observers/heartbeat', handleAndroidHeartbeat);
 
   // --- MERCHANT ADMIN: SMS GATEWAY PAIRING QR CODE & STATUS ---
   server.get('/api/v1/admin/sms-gateway/pair-qr', async (req, res) => {
@@ -604,66 +581,4 @@ export function registerPollerRoutes(server, ctx) {
     ctx.db.execute('DELETE FROM android_devices WHERE id = ?', [deviceId]);
     HttpServer.json(res, 200, { success: true, message: 'Device unlinked.' });
   });
-
-  // GET /api/v1/admin/sms-gateway/download-apk & GET /youpi-sms-gateway.apk
-  const serveApk = async (req, res) => {
-    // --- Rate limit: max 5 requests per 15 minutes per IP ---
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-    const rateLimit = checkApkDownloadRateLimit(clientIp);
-    if (!rateLimit.allowed) {
-      res.writeHead(429, {
-        'Content-Type': 'application/json',
-        'Retry-After': Math.ceil((rateLimit.resetAt - Date.now()) / 1000) || '1',
-      });
-      res.end(JSON.stringify({ error: 'Too many requests', code: 'APK_DOWNLOAD_RATE_LIMITED', retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000) || 1 }));
-      return;
-    }
-
-    // --- Entitlement check: require x-merchant-id header with a known merchant ---
-    const merchantId = req.headers['x-merchant-id'];
-    if (!merchantId) {
-      res.writeHead(403, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing x-merchant-id header', code: 'MERCHANT_ID_REQUIRED' }));
-      return;
-    }
-    let merchantExists = false;
-    try {
-      const row = ctx.db.queryOne('SELECT id FROM merchants WHERE id = ?', [merchantId]);
-      if (row) merchantExists = true;
-    } catch {}
-    if (!merchantExists) {
-      res.writeHead(403, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Merchant not found', code: 'MERCHANT_NOT_FOUND' }));
-      return;
-    }
-
-    const apkLocations = [
-      path.resolve(__dirname, '../../public/youpi-sms-gateway.apk'),
-      path.resolve(__dirname, '../../../merchant-admin/public/youpi-sms-gateway.apk'),
-      path.resolve(__dirname, '../../../android-observer-app/app/build/outputs/apk/release/youpi-sms-gateway.apk'),
-      path.resolve(__dirname, '../../../android-observer-app/youpi-sms-gateway.apk')
-    ];
-
-    let foundPath = null;
-    for (const p of apkLocations) {
-      if (fs.existsSync(p)) {
-        foundPath = p;
-        break;
-      }
-    }
-
-    if(!foundPath || (process.env.NODE_ENV==='production' && !isCurrentAndroidRelease(foundPath,path.resolve(__dirname,'../../../..'))))return HttpServer.json(res,503,{error:'A current signed Android release has not been built and verified. The old APK is not distributed as the updated observer.',code:'ANDROID_BUILD_REQUIRED'});
-
-    const stat = fs.statSync(foundPath);
-    res.writeHead(200, {
-      'Content-Type': 'application/vnd.android.package-archive',
-      'Content-Disposition': 'attachment; filename="youpi-sms-gateway.apk"',
-      'Content-Length': stat.size,
-      'Access-Control-Allow-Origin': '*'
-    });
-    fs.createReadStream(foundPath).pipe(res);
-  };
-
-  server.get('/api/v1/admin/sms-gateway/download-apk', serveApk);
-  server.get('/youpi-sms-gateway.apk', serveApk);
 }

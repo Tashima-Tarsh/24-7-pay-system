@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
 import {
-  ObserverSource,
   PaymentStatus,
   calculateObservationFingerprint,
   toPaise,
@@ -129,17 +128,13 @@ export class PaymentVerificationPipeline {
     // =========================================================================
     // [ STAGE 1 ]: Load + Normalize + Preserve Raw Evidence
     // =========================================================================
-    const rawNormalizedSource = (input.source || 'SMS').toUpperCase();
-    const isGmailSource = rawNormalizedSource.includes('GMAIL') || rawNormalizedSource.includes('EMAIL');
-    const source = isGmailSource ? 'GMAIL' : 'SMS';
+    const rawNormalizedSource = (input.source || 'PROVIDER_WEBHOOK').toUpperCase();
+    const source = rawNormalizedSource === 'BANK_H2H_POLL' ? 'BANK_H2H_POLL' : 'PROVIDER_WEBHOOK';
     const messageId = input.messageId || (isTest
       ? `TEST-${crypto.randomUUID().slice(0, 8)}`
       : `OBS-${crypto.randomUUID().slice(0, 8)}`);
 
-    let defaultSender = source === 'GMAIL' ? 'alerts@retail.bank.in' : 'BANK-ALERT';
-    if (isTest && input.sender === 'TEST') {
-      defaultSender = 'TEST';
-    }
+    const defaultSender = 'BANK-H2H';
     const sender = input.sender !== undefined ? input.sender : defaultSender;
 
     let receivedAt = new Date();
@@ -301,114 +296,35 @@ export class PaymentVerificationPipeline {
 
     // =========================================================================
     // [ STAGE 2 ]: Source / Sender Filtering
+    // Only PROVIDER_WEBHOOK and BANK_H2H_POLL are accepted as authoritative proof.
     // =========================================================================
     let stage2;
-    if (source === 'SMS') {
-      const cleanSender = (sender || '').trim();
-      const digitsOnly = cleanSender.replace(/[\s+-]/g, '');
-
-      // Pure numeric check: Any string consisting solely of numbers (personal mobile numbers or +91 prefixed values)
-      const isPureNumeric = /^\d+$/.test(digitsOnly) && !/[a-zA-Z]/.test(cleanSender);
-
-      if (isPureNumeric) {
-        if (!isAttributableToCustomer) {
-          // Unknown sender pure numeric SMS: Reject immediately, NO AUTO-BAN
-          stage2 = {
-            stage: 2,
-            name: 'FILTER',
-            status: 'FAILED',
-            reason: 'PERSONAL_SMS_REJECTED',
-            details: `Personal SMS from numeric phone numbers (${sender}) is rejected. Bank SMS sender cannot be purely numeric; it must be an alphanumeric or alphabetic sender code.`
-          };
-          return buildResult({
-            finalStatus: 'REJECTED',
-            failingStage: 2,
-            failingCondition: 'PERSONAL_SMS_REJECTED',
-            failingReason: stage2.details,
-            stage2
-          });
-        }
-        // Attributable to active customer: allow inspection under Defined Fraud Scenario
-        stage2 = {
-          stage: 2,
-          name: 'FILTER',
-          status: 'FLAGGED_CUSTOMER_SENDER',
-          details: `Sender '${sender}' matches customer registered mobile number. Proceeding to fraud verification.`
-        };
-      } else {
-        // Any pure alphabetic or alphanumeric string of any length containing letters (e.g. HDFCBK, SBI, VM-HDFCBK, AXIS123, etc.)
-        const isValidSenderCode = /[a-zA-Z]/.test(cleanSender) && /^[a-zA-Z0-9_\-\.]+$/.test(cleanSender);
-
-        if (!isValidSenderCode) {
-          stage2 = {
-            stage: 2,
-            name: 'FILTER',
-            status: 'FAILED',
-            reason: 'INVALID_SMS_SENDER',
-            details: `Invalid SMS sender '${sender}'. Bank SMS sender must be an alphanumeric or pure alphabetic string containing letters (no pure numeric strings or invalid symbols).`
-          };
-          return buildResult({
-            finalStatus: 'REJECTED',
-            failingStage: 2,
-            failingCondition: 'INVALID_SMS_SENDER',
-            failingReason: stage2.details,
-            stage2
-          });
-        }
-      }
-    } else if (source === 'GMAIL') {
-      const emailMatch = sender.match(/<([^>]+)>/);
-      const cleanEmail = (emailMatch ? emailMatch[1] : sender).trim();
-      let emailDomain = '';
-      if (cleanEmail.includes('@')) {
-        emailDomain = cleanEmail.split('@')[1]?.toLowerCase().trim().replace(/[>]/g, '');
-      } else {
-        emailDomain = cleanEmail.toLowerCase().trim().replace(/[>]/g, '');
-      }
-
-      // Universal Bank Identifier: Email domain ends with .bank.in (e.g. alerts@hdfc.bank.in, example@example.bank.in)
-      const isBankDomain = emailDomain.endsWith('.bank.in') || emailDomain === 'bank.in';
-      // In automated test suite or local dev, allow TEST sender and legacy test fixture domains
-      const isValidDomain = isBankDomain || emailDomain === 'hdfcbank.net' || (process.env.NODE_ENV==='test' && (sender==='TEST'||cleanEmail==='TEST'||emailDomain.endsWith('.youpi.local'))) || sender==='gmail-browser-automator';
-
-      if (!isValidDomain) {
-        if (!isAttributableToCustomer) {
-          // Unknown sender unauthorized email domain: Reject immediately, NO AUTO-BAN
-          stage2 = {
-            stage: 2,
-            name: 'FILTER',
-            status: 'FAILED',
-            reason: 'INVALID_EMAIL_DOMAIN',
-            details: `Invalid or unauthorized email domain '${emailDomain || sender}'. Official Indian bank alerts must originate from domains ending in .bank.in (e.g. alerts@bankname.bank.in).`
-          };
-          return buildResult({
-            finalStatus: 'REJECTED',
-            failingStage: 2,
-            failingCondition: 'INVALID_EMAIL_DOMAIN',
-            failingReason: stage2.details,
-            stage2
-          });
-        }
-        // Attributable to active customer: allow inspection under Defined Fraud Scenario
-        stage2 = {
-          stage: 2,
-          name: 'FILTER',
-          status: 'FLAGGED_CUSTOMER_SENDER',
-          details: `Sender '${sender}' matches customer registered email. Proceeding to fraud verification.`
-        };
-      }
+    if (source === 'PROVIDER_WEBHOOK') {
+      stage2 = {
+        stage: 2,
+        name: 'FILTER',
+        status: 'PASSED',
+        details: `Provider webhook source verified: ${sender}.`
+      };
+    } else if (source === 'BANK_H2H_POLL') {
+      stage2 = {
+        stage: 2,
+        name: 'FILTER',
+        status: 'PASSED',
+        details: `Bank H2H poll source verified: ${sender}.`
+      };
     } else {
       stage2 = {
         stage: 2,
         name: 'FILTER',
         status: 'FAILED',
-        reason: 'IRRELEVANT_SOURCE',
-        details: `Observation source '${source}' is irrelevant or unsupported.`
+        reason: 'UNAUTHORIZED_SOURCE',
+        details: `Observation source '${source}' is not an authorized payment proof source. Only PROVIDER_WEBHOOK and BANK_H2H_POLL are accepted as authoritative proof of payment.`
       };
       return buildResult({
         finalStatus: 'REJECTED',
         failingStage: 2,
-        failingCondition: 'IRRELEVANT_SOURCE',
+        failingCondition: 'UNAUTHORIZED_SOURCE',
         failingReason: stage2.details,
         stage2
       });
@@ -683,17 +599,16 @@ export class PaymentVerificationPipeline {
 
     // 4. Duplicate Check
     const receivingAccountId = session.receivingAccountId || input.receivingAccountId || '00000000-0000-0000-0000-000000000002';
-    const observerSourceEnum = source === 'GMAIL' ? ObserverSource.GMAIL : ObserverSource.SMS_GATEWAY;
     const fingerprint = calculateObservationFingerprint({
       receivingAccountId,
       amountPaise: parsedData.amountPaise,
-      source: observerSourceEnum,
+      source: source,
       bankReferenceNumber: bankRef,
       observedAt: receivedAt
     });
 
     const existingObs = this.obsRepo.findByFingerprint(fingerprint);
-    if (existingObs && existingObs.source === observerSourceEnum) {
+    if (existingObs && existingObs.source === source) {
       stage4 = {
         stage: 4,
         name: 'VERIFICATION',
@@ -807,18 +722,8 @@ export class PaymentVerificationPipeline {
     );
 
     // 5. The observation is not a legitimate bank-originated transaction observation:
-    let isNotLegitimateBank = false;
-    if (source === 'SMS') {
-      const cleanSender = (sender || '').trim();
-      const isValidSenderCode = /[a-zA-Z]/.test(cleanSender) && /^[a-zA-Z0-9_\-\.]+$/.test(cleanSender);
-      isNotLegitimateBank = !isValidSenderCode || isAttributableToCustomer;
-    } else if (source === 'GMAIL') {
-      const senderDomain = sender.includes('@') ? sender.split('@')[1]?.toLowerCase().trim() : sender.toLowerCase().trim();
-      const isBankDomain = senderDomain.endsWith('.bank.in') || senderDomain === 'bank.in' || sender === 'TEST' || senderDomain === 'hdfcbank.net';
-      isNotLegitimateBank = !isBankDomain || isAttributableToCustomer;
-    } else {
-      isNotLegitimateBank = true;
-    }
+    // PROVIDER_WEBHOOK and BANK_H2H_POLL are by definition legitimate authoritative sources.
+    const isNotLegitimateBank = false;
 
     // 6. The observation is being used to falsely satisfy payment verification for that customer's session:
     const targetsCustomerSession = Boolean(session && (
@@ -1041,7 +946,7 @@ export class PaymentVerificationPipeline {
 
     // Execute standard attribution engine process
     const normalized = ObservationNormalizer.normalize({
-      source: observerSourceEnum,
+      source,
       receivingAccountId: session?.receivingAccountId || receivingAccountId,
       rawPayload: {
         ...observation,

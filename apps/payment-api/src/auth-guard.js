@@ -1,11 +1,8 @@
-import { getAdminToken, getObserverToken, safeEqual } from '@youpi/common';
+import { getAdminToken, safeEqual } from '@youpi/common';
 import { HttpServer } from './server.js';
 
 /** Admin-prefixed routes that are intentionally public (static APK download for pairing). */
 const PUBLIC_ADMIN_PATHS = new Set([]);
-
-/** Admin-prefixed routes the local observer processes call with the observer token. */
-const OBSERVER_ADMIN_PATHS = new Set(['/api/v1/admin/gmail/credentials']);
 
 /** APK download route: requires a valid bearer token (admin OR observer) plus entitlement + rate limit checked in the route handler. */
 const DOWNLOAD_TOKEN_PATHS = new Set(['/api/v1/admin/sms-gateway/download-apk']);
@@ -25,17 +22,16 @@ function isDevTool(pathname) {
 
 /**
  * Decides which credential a request needs.
- * @returns {null | 'admin' | 'observer'} null = public, 'observer' = admin OR observer token
+ * @returns {null | 'admin'} null = public, 'admin' = admin token only
  */
 function requiredLevel(method, pathname) {
   if(/^\/api\/v1\/(collections|payouts|beneficiaries|banking|settlements|ledger|reconciliation|refunds|split-settlements|operations)(?:\/|$)/.test(pathname))return 'admin';
   if (pathname.startsWith('/api/v1/admin/')) {
     if (PUBLIC_ADMIN_PATHS.has(pathname)) return null;
-    if (DOWNLOAD_TOKEN_PATHS.has(pathname)) return 'download'; // lightweight: admin OR observer token
-    if (OBSERVER_ADMIN_PATHS.has(pathname)) return 'observer';
+    if (DOWNLOAD_TOKEN_PATHS.has(pathname)) return 'download'; // lightweight: admin token
     return 'admin';
   }
-  if (method === 'POST' && pathname === '/api/v1/pollers/events') return 'observer';
+  if (method === 'POST' && pathname === '/api/v1/pollers/events') return 'admin';
   // Injects a synthetic bank message into the real verification pipeline.
   if (method === 'POST' && /^\/api\/v1\/checkout\/[^/]+\/simulate-observation$/.test(pathname)) return 'admin';
   return null;
@@ -43,7 +39,6 @@ function requiredLevel(method, pathname) {
 
 /**
  * Guard for HttpServer.use(). Admin credential = ADMIN_API_TOKEN (or data/.secrets/admin_api_token).
- * Observer credential = OBSERVER_API_TOKEN (or data/.secrets/observer_api_token); admin token also satisfies it.
  */
 export function authGuard(req, res, pathname, url) {
   const method = req.method.toUpperCase();
@@ -62,18 +57,14 @@ export function authGuard(req, res, pathname, url) {
     presented = url.searchParams.get('token') || '';
   }
 
-  const ok = presented && (
-    safeEqual(presented, getAdminToken()) ||
-    (level === 'observer' && safeEqual(presented, getObserverToken())) ||
-    (level === 'download' && (safeEqual(presented, getAdminToken()) || safeEqual(presented, getObserverToken())))
-  );
+  const ok = presented && safeEqual(presented, getAdminToken());
   if (ok) return false;
 
   HttpServer.json(res, 401, { error: 'Unauthorized', code: 'AUTH_REQUIRED' });
   return true;
 }
 
-/** True only when the request carries the admin token (observer token is not enough). */
+/** True only when the request carries the admin token. */
 export function isAdminRequest(req) {
   const presented = bearerToken(req);
   return Boolean(presented) && safeEqual(presented, getAdminToken());

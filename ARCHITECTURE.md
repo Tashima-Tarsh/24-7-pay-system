@@ -74,13 +74,9 @@ Authoritative sources only: verified provider webhook (signature verification), 
 - Atomic posting with idempotency
 - Never silently rewrite historical ledger entries
 
-## Observers
-
-SMS/Gmail/Android observations are supplementary evidence only. Production SMS/Gmail/Android notifications do not independently prove bank settlement.
-
 ## Verification and Attribution
 
-Production observer messages are supplementary evidence. A matching amount alone cannot mark a customer paid. Provider collection confirmation validates signature, currency, exact paise and provider payment-reference ownership, then atomically posts the state, journal and provider callback.
+Production confirmation comes from provider webhook only. A matching amount alone cannot mark a customer paid. Provider collection confirmation validates signature, currency, exact paise and provider payment-reference ownership, then atomically posts the state, journal and provider callback.
 
 ## Credentials
 

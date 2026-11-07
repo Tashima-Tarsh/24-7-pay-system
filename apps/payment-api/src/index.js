@@ -11,8 +11,6 @@ import { fileURLToPath } from 'node:url';
 import { PaymentStatus, safeEqual } from '@youpi/common';
 import { DynamoPayQueue } from '@youpi/common';
 import { DynamoPayWebhooks } from '@youpi/common';
-import { DynamoPayGmailVerification } from '@youpi/common';
-import { DynamoPaySMSGateway } from '@youpi/common';
 
 // Increase libuv thread pool for higher concurrency under burst load
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '128';
@@ -59,15 +57,11 @@ import {
   PricingRepository,
   DiagnosticRepository,
   MerchantUpiConnectionRepository,
-  MerchantObserverDeviceRepository,
-  DevicePairingChallengeRepository,
-  ObserverSourceConfigRepository,
   SubscriptionEntitlementRepository,
   ConnectionHealthEventRepository,
   AdminAuditEventRepository,
   CallbackOutboxRepository,
-  CallbackDeliveryAttemptRepository,
-  UpiMirrorObservationRepository
+  CallbackDeliveryAttemptRepository
 } from '@youpi/db';
 import {
   QueueEngine,
@@ -76,8 +70,6 @@ import {
   RecoveryEngine,
   WebhookEngine,
   PaymentVerificationPipeline,
-  FlashMatchingEngine,
-  UpiMirrorService,
   PaiseOffsetAllocator,
   VpaRotationGuard
 } from '@youpi/core';
@@ -120,14 +112,9 @@ import { registerBankReconciliationRoutes } from './routes/bank-reconciliation.r
 import { registerMultiOperatorRoutes } from './routes/multi-operator.routes.js';
 import { registerDirectBankRoutes } from './routes/direct-bank.routes.js';
 import { registerCodeAttestationRoutes } from './routes/code-attestation.routes.js';
-import { registerGmailRoutes } from './routes/gmail.routes.js';
-import { GmailService } from '../../../packages/core/src/gmail-service.js';
-import { DeviceBindingService } from '../../../packages/core/src/device-binding.js';
 import { registerReceivingAccountRoutes } from './routes/receiving-accounts.routes.js';
 import { registerProviderConnectionsRoutes } from './routes/provider-connections.routes.js';
 import { registerAcceptanceRulesRoutes } from './routes/acceptance-rules.routes.js';
-import { registerMultiSourceEvidenceRoutes } from './routes/multi-source-evidence.routes.js';
-import { registerDevicePairingRoutes } from './routes/device-pairing.routes.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
   const db = customDb || getDatabase();
@@ -149,15 +136,11 @@ export function createPaymentApp(customDb = null, options = {}) {
   const sessionRepo = new PaymentSessionRepository(db);
   const obsRepo = new ObservationRepository(db);
   const upiConnectionRepository = new MerchantUpiConnectionRepository(db);
-  const observerDeviceRepository = new MerchantObserverDeviceRepository(db);
-  const pairingChallengeRepository = new DevicePairingChallengeRepository(db);
-  const observerSourceConfigRepository = new ObserverSourceConfigRepository(db);
   const subscriptionEntitlementRepository = new SubscriptionEntitlementRepository(db);
   const connectionHealthEventRepository = new ConnectionHealthEventRepository(db);
   const adminAuditEventRepository = new AdminAuditEventRepository(db);
   const callbackOutboxRepository = new CallbackOutboxRepository(db);
   const callbackDeliveryAttemptRepository = new CallbackDeliveryAttemptRepository(db);
-  const upiMirrorObservationRepository = new UpiMirrorObservationRepository(db);
   const ticketRepo = new SupportTicketRepository(db);
   const auditRepo = new AuditLogRepository(db);
   const ppMerchantPaymentProfileRepo = new PpMerchantPaymentProfileRepository(db);
@@ -236,40 +219,9 @@ export function createPaymentApp(customDb = null, options = {}) {
     maxRetries: Number(process.env.WEBHOOK_MAX_RETRIES || 5)
   });
 
-  // UPI Mirror services (Phases 3-4)
-  const flashMatchingEngine = new FlashMatchingEngine({
-    db,
-    sessionRepo,
-    obsRepo,
-    upiMirrorObsRepo: upiMirrorObservationRepository,
-    upiConnectionRepo: upiConnectionRepository,
-    callbackOutboxRepo: callbackOutboxRepository,
-    eventEmitter
-  });
-
-  const upiMirrorService = new UpiMirrorService({
-    db,
-    upiConnectionRepo: upiConnectionRepository,
-    observerDeviceRepo: observerDeviceRepository,
-    pairingChallengeRepo: pairingChallengeRepository,
-    observerSourceConfigRepo: observerSourceConfigRepository,
-    subscriptionEntitlementRepo: subscriptionEntitlementRepository,
-    connectionHealthEventRepo: connectionHealthEventRepository,
-    upiMirrorObservationRepo: upiMirrorObservationRepository,
-    callbackOutboxRepo: callbackOutboxRepository,
-    callbackDeliveryAttemptRepo: callbackDeliveryAttemptRepository,
-    sessionRepo,
-    merchantRepo,
-    auditRepo,
-    flashMatchingEngine,
-    eventEmitter
-  });
-
   // Dynamo Pay production services
   const dynamoQueue = new DynamoPayQueue();
   const dynamoWebhooks = new DynamoPayWebhooks();
-  const dynamoGmail = new DynamoPayGmailVerification();
-  const dynamoSMS = new DynamoPaySMSGateway();
 
   // Connect Dynamo Pay queue to Redis (auxiliary job queue only).
   // Durable financial event persistence is provided by the database-backed callback_outbox
@@ -285,23 +237,7 @@ export function createPaymentApp(customDb = null, options = {}) {
     console.warn('[DynamoPay Queue] No in-memory queue is used as a durable substitute for financial events.');
   });
 
-  // Connect Gmail verification if credentials available
-  if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
-    console.log('[DynamoPay Gmail] OAuth2 credentials configured');
-  } else {
-    console.warn('[DynamoPay Gmail] No credentials - SMS/Gmail verification disabled');
-  }
-
-  // Connect SMS Gateway if URL available
-  if (process.env.SMS_GATEWAY_URL) {
-    console.log('[DynamoPay SMS] Gateway configured:', process.env.SMS_GATEWAY_URL);
-  } else {
-    console.warn('[DynamoPay SMS] No gateway URL - SMS verification disabled');
-  }
-
   const server = new HttpServer();
-  flashMatchingEngine.server = server;
-  upiMirrorService.server = server;
   server.use(authGuard);
   let checkoutBaseUrl = process.env.BASE_CHECKOUT_URL || 'http://localhost:7000';
   try {
@@ -451,19 +387,7 @@ export function createPaymentApp(customDb = null, options = {}) {
           const sessions = db.query(`SELECT id, receiving_account_id FROM payment_sessions WHERE status = 'PROCESSING' LIMIT ?`, [sweepBatchSize]);
           if (sessions.length === 0) return;
 
-          // Sweep 1: Google Messages Web SMS (shared, single call per sweep)
-          try {
-            const smsPort = Number(process.env.SMS_OBSERVER_PORT || 6002);
-            fetch(`http://localhost:${smsPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(1200) }).catch(() => {});
-          } catch {}
-
-          // Sweep 2: Gmail Inbox (shared, single call per sweep)
-          try {
-            const gmailPort = Number(process.env.GMAIL_OBSERVER_PORT || 6003);
-            fetch(`http://localhost:${gmailPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(1200) }).catch(() => {});
-          } catch {}
-
-          // Sweep 3: Process unattributed observations for each session
+          // Sweep 2: Process unattributed observations for each session
           for (const session of sessions) {
             try {
               const current = sessionRepo.findById(session.id);
@@ -539,7 +463,7 @@ export function createPaymentApp(customDb = null, options = {}) {
         handleSlotFreedAndPromote(row.receiving_account_id);
       }
 
-      const pendingBankMatches=db.query(`SELECT DISTINCT ps.id FROM payment_sessions ps JOIN payment_observations obs ON obs.receiving_account_id=ps.receiving_account_id AND obs.amount_paise=ps.amount_paise AND obs.bank_reference_number=json_extract(ps.metadata,'$.reportedUtr') WHERE ps.status='VERIFICATION_PENDING' AND obs.attributed_payment_id IS NULL AND obs.attribution_status IN ('UNATTRIBUTED','LATE_UNMATCHED') AND obs.source IN ('GMAIL','GOOGLE_MESSAGES','ANDROID_OBSERVER','SMS_GATEWAY')`);
+      const pendingBankMatches=db.query(`SELECT DISTINCT ps.id FROM payment_sessions ps JOIN payment_observations obs ON obs.receiving_account_id=ps.receiving_account_id AND obs.amount_paise=ps.amount_paise AND obs.bank_reference_number=json_extract(ps.metadata,'$.reportedUtr') WHERE ps.status='VERIFICATION_PENDING' AND obs.attributed_payment_id IS NULL AND obs.attribution_status IN ('UNATTRIBUTED','LATE_UNMATCHED')`);
       for(const row of pendingBankMatches)attributionEngine.reconcilePendingPayment(row.id);
 
       // Scan for vacant receiving accounts that have waiting queued sessions
@@ -555,53 +479,6 @@ export function createPaymentApp(customDb = null, options = {}) {
   }, 1000);
 
   if (queueSyncDaemon.unref) queueSyncDaemon.unref();
-
-  // Continuous 1-Second Aggressive Polling Daemon across SMS Gateway & Gmail Observers
-  const aggressivePollerDaemon = setInterval(async () => {
-    try {
-      // Find all active/processing sessions currently waiting for bank confirmation
-      const activeSessions = db.query(`
-        SELECT id, receiving_account_id, amount_paise, status
-        FROM payment_sessions
-        WHERE status IN ('ACTIVE', 'PROCESSING') AND method = 'UPI'
-      `);
-
-      if (activeSessions.length === 0) return;
-
-      // 1. Poll SMS Observer
-      try {
-        const smsPort = Number(process.env.SMS_OBSERVER_PORT || 6002);
-        fetch(`http://localhost:${smsPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(800) }).catch(() => {});
-      } catch {}
-
-      // 2. Poll Gmail Observer
-      try {
-        const gmailPort = Number(process.env.GMAIL_OBSERVER_PORT || 6003);
-        fetch(`http://localhost:${gmailPort}/api/sweep`, { method: 'POST', signal: AbortSignal.timeout(800) }).catch(() => {});
-      } catch {}
-
-      // 3. Sweep any pending unattributed observations in DB matching active sessions
-      for (const session of activeSessions) {
-        try {
-          const unattributed = obsRepo.findUnattributed(session.receiving_account_id);
-          for (const obs of unattributed) {
-            attributionEngine.processObservation({
-              source: obs.source,
-              receivingAccountId: obs.receivingAccountId,
-              amountPaise: obs.amountPaise,
-              observedAt: obs.observedAt,
-              bankReferenceNumber: obs.bankReferenceNumber,
-              senderVpa: obs.senderVpa,
-              rawPayload: obs.rawPayload,
-              fingerprintHash: obs.fingerprintHash
-            });
-          }
-        } catch {}
-      }
-    } catch {}
-  }, 1000);
-
-  if (aggressivePollerDaemon.unref) aggressivePollerDaemon.unref();
 
   // Execute crash recovery on boot
   const recoveryStats = recoveryEngine.recover();
@@ -670,9 +547,6 @@ export function createPaymentApp(customDb = null, options = {}) {
     pricingRepo,
     diagnosticRepo,
     upiConnectionRepo: upiConnectionRepository,
-    observerDeviceRepo: observerDeviceRepository,
-    pairingChallengeRepo: pairingChallengeRepository,
-    observerSourceConfigRepo: observerSourceConfigRepository,
     subscriptionEntitlementRepo: subscriptionEntitlementRepository,
     connectionHealthEventRepo: connectionHealthEventRepository,
     adminAuditEventRepo: adminAuditEventRepository,
@@ -734,43 +608,11 @@ registerHyperswitchRoutes(server, context);
   // Super Admin authentication routes
   registerSuperAdminRoutes(server, context);
 
-  // Super Admin UPI Mirror management routes (Phase 7)
-  registerSuperAdminUpiMirrorRoutes(server, {
-    ...context,
-    upiConnectionRepo: upiConnectionRepository,
-    observerDeviceRepo: observerDeviceRepository,
-    pairingChallengeRepo: pairingChallengeRepository,
-    observerSourceConfigRepo: observerSourceConfigRepository,
-    subscriptionEntitlementRepo: subscriptionEntitlementRepository,
-    connectionHealthEventRepo: connectionHealthEventRepository,
-    adminAuditEventRepo: adminAuditEventRepository,
-    callbackOutboxRepo: callbackOutboxRepository,
-    callbackDeliveryAttemptRepo: callbackDeliveryAttemptRepository,
-    upiMirrorObservationRepo: upiMirrorObservationRepository
-  });
-
   // Payment Links & Failover routes
   registerPaymentLinkRoutes(server, context);
 
   // Callback, Wallet, Diagnostics, Pricing routes
   registerCallbackWalletRoutes(server, context);
-
-  // UPI Mirror routes (Phase 1-3)
-  registerUpiMirrorRoutes(server, {
-    ...context,
-    upiConnectionRepo: upiConnectionRepository,
-    observerDeviceRepo: observerDeviceRepository,
-    pairingChallengeRepo: pairingChallengeRepository,
-    observerSourceConfigRepo: observerSourceConfigRepository,
-    subscriptionEntitlementRepo: subscriptionEntitlementRepository,
-    connectionHealthEventRepo: connectionHealthEventRepository,
-    upiMirrorObservationRepo: upiMirrorObservationRepository,
-    callbackOutboxRepo: callbackOutboxRepository,
-    callbackDeliveryAttemptRepo: callbackDeliveryAttemptRepository,
-    featureFlags: new Map(),
-    upiMirrorService,
-    flashMatchingEngine
-  });
 
   // New production features
   registerDisputesRoutes(server, context);
@@ -782,36 +624,22 @@ registerHyperswitchRoutes(server, context);
   registerDirectBankRoutes(server, context);
   registerCodeAttestationRoutes(server, context);
 
-  // Gmail Universal Email Adapter — OAuth connect, callback, disconnect
-  const gmailService = new GmailService(db);
-  context.gmailService = gmailService;
-  registerGmailRoutes(server, context);
-
-  // Receiving Accounts, Provider Connections, Acceptance Rules, Multi-Source Evidence
+  // Receiving Accounts, Provider Connections, Acceptance Rules
   registerReceivingAccountRoutes(server, context);
   registerProviderConnectionsRoutes(server, context);
   registerAcceptanceRulesRoutes(server, context);
-  registerMultiSourceEvidenceRoutes(server, context);
-
-  // Device pairing & binding — Android app connects to merchant portal via QR
-  const deviceBindingService = new DeviceBindingService(db);
-  context.deviceBindingService = deviceBindingService;
-  registerDevicePairingRoutes(server, context);
 
   function destroy() {
     notificationDeliveryService.stop();
     clearInterval(webhookRetryTimer);
     webhookEngine.stop();providerWebhookEngine.stop();
     clearInterval(queueSyncDaemon);
-    clearInterval(aggressivePollerDaemon);
     timingEngine.destroy();
     if (typeof attributionEngine.destroy === 'function') {
       attributionEngine.destroy();
     }
     // Dynamo Pay services shutdown
     dynamoQueue.disconnect().catch(() => {});
-    dynamoSMS.stopPolling();
-    dynamoGmail.stopPolling();
   }
 
   let webhookRetryRunning=false;

@@ -408,7 +408,7 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
     // 36. Existing payment verification continues working
     const obs = attributionEngine.processObservation({
       receivingAccountId: receivingAccount.id,
-      source: 'ANDROID_OBSERVER',
+      source: 'PROVIDER_WEBHOOK',
       amountPaise: 20000n,
       observedAt: new Date(),
       senderVpa: 'payer@upi',
@@ -537,7 +537,7 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
     // 49. Verification works
     const qObs = attributionEngine.processObservation({
       receivingAccountId: receivingAccount.id,
-      source: 'GMAIL_OBSERVER',
+      source: 'BANK_H2H_POLL',
       amountPaise: 1000n,
       observedAt: new Date(),
       bankReferenceNumber: 'UTR_QUEUE_DONE_01',
@@ -556,7 +556,7 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
     assert.equal(dashSettings.status, 200);
     assert.equal(dashSettings.body.businessName, 'Nova Commerce Ltd');
 
-    // 52. Observer services work
+    // 52. Poller active window works
     const pollerActive = await httpReq('GET', `${apiBase}/api/v1/pollers/active-window`);
     assert.equal(pollerActive.status, 200);
     assert.ok(Array.isArray(pollerActive.body.sessions));

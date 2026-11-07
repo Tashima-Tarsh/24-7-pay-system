@@ -915,14 +915,8 @@
             tile.removeAttribute('href');
             return;
           }
-
-          const app = tile.getAttribute('data-app');
-          const pkg = tile.getAttribute('data-pkg');
-          if (isAndroid) {
-            tile.setAttribute('href', 'intent://pay?' + upiUri.slice('upi://pay?'.length) + '#Intent;scheme=upi;package=' + pkg + ';end');
-          } else {
-            tile.setAttribute('href', isIOS ? dynamoUpiLink(app, upiUri, userAgent) : upiUri);
-          }
+          // Standard UPI deep link — works with any UPI app on any platform
+          tile.setAttribute('href', upiUri);
         });
       }
 
@@ -1220,24 +1214,11 @@
       }
     });
 
-    // ---- dynamoUpiLink: UPI deep-link builder (Android + iOS) ----
+    // ---- dynamoUpiLink: UPI deep-link builder (returns standard upi:// URL) ----
     function dynamoUpiLink(app, upiUriParam, platform) {
       if (!upiUriParam || typeof upiUriParam !== 'string') throw new Error('Invalid UPI URI');
       if (!upiUriParam.startsWith('upi://')) throw new Error('Invalid UPI URI');
-      try {
-        new URL(upiUriParam);
-      } catch {
-        throw new Error('Invalid UPI URI');
-      }
-      const isAndroid = /Android/i.test(String(platform));
-      if (isAndroid) {
-        return upiUriParam;
-      }
-      // iOS / other
-      if (app === 'gpay') return `gpay://upi/pay?${upiUriParam.split('?')[1] || ''}`;
-      if (app === 'phonepe') return `phonepe://upi/pay?${upiUriParam.split('?')[1] || ''}`;
-      if (app === 'paytm') return `paytm://upi/pay?${upiUriParam.split('?')[1] || ''}`;
-      if (app === 'navi') return `navi://upi/pay?${upiUriParam.split('?')[1] || ''}`;
+      // Return standard upi:// URL — works with any UPI app on any platform
       return upiUriParam;
     }
 

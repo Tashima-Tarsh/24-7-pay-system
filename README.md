@@ -99,7 +99,7 @@ Platform Owner (Root Super Admin)
 2. **Merchant registers UPI VPA** — receives webhook secret, access token, callback URL
 3. **Merchant creates payment order** — amount only, system generates UPI QR URI + checkout link
 4. **Customer pays** — scans QR with any UPI app or taps app tile on Android; money goes directly to merchant's VPA
-5. **Observer detects credit** — Android observer / SMS / Gmail monitor posts UTR; system matches order + amount
+5. **Provider webhook confirms credit** — provider posts UTR; system matches order + amount
 6. **Real-time callback** — merchant backend receives `PAYMENT_SUCCESS` with UTR, HMAC-SHA256 signed
 7. **Ledger entry** — atomic double-entry: `PROVIDER_CLEARING` → `MERCHANT_RECEIVABLES` (integer paise)
 8. **Merchant verifies** — checks order status, confirms UTR, credits customer/wallet
@@ -130,24 +130,11 @@ A glassmorphism, mobile-responsive checkout page with:
 
 - **Amount card** — payable amount, order reference, countdown timer
 - **QR card** — live UPI QR image (SVG), payee VPA display, copy-to-clipboard
-- **UPI app launcher grid** — Google Pay, PhonePe, Paytm, generic UPI tiles with Android deep-link intents
+- **UPI app launcher grid** — Google Pay, PhonePe, Paytm, generic UPI tiles with standard upi:// deep links
 - **Intent-return status strip** — APP_OPENED → CLIENT_REPORTED_SUCCESS → bank verification
 - **Sticky mobile footer** — total amount, "I've Paid" verification request
-- **Terminal screens** — success (verified by bank observers), failed, expired, cancelled, under review
+- **Terminal screens** — success (verified by provider webhook), failed, expired, cancelled, under review
 - **Auto-polling** — payment status every 3 seconds, visibility-change re-poll
-- **No bank reference entry by customer** — UTR captured automatically from authorized observers
-
----
-
-## Android Bridge (APK)
-
-**Artifact:** `apps/android-bridge/app/build/outputs/apk/debug/app-debug.apk` (7.5 MB)
-
-- UPI intent launching for installed UPI apps
-- Android observer for SMS/Gmail notification detection
-- QR scanning and VPA pairing on real devices
-- Build: `cd apps/android-bridge && ./gradlew assembleDebug` (Android SDK 34, Java 17)
-- Install: `adb install app-debug.apk`
 
 ---
 
@@ -157,8 +144,6 @@ Every confirmed UPI payment posts atomically to a **double-entry financial ledge
 
 - **Integer-paise accounting** — no floating-point rounding
 - **Debit `PROVIDER_CLEARING` → Credit `MERCHANT_RECEIVABLES`** on provider collection confirmation
-- **Debit `NOTIFICATION_CLEARING` → Credit `MERCHANT_RECEIVABLES`** on observer-detected credit (pending bank verification)
-- **Debit `BANK_CASH` → Credit `MERCHANT_RECEIVABLES`** on manual merchant bank review
 - **Idempotent** — same reference type + ID cannot post twice
 - **Atomic** — both entries commit together or not at all
 - **Immutable** — historical ledger entries are never silently rewritten
@@ -184,7 +169,7 @@ Query the journal per merchant to see every transaction with debit/credit entrie
 - **MFA required** for sensitive operations (merchant state changes, key rotation, connection approval)
 - **API key secrets SHA-256 hashed**, client secrets encrypted at rest
 - **Webhook signatures verified with HMAC-SHA256**
-- **No manual UTR entry** — automatic capture from authorized provider APIs / observers
+- **No manual UTR entry** — automatic capture from authorized provider APIs
 - **Sessions expire after 8 hours**, CSRF protection on all state-changing requests
 - **Never commit plaintext credentials to Git** — `.env` is gitignored
 
@@ -217,7 +202,6 @@ Start services:
 | Callback webhooks | IMPLEMENTED |
 | Server concurrency fixes | APPLIED (backlog 4096, UV_THREADPOOL_SIZE=128) |
 | Sweep timer consolidation | APPLIED |
-| Android APK build | SUCCESS (7.5 MB) |
 | 7 production features | IMPLEMENTED |
 
 ---

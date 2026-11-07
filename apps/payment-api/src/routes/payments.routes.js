@@ -1,6 +1,6 @@
 import {enforcePaymentControls} from '../payment-controls.js';
 import { HttpServer } from '../server.js';
-import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, hasBearer, getObserverToken, maskPhone, maskEmail, generateCustomerId, isValidVpa } from '@youpi/common';
+import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, maskPhone, maskEmail, generateCustomerId, isValidVpa } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome, PaiseOffsetAllocator } from '@youpi/core';
 import { isAdminRequest } from '../auth-guard.js';
 
@@ -22,7 +22,6 @@ function testReceivingVpa(merchantId) {
  */
 function isPaymentOwner(req, session, ctx) {
   if (isAdminRequest(req)) return true;
-  if (hasBearer(req, getObserverToken())) return true;
 
   const presented = req.headers['x-merchant-key'];
   if (!presented || typeof presented !== 'string' || !presented.trim()) return false;
