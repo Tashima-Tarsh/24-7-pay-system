@@ -41,7 +41,6 @@ const testFiles = [
   'packages/core/src/__tests__/webhook-failure-matrix.test.js',
   'packages/merchant-sdk/src/__tests__/merchant-sdk.test.js',
   'packages/merchant-sdk/src/__tests__/youpi-universal-integration.test.js',
-  'apps/coin-wallet-store/src/__tests__/coin-wallet-store.test.js',
   'apps/merchant-admin/src/__tests__/merchant-admin.test.js',
   'apps/merchant-admin/src/__tests__/console-navigation.test.js',
   'apps/payment-help/src/__tests__/payment-help.test.js',

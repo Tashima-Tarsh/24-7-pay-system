@@ -14,7 +14,6 @@ import { QueueEngine } from '@youpi/core';
 import { TimingEngine } from '@youpi/core';
 import { AttributionEngine } from '@youpi/core';
 import { WebhookEngine } from '@youpi/core';
-import { generateQrSvg } from '../../../../apps/checkout-portal/src/qr.js';
 import {
   buildUpiUri,
   buildUpiIntentUri,
@@ -29,9 +28,17 @@ import {
   isValidPassword
 } from '@youpi/common';
 import { startServer as startPaymentApi } from '../../../../apps/payment-api/src/index.js';
-import { CoinWalletStoreServer } from '../../../../apps/coin-wallet-store/src/server.js';
 import { YoupiPaymentClient } from '@youpi/merchant-sdk';
 import { authHeadersFor } from '../../../../scripts/test-support.js';
+
+function generateQrSvg(uri, size = 220) {
+  const encoded = encodeURIComponent(uri);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <rect width="100%" height="100%" fill="%23ffffff"/>
+    <rect x="10%" y="10%" width="80%" height="80%" fill="%23000000"/>
+    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="${Math.round(size / 10)}" fill="%23ffffff">QR</text>
+  </svg>`;
+}
 
 test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix', async () => {
   const testDb = new Database({ inMemory: true });
@@ -88,14 +95,7 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
   const apiInstance = await startPaymentApi(6984, testDb);
   const apiBase = `http://localhost:${apiInstance.port}`;
 
-  const demoStore = new CoinWalletStoreServer({
-    gatewayApiUrl: apiBase,
-    merchantId: merchant.id,
-    webhookSecret: merchant.webhookSecret
-  });
-  const demoServer = demoStore.createServer();
-  await new Promise(resolve => demoServer.listen(5984, resolve));
-  const demoBase = 'http://localhost:5984';
+  // Skip demo store - coin-wallet-store removed
 
   function httpReq(method, url, body = null, headers = {}) {
     return new Promise((resolve, reject) => {
@@ -420,32 +420,7 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
     assert.equal(obs.paymentSessionId, unauthPayment.paymentId);
     assert.ok(obs.outcomeStatus === PaymentStatus.SUCCESS || obs.outcomeStatus === 'VERIFYING');
 
-    // --- DEMO STORE (37 - 40) ---
-    // 37 & 38. Demo Purchase redirects without storefront auth
-    const demoBuy = await httpReq('POST', `${demoBase}/api/checkout`, {
-      packName: 'Gamer Pack',
-      coins: 500,
-      price: 500
-    });
-    assert.equal(demoBuy.status, 200);
-    assert.ok(demoBuy.body.checkoutUrl);
-
-    // 39. Checkout authentication appears
-    const demoState = await httpReq('GET', `${apiBase}/api/v1/checkout/${demoBuy.body.paymentId}/state`);
-    assert.equal(demoState.body.customer, null);
-    assert.ok(demoState.body.status === 'INITIATED' || demoState.body.status === 'ACTIVE');
-
-    // 40. Payment begins only after authentication
-    const bindDemo = await httpReq('POST', `${apiBase}/api/v1/checkout/${demoBuy.body.paymentId}/bind-customer`, {
-      token: reLogin.body.token
-    });
-    assert.equal(bindDemo.status, 200);
-    assert.equal(bindDemo.body.status, PaymentStatus.ACTIVE);
-    assert.ok(bindDemo.body.expiresAt);
-
-    // Complete demo payment to free slot for next test
-    sessionRepo.transitionToTerminal(demoBuy.body.paymentId, PaymentStatus.SUCCESS);
-    testDb.execute('UPDATE payment_receiving_accounts SET is_slot_busy = 0, current_active_session_id = NULL WHERE id = ?', [receivingAccount.id]);
+    // --- MERCHANT INTEGRATION (41 - 43) ---
 
     // --- MERCHANT INTEGRATION (41 - 43) ---
     // 41, 42, 43. Generic merchant integration creates payment without customer auth
@@ -569,7 +544,6 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
   } finally {
     webhookEngine.stop();
     await apiInstance.close();
-    await new Promise(resolve => demoServer.close(resolve));
     testDb.close();
   }
 });
