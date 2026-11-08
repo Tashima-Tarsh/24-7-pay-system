@@ -21,7 +21,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --install-links
 
       - name: Dependency audit (high and critical)
         run: npm audit --audit-level=high
