@@ -2,7 +2,7 @@ services:
   - type: web
     name: dynamo-pay
     runtime: node
-    repo: https://github.com/Tashima-Tarsh/Sanbookpay
+    repo: https://github.com/Tashima-Tarsh/24-7-pay-system
     branch: main
     plan: free
     region: singapore

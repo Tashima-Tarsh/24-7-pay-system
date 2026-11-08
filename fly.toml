@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for dynamo-pay-api on 2026-11-09T03:25:58+05:30
+# fly.toml app configuration file generated for dynamo-pay-api-tender-stone-1051 on 2026-11-09T03:34:18+05:30
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'dynamo-pay-api'
+app = 'dynamo-pay-api-tender-stone-1051'
 primary_region = 'iad'
 
 [experimental]
@@ -31,7 +31,6 @@ primary_region = 'iad'
 
 [[vm]]
   memory = '1gb'
-  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 1024
 
