@@ -1,4 +1,4 @@
-# 11 — SAAS COMMERCIAL READINESS
+# 24-7 PAY SYSTEM — SAAS COMMERCIAL READINESS
 
 **Product:** 24-7 Pay / YOUPI PG  
 **Deployment model:** Self-hosted white-label (Docker, Caddy, Render, IBM Cloud Code Engine/K8s)  
@@ -10,7 +10,7 @@
 ## Installation & setup
 
 | Item | Status | Evidence |
-|---|---|---|
+|------|--------|----------|
 | `INSTALLATION.md` | Present | `docs/INSTALLATION.md` |
 | `DEPLOYMENT.md` | Present | `docs/DEPLOYMENT.md` |
 | `docker-compose.production.yml` | Present | Production compose |
@@ -24,7 +24,7 @@
 ## Configuration completeness
 
 | Item | Status |
-|---|---|
+|------|--------|
 | `ENCRYPTION_MASTER_KEY` | Required in production |
 | `JWT_SECRET` | Required in production |
 | `INITIAL_ADMIN_PASSWORD` | Validated (not weak default) |
@@ -37,17 +37,18 @@
 ## Deployment reproducibility
 
 | Item | Status |
-|---|---|
+|------|--------|
 | Docker Compose | Present |
 | Caddyfile (TLS) | Present |
 | Render deploy docs | `DEPLOY_TO_RENDER.md`, `RENDER-TRIAL.md` |
 | IBM Cloud K8s/Code Engine | `deploy/ibm-cloud/` |
 | GitHub Actions CI | `.github/workflows/ci.yml`, `master-payment.yml` |
+| fly.io config | `fly.toml` (root + checkout-portal) |
 
 ## Production security (observed)
 
 | Control | Status |
-|---|---|
+|---------|--------|
 | Bind host `127.0.0.1` by default | `startServer()` |
 | Production env fail-fast | `startServer()` |
 | Weak password rejection | `startServer()` |
@@ -58,27 +59,27 @@
 ## Monitoring / alerting / incident response
 
 | Item | Status |
-|---|---|
+|------|--------|
 | Health check `/health`, `/api/v1/health` | `index.js:491-500` |
 | SSE status broadcast | EventEmitter + `server.broadcastSse` |
 | Audit log repository | `AuditLogRepository`, `AdminAuditEventRepository` |
 | Recovery engine on boot | `RecoveryEngine.recover()` |
-| Formal alerting (PagerDuty/etc.) | Not observed in code |
-| Incident response runbook | Not observed |
-| Backup/restore drill | Not executed |
+| Formal alerting (PagerDuty/etc.) | Not observed |
+| Incident response runbook | `audit-reports/INCIDENT-RUNBOOK.md` (created) |
+| Backup/restore drill | Executed (SQLite backup → restore verified) |
 
 ## Backups / restore
 
 | Item | Status |
-|---|---|
+|------|--------|
 | `scripts/backup.sh` | Present |
 | `docs/deployment/BACKUP_RECOVERY.md` | Present |
-| Restore test executed | No |
+| Restore test executed | ✅ PASS (executed during audit) |
 
 ## Regulatory / compliance (NOT assessed)
 
 | Item | Status |
-|---|---|
+|------|--------|
 | PCI-DSS | Not assessed |
 | RBI UPI guidelines | Not assessed |
 | Data residency / localization | Not assessed |
@@ -88,4 +89,4 @@
 
 ## Commercial readiness verdict
 
-**UNVERIFIED.** The product is technically deployable (Docker, CI, env validation, prod guards), but operational readiness (backup/restore drill, incident runbook, alerting) and regulatory mapping (PCI-DSS/RBI UPI) are not verified. Do not mark commercially launch-ready until these are completed.
+**UNVERIFIED.** The product is technically deployable (Docker, CI, env validation, prod guards), but operational readiness (incident runbook — drafted; backup/restore drill — executed) and regulatory mapping (PCI-DSS/RBI UPI) are not fully verified. Do not mark commercially launch-ready until these are completed.

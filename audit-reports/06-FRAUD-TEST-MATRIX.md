@@ -1,6 +1,5 @@
-# 06 — FRAUD TEST MATRIX
+# 24-7 PAY SYSTEM — FRAUD TEST MATRIX
 
-**Product:** 24-7 Pay / YOUPI PG  
 **Scope:** Simulated adversarial scenarios (code-verified protections; live adversarial execution NOT performed in this cycle)  
 **Environment:** Local/sandbox only — no real customer credentials, no real money.
 
@@ -9,7 +8,7 @@
 ## Fraud threat model (20 scenarios)
 
 | # | Attack | Preconditions | Simulated Input | Expected Secure Behavior | Existing Protection | Missing Protection | Required Fix | Regression Test |
-|---|---|---|---|---|---|---|---|---|
+|---|--------|---------------|-----------------|-------------------------|---------------------|-------------------|--------------|-----------------|
 | 1 | Fake payment success | Customer return page | `?Status=success` on `/checkout` | Return page informational only; settlement requires bank callback | Client return never authoritative | Live test | Execute against pristine DB | — |
 | 2 | Forged callback | Know callback endpoint | POST `/verify-callback` with fake HMAC | Rejected; HMAC/merchant secret validation | Merchant `webhookSecret` validation | Live test | Execute | — |
 | 3 | Replayed callback | Captured valid callback | Re-send same callback payload | Idempotency key rejects duplicate | `idempotency.repository.js` | Live test | Execute | — |
@@ -36,7 +35,7 @@
 ## Protection summary
 
 | Protection | Verified | Coverage |
-|---|---|---|
+|------------|----------|----------|
 | Idempotency (duplicate/replay) | Code | All write paths |
 | State-machine guard | Code | All transitions |
 | HMAC/merchant-secret callback auth | Code | Payment creation + callback |

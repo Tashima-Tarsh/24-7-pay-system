@@ -1,4 +1,4 @@
-# Incident Runbook — 24-7 Pay / YOUPI PG
+# 24-7 PAY SYSTEM — INCIDENT RUNBOOK
 
 **Product:** 24-7 Pay / YOUPI PG — Self-Hosted White-Label UPI Payment Gateway  
 **Version:** 1.0  
@@ -17,7 +17,7 @@ This runbook provides standard operating procedures for responding to incidents 
 ## 2. Severity Levels
 
 | Severity | Definition | Response Time | Escalation |
-|---|---|---|---|
+|----------|------------|---------------|------------|
 | **SEV-1** | Payment processing down; no callbacks processed; financial transactions at risk | 15 min | Page on-call + Engineering Manager |
 | **SEV-2** | Degraded payment flow; high error rate; partial callback failure | 30 min | On-call engineer |
 | **SEV-3** | Non-payment feature broken; admin console issue; performance degradation | 1 hour | On-call engineer |
@@ -28,7 +28,7 @@ This runbook provides standard operating procedures for responding to incidents 
 ## 3. On-Call Contacts
 
 | Role | Contact | Escalation Path |
-|---|---|---|
+|------|---------|-----------------|
 | Primary On-Call | [PagerDuty / Slack] | SEV-1 → SEV-4 |
 | Secondary On-Call | [PagerDuty / Slack] | If primary unresponsive 15 min |
 | Engineering Lead | [Slack / Email] | SEV-1 escalation |
@@ -42,7 +42,7 @@ This runbook provides standard operating procedures for responding to incidents 
 ### 4.1 Health Checks
 
 | Endpoint | Method | Expected | Alert Threshold |
-|---|---|---|---|
+|----------|--------|----------|-----------------|
 | `/health` | GET | 200 OK | >30s response or non-200 |
 | `/api/v1/health` | GET | 200 OK | >30s response or non-200 |
 | SSE broadcast | EventStream | Connected | Disconnected >5 min |
@@ -50,7 +50,7 @@ This runbook provides standard operating procedures for responding to incidents 
 ### 4.2 Key Metrics to Monitor
 
 | Metric | Warning | Critical |
-|---|---|---|
+|--------|---------|----------|
 | Payment creation error rate | >5% | >10% |
 | Callback delivery failure rate | >5% | >10% |
 | API P95 latency | >500ms | >1s |
@@ -120,7 +120,7 @@ This runbook provides standard operating procedures for responding to incidents 
 
 **Response:**
 
-1. **Identify affected feature** — Check specific page/routes returning errors.
+1. **Identify affected feature** — Check specific pages/routes returning errors.
 2. **Apply fix or workaround** — Deploy fix or disable broken feature gracefully.
 3. **Document** — Track in issue tracker for next sprint.
 
@@ -206,7 +206,7 @@ Time: <UTC timestamp>
 On-call: <name>
 Channel: #incident-<id>
 
-We are aware of an issue affecting payment processing. Our team is investigating. 
+We are aware of an issue affecting payment processing. Our team is investigating.
 We will provide updates every 15 minutes.
 ```
 
@@ -222,7 +222,7 @@ Duration: <X minutes>
 Root cause: <brief summary>
 Action items: <link to postmortem>
 
-Payment processing has been restored. All transactions are processing normally. 
+Payment processing has been restored. All transactions are processing normally.
 A postmortem will be published within 24 hours.
 ```
 
@@ -233,7 +233,7 @@ A postmortem will be published within 24 hours.
 ### 8.1 Postmortem Template
 
 | Field | Content |
-|---|---|
+|-------|---------|
 | Incident ID | |
 | Severity | |
 | Start time | |
@@ -268,7 +268,7 @@ All action items must be:
 ## 10. Emergency Contacts
 
 | Role | Name | Phone | Slack | Email |
-|---|---|---|---|---|
+|------|------|-------|-------|-------|
 | Primary On-Call | | | | |
 | Secondary On-Call | | | | |
 | Engineering Lead | | | | |

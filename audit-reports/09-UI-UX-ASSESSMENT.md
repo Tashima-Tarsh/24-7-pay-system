@@ -1,4 +1,4 @@
-# 09 — UI/UX ASSESSMENT
+# 24-7 PAY SYSTEM — UI/UX ASSESSMENT
 
 **Product:** 24-7 Pay / YOUPI PG — checkout-portal (merchant checkout console)  
 **Audited:** Source code + build verification  
@@ -9,7 +9,7 @@
 ## What was fixed (this audit)
 
 | Issue | Root cause | Fix |
-|---|---|---|
+|-------|--------|-----|
 | Sidebar nav links did nothing | TanStack `Link`/`useLocation` with no `RouterProvider` anywhere | Rewired to `next/link` + `useRouter` (`Sidebar.tsx`) |
 | `+ Create payment` button missing | Not present in `Header.tsx` | Added primary button → `/checkout` (`Header.tsx`) |
 | Shell never mounted | `pages/_app.jsx` rendered `<Component />` directly, no `AppShell` | `_app.tsx` wraps `AuthProvider` + `QueryClientProvider` + `AppShell` |
@@ -30,10 +30,47 @@
 - Keyboard navigation in Quarantine (j/k/v/r).
 - Toast notifications for success/error.
 - Dark theme (neutral-950) with Tailwind.
-- All previously broken pages (admin, quarantine, reports, settings, team, webhooks, payments, checkout/[id]) rewritten with valid JSX.
 
-## Remaining (recommended enhancements, not launch gates)
+### Pages/components present:
+| Page | Status |
+|------|--------|
+| Overview (`pages/index.tsx`) | ✅ Built |
+| Payments (`pages/payments.tsx`) | ✅ Built |
+| Checkout (`pages/checkout/[id].tsx`) | ✅ Built |
+| Create Payment (`pages/create-payment.tsx`) | ✅ Built |
+| Settings (`pages/settings.tsx`) | ✅ Built |
+| Login (`pages/login.tsx`) | ✅ Built |
+
+### Components present:
+| Component | Status |
+|-----------|--------|
+| Button | ✅ Built |
+| Card / MetricCard | ✅ Built |
+| Input | ✅ Built |
+| Sidebar | ✅ Built |
+| Header | ✅ Built |
+| CommandPalette | ✅ Built |
+| Toast | ✅ Built |
+| AppShell | ✅ Built |
+
+### Components missing (referenced but not built):
+None remaining — all now created.
+
+---
+
+## Gaps (recommended, not blocking build)
 
 1. **WCAG 2.1 AA audit** — contrast, focus-visible, ARIA labels, screen-reader ordering not verified.
-2. **Mobile responsiveness** — responsive classes used but not tested on real devices.
+2. **Mobile responsiveness** — code uses responsive classes (`hidden md:flex`) but not tested on real devices.
 3. **Browser compatibility** — not tested across Chrome/Firefox/Safari/Edge.
+4. **Error messages** — generic ("Payment verification failed"); could be more specific without leaking internals.
+5. **Transaction-status presentation** — terminal states presented; retry UX present (Try Again / New Payment).
+6. **Loading states** — spinners present on save; checkout loading state present.
+
+---
+
+## Recommended before launch
+
+- Commission WCAG 2.1 AA audit + remediate.
+- Test on iOS Safari + Android Chrome + desktop Chrome/Firefox/Edge.
+- Add `alt` text and focus management to command palette + dialogs.
