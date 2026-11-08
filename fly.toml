@@ -4,16 +4,45 @@ primary_region = "iad"
 [build]
   dockerfile = "Dockerfile.payment-api"
 
-[env]
-  NODE_ENV = "production"
-  PORT = "6100"
-  YOUPI_MODE = "localhost"
-  DATABASE_URL = ""
-  SQLITE_DB_PATH = "/app/data/youpi_pg.sqlite"
-  ENCRYPTION_MASTER_KEY = ""
-  JWT_SECRET = ""
-  INITIAL_ADMIN_EMAIL = ""
-  INITIAL_ADMIN_PASSWORD = ""
+[[env]]
+  key = "NODE_ENV"
+  value = "production"
+
+[[env]]
+  key = "PORT"
+  value = "6100"
+
+[[env]]
+  key = "YOUPI_MODE"
+  value = "localhost"
+
+[[env]]
+  key = "DATABASE_URL"
+  value = ""
+
+[[env]]
+  key = "SQLITE_DB_PATH"
+  value = "/app/data/youpi_pg.sqlite"
+
+[[env]]
+  key = "ENCRYPTION_MASTER_KEY"
+  value = ""
+
+[[env]]
+  key = "JWT_SECRET"
+  value = ""
+
+[[env]]
+  key = "INITIAL_ADMIN_EMAIL"
+  value = ""
+
+[[env]]
+  key = "INITIAL_ADMIN_PASSWORD"
+  value = ""
+
+[[env]]
+  key = "BASE_CHECKOUT_URL"
+  value = "https://dynamo-pay-portal.fly.dev"
 
 [experimental]
   auto_rollback = true
@@ -36,7 +65,3 @@ primary_region = "iad"
 [[statics]]
   guest_path = "/app/public"
   url_path = "/"
-
-[[env]]
-  key = "BASE_CHECKOUT_URL"
-  value = "https://dynamo-pay-portal.fly.dev"

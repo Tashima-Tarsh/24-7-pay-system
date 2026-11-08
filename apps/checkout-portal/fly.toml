@@ -5,11 +5,21 @@ primary_region = "iad"
   dockerfile = "apps/checkout-portal/Dockerfile"
   context = ".."
 
-[env]
-  NODE_ENV = "production"
-  PORT = "7000"
-  BASE_PAYMENT_API_URL = "https://dynamo-pay-api.fly.dev"
-  BASE_CHECKOUT_URL = "https://dynamo-pay-portal.fly.dev"
+[[env]]
+  key = "NODE_ENV"
+  value = "production"
+
+[[env]]
+  key = "PORT"
+  value = "7000"
+
+[[env]]
+  key = "BASE_PAYMENT_API_URL"
+  value = "https://dynamo-pay-api.fly.dev"
+
+[[env]]
+  key = "BASE_CHECKOUT_URL"
+  value = "https://dynamo-pay-portal.fly.dev"
 
 [experimental]
   auto_rollback = true
