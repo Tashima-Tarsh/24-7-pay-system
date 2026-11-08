@@ -79,7 +79,7 @@ export function decryptField(ciphertext) {
 }
 
 /**
- * Encrypt sensitive fields in a record object.
+ * Encrypt sensitive fields in a payment record object.
  * @param {object} record - Record object with sensitive fields
  * @param {string[]} fields - Field names to encrypt
  * @returns {object} Record with encrypted fields
@@ -123,7 +123,7 @@ export function decryptRecordFields(record, fields = []) {
 }
 
 /**
- * Check if data residency encryption is configured.
+ * Check if data residency is configured (data stored in India).
  * @returns {boolean}
  */
 export function isDataResidencyEnforced() {

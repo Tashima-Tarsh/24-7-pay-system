@@ -1,5 +1,3 @@
-import crypto from 'node:crypto';
-
 /**
  * Dispute Case Management — Phase 4 Deliverable 10
  *
@@ -209,3 +207,4 @@ export class DisputeCaseManager {
 function cryptoRandomUUID() {
   return crypto.randomUUID();
 }
+import crypto from 'node:crypto';

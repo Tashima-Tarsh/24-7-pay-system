@@ -1,25 +1,46 @@
 /**
  * Law Enforcement Cooperation Protocol — Phase 4 Deliverable 6
  *
- * When ED/CBI/Police send a lawful request, the system must respond.
- * This route is authenticated via separate admin channel, NOT merchant API.
+ * When ED/CBI/Police send a lawful request, you MUST respond.
+ * Build the protocol now.
+ *
+ * This route is AUTHENTICATED via separate admin channel, NOT merchant API.
+ *
  * Headers required:
  *   x-le-agency: Law enforcement agency name
  *   x-le-case-number: Case number
  *   x-le-officer: Officer name/ID
+ *
+ * Endpoint:
+ *   POST   /api/v1/internal/le-request
  */
 
 import { HttpServer } from '../server.js';
 import { AuditLogger } from '@youpi/core/audit/logger';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
-const ENCRYPTION_KEY = Buffer.from(process.env.DATA_ENCRYPTION_KEY || '00'.repeat(32), 'hex');
+const ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_MASTER_KEY;
+const ENCRYPTION_KEY = ENCRYPTION_KEY_HEX
+  ? Buffer.from(ENCRYPTION_KEY_HEX, 'hex')
+  : null;
 
+if (ENCRYPTION_KEY && ENCRYPTION_KEY.length !== 32) {
+  throw new Error(
+    'ENCRYPTION_MASTER_KEY must be set as a 32-byte (64 hex char) value'
+  );
+}
+
+/**
+ * Register LE request routes.
+ *
+ * @param {import('../server.js').HttpServer} server - HTTP server instance
+ * @param {object} ctx - Context with db and auditLogger
+ */
 export function registerLERequestRoutes(server, ctx) {
   const { db, auditLogger } = ctx;
 
   // POST /api/v1/internal/le-request
-  // Law enforcement request endpoint — authenticated via admin channel
+  // Law enforcement request endpoint — authenticated via separate admin channel
   server.post('/api/v1/internal/le-request', async (req, res) => {
     try {
       // Verify law enforcement auth headers
@@ -47,7 +68,6 @@ export function registerLERequestRoutes(server, ctx) {
       }
 
       // ---- Log the LE request itself (regulatory requirement) ----
-      const auditLogger = ctx.auditLogger;
       await auditLogger.log({
         actorType: 'ADMIN',
         actorId: officer,
@@ -115,9 +135,10 @@ export function registerLERequestRoutes(server, ctx) {
       db.execute(`
         INSERT INTO le_reports (id, case_number, agency, officer, target_type, target_id,
                                report_blob, report_key, created_at, retention_until)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 years'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [reportId, effectiveCaseNumber, agency, officer, target_type, target_id,
-          report.blob, report.encryptedKey, new Date().toISOString()]);
+          report.blob, report.encryptedKey, new Date().toISOString(),
+          new Date(Date.now() + 7 * 365 * 24 * 60 * 60 * 1000).toISOString()]);
 
       return HttpServer.json(res, 200, {
         status: 'FULFILLED',
