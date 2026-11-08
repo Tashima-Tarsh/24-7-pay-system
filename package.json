@@ -1,6 +1,6 @@
 {
   "name": "youpi-pg",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Self-Hosted White-Label UPI Payment Gateway with Payment Observation Engine",
   "private": true,
@@ -52,5 +52,6 @@
     "node": ">=22.13.0"
   },
   "author": "Antigravity Systems",
-  "license": "Commercial"
+  "license": "Commercial",
+  "_workspace_note": "Updated to include checkout-portal dependencies"
 }
