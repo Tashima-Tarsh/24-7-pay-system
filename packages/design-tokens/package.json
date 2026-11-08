@@ -1,0 +1,19 @@
+{
+  "name": "@youpi/design-tokens",
+  "version": "1.0.0",
+  "description": "Design tokens for 24-7 Pay - Colors, spacing, typography, and component tokens",
+  "type": "module",
+  "main": "./src/tokens.css",
+  "files": [
+    "src/**/*"
+  ],
+  "scripts": {
+    "build": "echo 'No build step needed for CSS tokens'"
+  },
+  "keywords": [
+    "design-tokens",
+    "css-variables",
+    "ui-kit",
+    "24-7-pay"
+  ]
+}

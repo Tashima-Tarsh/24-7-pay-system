@@ -39,6 +39,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@tanstack/react-router": "^1.170.46",
     "bullmq": "^5.35.0",
     "googleapis": "^189.0.0",
     "ioredis": "^5.5.0",

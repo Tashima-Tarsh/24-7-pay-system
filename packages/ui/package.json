@@ -1,0 +1,42 @@
+{
+  "name": "@youpi/ui",
+  "version": "1.0.0",
+  "description": "UI component library for 24-7 Pay - Built on design tokens",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./button": "./src/components/Button.tsx",
+    "./card": "./src/components/Card.tsx",
+    "./badge": "./src/components/Badge.tsx",
+    "./skeleton": "./src/components/Skeleton.tsx"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test src/__tests__/**/*.test.js"
+  },
+  "dependencies": {
+    "@youpi/core": "*",
+    "@youpi/common": "*",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.3.0"
+  },
+  "files": [
+    "src/**/*"
+  ],
+  "keywords": [
+    "ui-components",
+    "react-components",
+    "24-7-pay"
+  ]
+}
