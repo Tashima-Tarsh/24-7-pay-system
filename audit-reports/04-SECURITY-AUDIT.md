@@ -40,7 +40,7 @@
 ## Production startup guards (`startServer`)
 
 - Requires `ENCRYPTION_MASTER_KEY` + `JWT_SECRET` in `NODE_ENV=production`.
-- Rejects weak admin passwords (`qwertyuiop90`, `password`, `admin123`, placeholder, empty).
+- Rejects weak admin passwords (a weak default pattern, `password`, `admin123`, placeholder, empty).
 - Rejects bypass flags `SKIP_MFA`, `SKIP_EMAIL_VERIFY`, `SKIP_MOBILE_VERIFY`.
 - Binds to `127.0.0.1` by default (loopback only), reachable via Cloudflare Tunnel.
 
