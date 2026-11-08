@@ -308,22 +308,39 @@ export function registerUpiIntentRoutes(server, ctx) {
         signed: built.signed
       };
 
-      const session = sessionRepo.create({
-        id: paymentId,
-        merchantId: merchant.id,
-        customerId: customerId || null,
-        receivingAccountId, // resolved above; enables bank observation correlation
-        orderId: generatedOrderId,
-        amountPaise: finalAmountPaise,
-        baseAmountPaise: finalAmountPaise,
-        currency: finalCurrency,
-        method: PaymentMethod.UPI,
-        status: PaymentStatus.INITIATED,
-        returnUrl: returnUrl || null,
-        idempotencyKey,
-        deviceId: null,
-        metadata: sessionMetadata
-      });
+      let session;
+      try {
+        session = sessionRepo.create({
+          id: paymentId,
+          merchantId: merchant.id,
+          customerId: customerId || null,
+          receivingAccountId, // resolved above; enables bank observation correlation
+          orderId: generatedOrderId,
+          amountPaise: finalAmountPaise,
+          baseAmountPaise: finalAmountPaise,
+          currency: finalCurrency,
+          method: PaymentMethod.UPI,
+          status: PaymentStatus.INITIATED,
+          returnUrl: returnUrl || null,
+          idempotencyKey,
+          deviceId: null,
+          metadata: sessionMetadata
+        });
+      } catch (createErr) {
+        // Handle duplicate (merchant_id, order_id) UNIQUE constraint idempotently.
+        if (createErr.code === 'ERR_SQLITE_ERROR' && createErr.message.includes('UNIQUE constraint failed: payment_sessions.merchant_id, payment_sessions.order_id')) {
+          const existing = sessionRepo.findByOrderId(merchant.id, generatedOrderId);
+          if (existing) {
+            session = existing;
+          } else {
+            console.error('[upi-intent] create error:', createErr);
+            return HttpServer.json(res, 500, { error: 'Internal Server Error', detail: createErr.message });
+          }
+        } else {
+          console.error('[upi-intent] create error:', createErr);
+          return HttpServer.json(res, 500, { error: 'Internal Server Error', detail: createErr.message });
+        }
+      }
 
       // Persist creation event.
       try {

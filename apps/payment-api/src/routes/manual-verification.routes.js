@@ -36,16 +36,58 @@ export function registerManualVerificationRoutes(server, ctx) {
         });
       }
 
-      // Check if this UTR was already used for another payment (prevents UTR reuse fraud)
-      const existingUtrMatch = obsRepo.findByFingerprint
-        ? obsRepo.findByFingerprint(crypto.createHash('sha256').update(`${paymentId}:${utr}`).digest('hex'))
-        : null;
-      // Also check by bank_reference_number across all observations for this UTR
-      const existingUtrByRef = db.queryOne(
-        `SELECT id, attributed_payment_id FROM payment_observations WHERE bank_reference_number = ? LIMIT 1`,
-        [utr]
-      );
-      if (existingUtrByRef && existingUtrByRef.attributed_payment_id !== paymentId) {
+      // Check if this UTR was already used for another payment (prevents UTR reuse fraud).
+      // The check AND observation insert happen in one BEGIN IMMEDIATE transaction so
+      // concurrent requests are serialized: only the first can claim the UTR.
+      let utrAlreadyUsed = false;
+      let existingAttributedPaymentId = null;
+      try {
+        db.transaction(() => {
+          const existingUtrByRef = db.queryOne(
+            `SELECT id, attributed_payment_id FROM payment_observations WHERE bank_reference_number = ? LIMIT 1`,
+            [utr]
+          );
+          if (existingUtrByRef && existingUtrByRef.attributed_payment_id !== paymentId) {
+            utrAlreadyUsed = true;
+            existingAttributedPaymentId = existingUtrByRef.attributed_payment_id;
+            throw new Error('UTR_ALREADY_USED');
+          }
+          // Insert observation directly via db.execute() so it participates in the BEGIN IMMEDIATE transaction.
+          let receivingAccountId = session.receivingAccountId || null;
+          if (!receivingAccountId) {
+            const acct = db.queryOne(
+              `SELECT id FROM payment_receiving_accounts WHERE merchant_id = ? AND is_active = 1 LIMIT 1`,
+              [session.merchantId]
+            );
+            receivingAccountId = acct?.id || null;
+          }
+          db.execute(
+            `INSERT INTO payment_observations (
+              id, receiving_account_id, source, amount_paise, observed_at,
+              sender_vpa, bank_reference_number, fingerprint_hash, raw_payload,
+              attribution_status, attributed_payment_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              `obs_manual_${crypto.randomUUID().replace(/-/g, '')}`,
+              receivingAccountId || '',
+              ObserverSource.MANUAL_UTR_ENTRY,
+              Number(session.amountPaise),
+              new Date().toISOString(),
+              null,
+              utr,
+              crypto.createHash('sha256').update(`${paymentId}:${utr}`).digest('hex'),
+              JSON.stringify({ utr, source: 'manual_user_entry' }),
+              'PENDING_VERIFICATION',
+              paymentId,
+              new Date().toISOString()
+            ]
+          );
+        });
+      } catch (err) {
+        if (err.message !== 'UTR_ALREADY_USED') throw err;
+      }
+
+      if (utrAlreadyUsed) {
         return HttpServer.json(res, 409, {
           error: 'This UTR has already been used for another payment.',
           code: 'UTR_ALREADY_USED'
@@ -82,31 +124,6 @@ export function registerManualVerificationRoutes(server, ctx) {
           paymentId
         ]
       );
-
-      // Record the UTR as an observation (for matching later)
-      if (obsRepo) {
-        // Resolve receiving account: use session's account, or look up merchant's default
-        let receivingAccountId = session.receivingAccountId || null;
-        if (!receivingAccountId) {
-          const acct = db.queryOne(
-            `SELECT id FROM payment_receiving_accounts WHERE merchant_id = ? AND is_active = 1 LIMIT 1`,
-            [session.merchantId]
-          );
-          receivingAccountId = acct?.id || null;
-        }
-        obsRepo.create({
-          id: `obs_manual_${crypto.randomUUID()}`,
-          receivingAccountId: receivingAccountId || '',
-          source: ObserverSource.MANUAL_UTR_ENTRY,
-          amountPaise: Number(session.amountPaise),
-          observedAt: new Date(),
-          bankReferenceNumber: utr,
-          fingerprintHash: crypto.createHash('sha256').update(`${paymentId}:${utr}`).digest('hex'),
-          rawPayload: { utr, source: 'manual_user_entry' },
-          attributionStatus: 'PENDING_VERIFICATION',
-          attributedPaymentId: paymentId
-        });
-      }
 
       // Fire webhook: payment.pending_verification (NOT success)
       if (webhookEngine) {
