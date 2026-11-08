@@ -1,0 +1,21 @@
+{
+  "name": "pay-system-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end Playwright test suite for 24-7-pay-system UPI payment platform",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "install:browsers": "playwright install",
+    "start:servers": "node start-servers.js start",
+    "stop:servers": "node start-servers.js stop"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

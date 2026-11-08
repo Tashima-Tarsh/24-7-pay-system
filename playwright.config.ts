@@ -21,5 +21,13 @@ export default defineConfig({
         actionTimeout: 15000,
       },
     },
+    {
+      name: 'chromium-mobile',
+      use: {
+        ...devices['iPhone 12'],
+        actionTimeout: 30000,
+        navigationTimeout: 30000,
+      },
+    },
   ],
 });
