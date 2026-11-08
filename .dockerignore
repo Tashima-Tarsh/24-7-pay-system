@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.gitignore
+README.md
+audit-reports
+output
+*.md
+!package.json
+!package-lock.json
