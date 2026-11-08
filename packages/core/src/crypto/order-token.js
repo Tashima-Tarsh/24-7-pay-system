@@ -1,6 +1,14 @@
 import crypto from 'node:crypto';
 
 const SECRET_KEY = process.env.ORDER_SIGNING_SECRET || 'change-me-in-production';
+
+// Reject insecure startup configuration in production: a default signing
+// secret would allow anyone to forge order tokens and confirm payments.
+if (process.env.NODE_ENV === 'production' && SECRET_KEY === 'change-me-in-production') {
+  throw new Error(
+    '[order-token] ORDER_SIGNING_SECRET must be set to a non-default value in production'
+  );
+}
 const NONCE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
 /**

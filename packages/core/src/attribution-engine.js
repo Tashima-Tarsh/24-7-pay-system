@@ -638,53 +638,71 @@ export class AttributionEngine {
         const targetMerchantId = currentSession.merchantId;
         const targetAmountPaise = currentSession.amountPaise;
 
+        // SEC-001 FIX: Wrap grace timer callback in try/catch so an error here
+        // (e.g. session already finalized) cannot crash the whole Node process.
         const graceTimer = setTimeout(() => {
-          this.pendingGraceTimers.delete(targetSessionId);
-          // 5 seconds elapsed without second source: finalize as Level 1
-          const finalResult = this.sessionRepo.recordVerificationSource(
-            targetSessionId,
-            targetSource,
-            targetObsId,
-            { finalizeSuccess: true }
-          );
+          try {
+            this.pendingGraceTimers.delete(targetSessionId);
+            // 5 seconds elapsed without second source: finalize as Level 1
+            const finalResult = this.sessionRepo.recordVerificationSource(
+              targetSessionId,
+              targetSource,
+              targetObsId,
+              { finalizeSuccess: true }
+            );
 
-          if (this.auditRepo) {
-            this.auditRepo.log({
+            if (this.auditRepo) {
+              this.auditRepo.log({
+                merchantId: targetMerchantId,
+                entityType: 'PAYMENT_SESSION',
+                entityId: targetSessionId,
+                action: 'PAYMENT_ATTRIBUTED_SUCCESS_L1',
+                actorType: 'SYSTEM',
+                details: {
+                  observationId: targetObsId,
+                  source: targetSource,
+                  verificationLevel: finalResult.level,
+                  verificationTag: finalResult.tag
+                }
+              });
+            }
+
+            this.eventEmitter.emit('PAYMENT.SUCCESS', {
+              paymentId: targetSessionId,
+              orderId: targetOrderId,
               merchantId: targetMerchantId,
-              entityType: 'PAYMENT_SESSION',
-              entityId: targetSessionId,
-              action: 'PAYMENT_ATTRIBUTED_SUCCESS_L1',
-              actorType: 'SYSTEM',
-              details: {
-                observationId: targetObsId,
-                source: targetSource,
+              amountPaise: targetAmountPaise,
+              observationId: targetObsId,
+              verificationLevel: finalResult.level,
+              verificationTag: finalResult.tag,
+              sources: finalResult.sources
+            });
+
+            if (this.server) {
+              this.server.broadcastSse(`payment_session_${targetSessionId}`, 'status_change', {
+                sessionId: targetSessionId,
+                orderId: targetOrderId,
+                status: PaymentStatus.SUCCESS,
+                amountPaise: targetAmountPaise ? targetAmountPaise.toString() : '0',
+                completedAt: new Date().toISOString(),
                 verificationLevel: finalResult.level,
                 verificationTag: finalResult.tag
-              }
-            });
-          }
-
-          this.eventEmitter.emit('PAYMENT.SUCCESS', {
-            paymentId: targetSessionId,
-            orderId: targetOrderId,
-            merchantId: targetMerchantId,
-            amountPaise: targetAmountPaise,
-            observationId: targetObsId,
-            verificationLevel: finalResult.level,
-            verificationTag: finalResult.tag,
-            sources: finalResult.sources
-          });
-
-          if (this.server) {
-            this.server.broadcastSse(`payment_session_${targetSessionId}`, 'status_change', {
-              sessionId: targetSessionId,
-              orderId: targetOrderId,
-              status: PaymentStatus.SUCCESS,
-              amountPaise: targetAmountPaise ? targetAmountPaise.toString() : '0',
-              completedAt: new Date().toISOString(),
-              verificationLevel: finalResult.level,
-              verificationTag: finalResult.tag
-            });
+              });
+            }
+          } catch (error) {
+            // Log to audit trail instead of crashing the server
+            console.error(`[AttributionEngine] Grace timer error for payment ${targetSessionId}:`, error.message);
+            if (this.auditRepo) {
+              this.auditRepo.log({
+                merchantId: targetMerchantId,
+                entityType: 'PAYMENT_SESSION',
+                entityId: targetSessionId,
+                action: 'GRACE_TIMER_FAILURE',
+                actorType: 'SYSTEM',
+                outcome: 'FAILURE',
+                rejectionReason: error.message
+              }).catch((err) => console.error('[AttributionEngine] Audit log failed:', err.message));
+            }
           }
         }, this.gracePeriodMs);
 

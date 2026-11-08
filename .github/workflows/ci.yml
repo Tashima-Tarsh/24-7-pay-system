@@ -23,6 +23,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Dependency audit (high and critical)
+        run: npm audit --audit-level=high
+
+      - name: Setup Semgrep
+        uses: returntocorp/setup-semgrep@v1
+
+      - name: Run Semgrep SAST
+        run: semgrep ci --config=auto --error
+
       - name: Type check
         run: npm run typecheck
 

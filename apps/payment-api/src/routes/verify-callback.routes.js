@@ -75,12 +75,6 @@ export function registerVerifyCallbackRoutes(server, ctx) {
         });
       }
 
-      // Mark nonce as used
-      db.execute(
-        `UPDATE payment_nonces SET used = 1, used_at = ? WHERE nonce = ?`,
-        [new Date().toISOString(), nonce]
-      );
-
       // ---- CHECK 3: Verify token not expired (< 5 minutes old) ----
       // Already verified in verifySignedOrderToken, but double-check here
       const now = Date.now();
@@ -168,24 +162,90 @@ export function registerVerifyCallbackRoutes(server, ctx) {
 
       // ---- ALL CHECKS PASSED ----
 
-      // Record UTR in registry to prevent reuse
-      db.execute(
-        `INSERT INTO utr_registry (utr, payment_order_id, payment_session_id, created_at) VALUES (?, ?, ?, ?)`,
-        [utr, order_id, paymentId, new Date().toISOString()]
-      );
+      // ---- CHECK 8: Validate responseCode - only a successful UPI response
+      // leads to a confirmed payment. Any other response code is a failed
+      // payment attempt and must not be treated as bank-confirmed success.
+      const isPaymentSuccess = String(responseCode).trim() === '00';
 
-      // Update payment session status to SUCCESS
-      db.execute(
-        `UPDATE payment_sessions SET status = 'SUCCESS', updated_at = ?, utr = ? WHERE id = ?`,
-        [new Date().toISOString(), utr, paymentId]
-      );
+      // ---- Cross-order binding: the session identified by the URL param must
+      // belong to the order embedded in the signed token. Prevents an attacker
+      // from presenting a valid token for order A against a session for order B.
+      const session = sessionRepo.findById(paymentId);
+      if (!session) {
+        return HttpServer.json(res, 404, {
+          verdict: 'REJECTED',
+          reason: 'SESSION_NOT_FOUND',
+          code: 'SESSION_NOT_FOUND'
+        });
+      }
+      if (String(session.orderId) !== String(order_id)) {
+        return HttpServer.json(res, 409, {
+          verdict: 'REJECTED',
+          reason: 'ORDER_SESSION_MISMATCH',
+          code: 'ORDER_SESSION_MISMATCH'
+        });
+      }
 
-      // Record observation for audit trail
+      if (!isPaymentSuccess) {
+        // Payment attempt failed (e.g. responseCode != '00'). Consume the nonce
+        // so this one-time attempt cannot be replayed, but record a FAILED
+        // verdict — never SUCCESS — since only customer-return evidence exists.
+        try {
+          db.transaction(() => {
+            db.execute(
+              `UPDATE payment_nonces SET used = 1, used_at = ? WHERE nonce = ?`,
+              [new Date().toISOString(), nonce]
+            );
+            db.execute(
+              `UPDATE payment_sessions SET status = 'FAILED', updated_at = ? WHERE id = ?`,
+              [new Date().toISOString(), paymentId]
+            );
+          });
+        } catch {}
+        return HttpServer.json(res, 200, {
+          verdict: 'REJECTED',
+          reason: 'PAYMENT_FAILED',
+          code: 'PAYMENT_FAILED',
+          order_id: order_id,
+          payment_id: paymentId,
+          response_code: responseCode,
+          verified_at: new Date().toISOString()
+        });
+      }
+
+      // Atomic commit: consume nonce, register UTR, mark session SUCCESS.
+      // All three happen in one transaction so a failure cannot leave the
+      // nonce consumed without state, or state changed without the nonce.
+      try {
+        db.transaction(() => {
+          db.execute(
+            `UPDATE payment_nonces SET used = 1, used_at = ? WHERE nonce = ?`,
+            [new Date().toISOString(), nonce]
+          );
+          db.execute(
+            `INSERT INTO utr_registry (utr, payment_order_id, payment_session_id, created_at) VALUES (?, ?, ?, ?)`,
+            [utr, order_id, paymentId, new Date().toISOString()]
+          );
+          db.execute(
+            `UPDATE payment_sessions SET status = 'SUCCESS', updated_at = ? WHERE id = ?`,
+            [new Date().toISOString(), paymentId]
+          );
+        });
+      } catch (commitErr) {
+        console.error('[verify-callback] atomic commit failed:', commitErr.message);
+        return HttpServer.json(res, 500, {
+          verdict: 'REJECTED',
+          reason: 'COMMIT_FAILED',
+          code: 'COMMIT_FAILED'
+        });
+      }
+
+      // Record observation for audit trail (best-effort, does not affect verdict)
       try {
         if (obsRepo) {
           obsRepo.create({
             id: `obs_verify_${crypto.randomUUID()}`,
-            receivingAccountId: sessionRepo.findById(paymentId)?.receivingAccountId || null,
+            receivingAccountId: session.receivingAccountId || null,
             source: 'INTENT_RETURN',
             amount_paise: amount_paise,
             observedAt: new Date(),
@@ -200,7 +260,7 @@ export function registerVerifyCallbackRoutes(server, ctx) {
         console.error('[verify-callback] observation record warning:', obsErr.message);
       }
 
-      // Fire webhook to merchant
+      // Fire webhook to merchant only after the durable state commit.
       try {
         if (webhookEngine) {
           const updated = sessionRepo.findById(paymentId);

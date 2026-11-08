@@ -815,9 +815,9 @@ export function createVpaPoolTables(db) {
       frozen_at TEXT,
       frozen_reason VARCHAR(255),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      CONSTRAINT uq_merchant_vpa_pool UNIQUE(merchant_id, LOWER(vpa))
-    );
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    CONSTRAINT uq_merchant_vpa_pool UNIQUE(merchant_id, vpa)
+  );
   `); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_vpa_pool_merchant_status ON vpa_pool (merchant_id, status);"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_vpa_pool_routing ON vpa_pool (merchant_id, status, health_score DESC);"); } catch {}

@@ -25,6 +25,13 @@ export class VPARoutingEngine {
   constructor(options = {}) {
     this.db = options.db;
     this.auditRepo = options.auditRepo || null;
+    // Operational thresholds (NPCI/RBI-aligned defaults). All monetary values in paise.
+    // Make configurable so a ₹10 crore/month merchant can right-size per-VPA limits
+    // without hardcoding a bank-approved transaction ceiling.
+    this.maxDailyTxPerVpa = Number(options.maxDailyTxPerVpa ?? 25);
+    this.maxDailyInflowPaisePerVpa = Number(options.maxDailyInflowPaisePerVpa ?? 4000000);
+    this.maxUniqueSenders24h = Number(options.maxUniqueSenders24h ?? 20);
+    this.minHealthScore = Number(options.minHealthScore ?? 40);
   }
 
   /**
@@ -49,13 +56,13 @@ export class VPARoutingEngine {
       FROM vpa_pool
       WHERE merchant_id = ?
         AND status IN ('ACTIVE', 'WARMING')
-        AND health_score > 40
-        AND daily_tx_count < 25
-        AND daily_inflow_paise + ? < 4000000
-        AND unique_senders_24h < 20
+        AND health_score > ?
+        AND daily_tx_count < ?
+        AND daily_inflow_paise + ? < ?
+        AND unique_senders_24h < ?
       ORDER BY health_score DESC, last_transaction_at ASC NULLS FIRST
       LIMIT 5
-    `, [merchantId, amountPaise]);
+    `, [merchantId, this.minHealthScore, this.maxDailyTxPerVpa, amountPaise, this.maxDailyInflowPaisePerVpa, this.maxUniqueSenders24h]);
 
     if (!candidates || candidates.length === 0) {
       const err = new Error('VPA_POOL_EXHAUSTED: No healthy VPA available for merchant ' + merchantId);
@@ -95,6 +102,108 @@ export class VPARoutingEngine {
       vpa_id: row.id,
       reason: 'FALLBACK'
     };
+  }
+
+  /**
+   * Atomically selects and reserves a VPA for an order under concurrency.
+   *
+   * Performs selection and counter increment inside a single write transaction
+   * so two concurrent requests cannot reserve the same VPA beyond its caps
+   * (no duplicate exclusive reservation, no oversubscription).
+   *
+   * @param {string} merchantId
+   * @param {number} amountPaise
+   * @returns {{ vpa: string, vpa_id: string, reason: string }}
+   * @throws {Error} VPA_POOL_EXHAUSTED when no healthy VPA can be reserved
+   */
+  reserveVPAForOrder(merchantId, amountPaise) {
+    const amountNum = typeof amountPaise === 'bigint' ? Number(amountPaise) : Number(amountPaise);
+    const now = new Date().toISOString();
+
+    const result = this.db.transaction(() => {
+      const candidates = this.db.query(`
+        SELECT id, vpa, health_score, daily_tx_count, daily_inflow_paise, unique_senders_24h
+        FROM vpa_pool
+        WHERE merchant_id = ?
+          AND status IN ('ACTIVE', 'WARMING')
+          AND health_score > ?
+          AND daily_tx_count < ?
+          AND daily_inflow_paise + ? < ?
+          AND unique_senders_24h < ?
+        ORDER BY health_score DESC, last_transaction_at ASC NULLS FIRST
+        LIMIT 5
+      `, [merchantId, this.minHealthScore, this.maxDailyTxPerVpa, amountNum, this.maxDailyInflowPaisePerVpa, this.maxUniqueSenders24h]);
+
+      if (!candidates || candidates.length === 0) {
+        const err = new Error('VPA_POOL_EXHAUSTED: No healthy VPA available for merchant ' + merchantId);
+        err.code = 'VPA_POOL_EXHAUSTED';
+        err.merchantId = merchantId;
+        throw err;
+      }
+
+      // Try each candidate in health order; the first conditional increment that
+      // succeeds atomically reserves the VPA (SQLite serializes write transactions).
+      for (const row of candidates) {
+        const updated = this.db.execute(`
+          UPDATE vpa_pool
+          SET daily_tx_count = daily_tx_count + 1,
+              daily_inflow_paise = daily_inflow_paise + ?,
+              unique_senders_24h = unique_senders_24h + 1,
+              last_transaction_at = ?,
+              updated_at = ?
+          WHERE id = ?
+            AND status IN ('ACTIVE', 'WARMING')
+            AND health_score > ?
+            AND daily_tx_count < ?
+            AND daily_inflow_paise + ? < ?
+            AND unique_senders_24h < ?
+        `, [amountNum, now, now, row.id, this.minHealthScore, this.maxDailyTxPerVpa, amountNum, this.maxDailyInflowPaisePerVpa, this.maxUniqueSenders24h]);
+
+        if (updated && updated.changes && updated.changes > 0) {
+          this._audit('VPA_RESERVED', row.id, row.vpa, {
+            amount_paise: amountNum,
+            health_score: row.health_score,
+            reason: 'ATOMIC_RESERVATION'
+          });
+          return { vpa: row.vpa, vpa_id: row.id, reason: 'ATOMIC_RESERVATION' };
+        }
+        // Cap was exceeded by a concurrent request; try the next candidate.
+      }
+
+      const err = new Error('VPA_POOL_EXHAUSTED: No healthy VPA could be reserved for merchant ' + merchantId);
+      err.code = 'VPA_POOL_EXHAUSTED';
+      err.merchantId = merchantId;
+      throw err;
+    });
+
+    return result;
+  }
+
+  /**
+   * Releases a VPA reservation when a payment does not complete (e.g., callback
+   * failure or timeout), decrementing the counters so the capacity returns to
+   * the pool. Safe to call multiple times (idempotent-ish via conditional).
+   *
+   * @param {string} vpaId
+   * @param {number} amountPaise
+   */
+  releaseVPA(vpaId, amountPaise) {
+    const amountNum = typeof amountPaise === 'bigint' ? Number(amountPaise) : Number(amountPaise);
+    const now = new Date().toISOString();
+    this.db.transaction(() => {
+      this.db.execute(`
+        UPDATE vpa_pool
+        SET daily_tx_count = CASE WHEN daily_tx_count > 0 THEN daily_tx_count - 1 ELSE 0 END,
+            daily_inflow_paise = CASE WHEN daily_inflow_paise >= ? THEN daily_inflow_paise - ? ELSE 0 END,
+            unique_senders_24h = CASE WHEN unique_senders_24h > 0 THEN unique_senders_24h - 1 ELSE 0 END,
+            updated_at = ?
+        WHERE id = ?
+      `, [amountNum, amountNum, now, vpaId]);
+      this.db.execute(`
+        INSERT INTO vpa_health_events (id, vpa_pool_id, event_type, severity, metadata, created_at)
+        VALUES (?, ?, 'DAILY_RESET', 'INFO', ?, ?)
+      `, [`evt_${crypto.randomUUID()}`, vpaId, JSON.stringify({ released_paise: amountNum, reason: 'payment_not_completed' }), now]);
+    });
   }
 
   /**

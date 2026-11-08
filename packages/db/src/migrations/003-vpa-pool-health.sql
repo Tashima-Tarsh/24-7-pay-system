@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS vpa_pool (
     frozen_reason VARCHAR(255),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CONSTRAINT uq_merchant_vpa_pool UNIQUE(merchant_id, LOWER(vpa))
+    CONSTRAINT uq_merchant_vpa_pool UNIQUE(merchant_id, vpa)
 );
 CREATE INDEX IF NOT EXISTS idx_vpa_pool_merchant_status ON vpa_pool(merchant_id, status);
 CREATE INDEX IF NOT EXISTS idx_vpa_pool_routing ON vpa_pool(merchant_id, status, health_score DESC);

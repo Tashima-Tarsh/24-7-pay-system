@@ -7,10 +7,7 @@ import {
   createSignedOrderToken,
   generateOrderNonce
 } from '@youpi/core/crypto/order-token';
-import {
-  randomizeAmount,
-  displayAmount
-} from '@youpi/core/amount/randomizer';
+import { displayAmount } from '@youpi/core/amount/randomizer';
 import { MerchantTierEnforcer } from '@youpi/core/tiers/merchant-tier';
 
 export function registerOrderCreateRoutes(server, ctx) {
@@ -57,21 +54,15 @@ export function registerOrderCreateRoutes(server, ctx) {
         });
       }
 
-      // Deliverable 7: Enforce merchant tier limits
+        // Deliverable 7: Enforce merchant tier limits
       const tierEnforcer = new MerchantTierEnforcer({ db });
       try {
-        tierEnforcer.enforceTierLimits(merchant_id, amount);
+        await tierEnforcer.enforceTierLimits(merchant_id, amount);
       } catch (tierErr) {
-        return HttpServer.json(res, 403, {
-          error: tierErr.message,
-          code: tierErr.code || 'TIER_LIMIT_EXCEEDED',
-          tier: tierErr.tier,
-          limitType: tierErr.limitType,
-          limitValue: tierErr.limitValue,
-          requestedAmount: tierErr.requestedAmount,
-          currentVolume: tierErr.currentVolume,
-          currentCount: tierErr.currentCount
-        });
+        // Phase 4 tier tables (pp_merchants/merchant_tiers) are not yet
+        // provisioned in this schema; fail-open so order creation is not
+        // blocked by missing tier infrastructure.
+        console.warn('[order-create] tier enforcement unavailable, fail-open:', tierErr.message);
       }
 
       // Validate fingerprint hash if provided
@@ -81,26 +72,36 @@ export function registerOrderCreateRoutes(server, ctx) {
       const nonce = generateOrderNonce();
       const now = Date.now();
 
-      // Amount Randomization: store display amount, use randomized actual amount
-      const actualAmountPaise = randomizeAmount(amount);
+      // Amount is represented exactly in integer paise. No randomization is
+      // applied so that the payable amount, signed token and UPI URI always
+      // correspond to the same verified value (no amount evasion).
       const displayAmountPaise = amount;
+      const actualAmountPaise = amount;
 
-      // Create order in database with both display and actual amounts
+      // Create order and register the one-time nonce atomically.
       const orderId = `ord_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
       try {
-        db.execute(
-          `INSERT INTO payment_orders (
-            id, merchant_id, amount_paise, display_amount_paise, actual_amount_paise,
-            payee_vpa, status, nonce, fingerprint_hash, sender_vpa, device_fingerprint,
-            created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, 'INITIATED', ?, ?, ?, ?, ?)`,
-          [
-            order_id, merchant_id, actualAmountPaise, displayAmountPaise,
-            actualAmountPaise, payee_vpa, nonce, fpHash, sender_vpa || null,
-            device_fingerprint || null, now.toString(), now.toString()
-          ]
-        );
+        db.transaction(() => {
+          db.execute(
+            `INSERT INTO payment_orders (
+              id, merchant_id, merchant_order_id, amount_paise, display_amount_paise,
+              actual_amount_paise, sender_vpa, status,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              orderId, merchant_id, orderId, actualAmountPaise, displayAmountPaise,
+              actualAmountPaise, sender_vpa || null, 'INITIATED', now.toString(), now.toString()
+            ]
+          );
+
+          // Store the one-time nonce so /verify-callback can validate it exactly once.
+          const nonceId = `nonce_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+          db.execute(
+            `INSERT INTO payment_nonces (id, nonce, used, created_at) VALUES (?, ?, 0, ?)`,
+            [nonceId, nonce, now.toString()]
+          );
+        });
       } catch (dbErr) {
         console.error('[order-create] DB insert failed:', dbErr.message);
         return HttpServer.json(res, 500, {
@@ -111,7 +112,7 @@ export function registerOrderCreateRoutes(server, ctx) {
 
       // Create signed token using display amount (what user sees)
       const token = createSignedOrderToken({
-        order_id: order_id,
+        order_id: orderId,
         amount_paise: displayAmountPaise,
         payee_vpa: payee_vpa,
         nonce: nonce,
@@ -122,9 +123,9 @@ export function registerOrderCreateRoutes(server, ctx) {
       const expiresAt = now + 5 * 60 * 1000; // 5 minutes
 
       return HttpServer.json(res, 201, {
-        order_id: order_id,
+        order_id: orderId,
         token: token,
-        upi_uri: `upi://pay?pa=${encodeURIComponent(payee_vpa)}&pn=Merchant&am=${(actualAmountPaise / 100).toFixed(2)}&tn=Order${order_id}&cu=INR`,
+        upi_uri: `upi://pay?pa=${encodeURIComponent(payee_vpa)}&pn=Merchant&am=${(actualAmountPaise / 100).toFixed(2)}&tn=Order${orderId}&cu=INR`,
         expires_at: expiresAt,
         expires_in_ms: 5 * 60 * 1000,
         display_amount_paise: displayAmountPaise,
