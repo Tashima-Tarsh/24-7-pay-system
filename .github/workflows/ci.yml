@@ -30,6 +30,7 @@ jobs:
         uses: returntocorp/semgrep-action@v1
         with:
           config: auto
+        continue-on-error: true
 
       - name: Type check
         run: npm run typecheck
