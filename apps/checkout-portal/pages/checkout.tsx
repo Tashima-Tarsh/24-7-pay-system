@@ -8,6 +8,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Button } from '@youpi/ui';
+import { CheckCircle, XCircle, Lock, Phone } from 'lucide-react';
 
 interface PaymentSession {
   id: string;
@@ -26,9 +28,10 @@ interface VerifyResult {
   order_id?: string;
   upi_transaction_reference?: string;
   amount?: number;
+  message?: string;
 }
 
-export function CheckoutPage({ paymentId }: { paymentId: string }) {
+export default function CheckoutPage({ paymentId }: { paymentId: string }) {
   const [state, setState] = useState<PaymentSession | null>(null);
   const [returnStatus, setReturnStatus] = useState<'success' | 'failure' | null>(null);
   const [returnMessage, setReturnMessage] = useState<string>('');
@@ -47,8 +50,7 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
           amount_paise: data.amount_paise,
           currency: data.currency || 'INR',
           status: data.status,
-          upiUri: data.upi_uri,
-          receiving_account_id: data.receiving_account_id,
+          upi_uri: data.upi_uri,          receiving_account_id: data.receiving_account_id,
           created_at: data.created_at,
         });
       })
@@ -75,7 +77,7 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
     }
   }, [state]);
 
-  const submitPaymentReturn = async (data: {
+  const submitClientReturn = async (data: {
     transaction_ref: string;
     response_code: string;
     amount: number;
@@ -95,7 +97,7 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
         throw new Error('Verification failed');
       }
 
-      const result = await res.json();
+      const result: VerifyResult = await res.json();
 
       if (result.status === 'SUCCESS') {
         setReturnStatus('success');
@@ -117,8 +119,8 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
   };
 
   const handlePayClick = () => {
-    if (!state?.upiUri) return;
-    window.location.href = state.upiUri;
+    if (!state?.upi_uri) return;
+    window.location.href = state.upi_uri;
   };
 
   if (!state) {
@@ -126,8 +128,8 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
       <div className="flex items-center justify-center h-screen text-neutral-400">
         <div className="animate-pulse rounded-full h-8 w-8 bg-neutral-600"></div>
       </div>
-    </div>
-  );
+    );
+  }
 
   if (returnStatus === 'success') {
     return (
@@ -143,8 +145,8 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
           Back to Home
         </Button>
       </div>
-    </div>
-  );
+    );
+  }
 
   if (returnStatus === 'failure') {
     return (
@@ -152,7 +154,7 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
         <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-6">
           <XCircle className="w-10 h-10 text-red-500" />
         </div>
-        <h1 className="text-3xl font-bold text-neutral-100 mb-2">Payment Failed</h2>
+        <h1 className="text-3xl font-bold text-neutral-100 mb-2">Payment Failed</h1>
         <p className="text-neutral-400 text-center mb-6 max-w-md">
           {returnMessage || 'Your payment could not be verified.'}
         </p>
@@ -165,8 +167,8 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
           </Button>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-950 text-neutral-100 p-4">
@@ -197,10 +199,9 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
         <div className="flex flex-col items-center gap-4 mb-8">
           <div className="w-64 h-64 rounded-xl bg-white/5 p-4 border border-neutral-700 shadow-lg flex items-center justify-center">
             <img
-              src={`${apiBaseUrl}/api/v1/payments/${state.id}/qr`}
+              src={`${state.qr_image || `/api/v1/payments/${state.id}/qr`}`}
               alt="UPI QR Code"
               className="w-full h-full rounded-lg bg-white"
-              alt="UPI QR Code"
             />
           </div>
           <p className="text-sm text-neutral-400">
@@ -212,8 +213,8 @@ export function CheckoutPage({ paymentId }: { paymentId: string }) {
         <div className="w-full">
           <Button
             className="w-full h-12 text-xl font-bold"
-            onClick={handlePay}
-            disabled={false}
+            onClick={handlePayClick}
+            disabled={!state?.upi_uri}
           >
             <Phone className="w-5 h-5 mr-2" />
             Pay ₹{state.amount_paise / 100} via UPI App

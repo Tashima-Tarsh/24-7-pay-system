@@ -9,8 +9,10 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, Badge, Button } from '@24-7-pay/ui';
+import { Card, Badge, Button } from '@youpi/ui';
+import { cn } from '@youpi/ui/utils';
 import { api } from '../hooks/useApi';
+import { useToast } from '../hooks/useToast';
 import { formatCurrency, formatDate } from '../utils/format';
 import { CheckCircle, XCircle, AlertTriangle, Keyboard } from 'lucide-react';
 
@@ -24,9 +26,10 @@ interface QuarantinedOrder {
   created_at: string;
 }
 
-export function QuarantinePage() {
+export default function QuarantinePage() {
   const queryClient = useQueryClient();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const { toast } = useToast();
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['quarantine'],
@@ -91,8 +94,8 @@ export function QuarantinePage() {
           <p className="text-neutral-400">Loading quarantined orders...</p>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   if (!orders?.length) {
     return (
@@ -157,7 +160,7 @@ export function QuarantinePage() {
 
               <div className="bg-neutral-800 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-neutral-400">Environment Risk Score</p>
+                  <span className="text-sm text-neutral-400">Environment Risk Score</span>
                   <p className="text-lg font-bold text-warning-500">
                     {order.environment_risk_score}/100
                   </p>
@@ -188,7 +191,7 @@ export function QuarantinePage() {
                   variant="success"
                   className="flex-1"
                   onClick={() => verifyMutation.mutate(order.id)}
-                  loading={verifyMutation.isLoading}
+                  loading={verifyMutation.isPending}
                 >
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Verify & Credit (v)
@@ -197,7 +200,7 @@ export function QuarantinePage() {
                   variant="danger"
                   className="flex-1"
                   onClick={() => rejectMutation.mutate(order.id)}
-                  loading={rejectMutation.isLoading}
+                  loading={rejectMutation.isPending}
                 >
                   <XCircle className="w-4 h-4 mr-2" />
                   Reject (r)

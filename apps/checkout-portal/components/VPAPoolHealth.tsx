@@ -6,7 +6,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../hooks/useApi';
-import { cn } from '@24-7-pay/ui/utils';
+import { cn } from '@youpi/ui/utils';
 
 export function VPAPoolHealth() {
   const { data: vpaPool } = useQuery({

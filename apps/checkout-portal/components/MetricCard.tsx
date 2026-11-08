@@ -5,8 +5,8 @@
  * and optional icon.
  */
 
-import { Card } from '@24-7-pay/ui';
-import { cn } from '@24-7-pay/ui/utils';
+import { Card } from '@youpi/ui';
+import { cn } from '@youpi/ui/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface MetricCardProps {
@@ -35,7 +35,7 @@ export function MetricCard({
             variant === 'danger' && 'bg-danger-500/10 text-danger-500',
             variant === 'default' && 'bg-primary-500/10 text-primary-500'
           )}>
-            {icon}
+            {Icon}
           </div>
         </div>
         <div className="mt-4">

@@ -9,16 +9,19 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, Button, Badge, Dialog, Input } from '@24-7-pay/ui';
+import { Card, Button, Badge, Input } from '@youpi/ui';
+import { Dialog } from '@radix-ui/react-dialog';
 import { api } from '../hooks/useApi';
-import { cn } from '@24-7-pay/ui/utils';
+import { useToast } from '../hooks/useToast';
+import { cn } from '@youpi/ui/utils';
 import { Plus, Snowflake, Sun, Trash2 } from 'lucide-react';
 
-export function VPAPoolPage() {
+export default function VPAPoolPage() {
   const queryClient = useQueryClient();
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newVPA, setNewVPA] = useState('');
   const [bankName, setBankName] = useState('');
+  const { toast } = useToast();
 
   const { data: vpaPool } = useQuery({
     queryKey: ['vpa-pool'],
@@ -161,7 +164,7 @@ export function VPAPoolPage() {
       </div>
 
       <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-neutral-100 mb-4">Add New VPA</h2>
+        <h3 className="text-lg font-semibold text-neutral-100 mb-4">Add New VPA</h3>
         <div className="flex gap-3">
           <div className="flex-1">
             <label className="block text-sm font-medium text-neutral-400 mb-2">
@@ -190,7 +193,7 @@ export function VPAPoolPage() {
               variant="primary"
               className="flex-1"
               onClick={() => addVPAMutation.mutate({ vpa: newVPA, bank_name: bankName })}
-              loading={addVPAMutation.isLoading}
+              loading={addVPAMutation.isPending}
             >
               Add VPA
             </Button>

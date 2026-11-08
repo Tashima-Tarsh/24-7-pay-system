@@ -8,11 +8,10 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Badge } from '@24-7-pay/ui';
+import { Card, Badge } from '@youpi/ui';
 import { api } from '../hooks/useApi';
-import { formatDate } from '../utils/format';
 
-export function AuditPage() {
+export default function AuditPage() {
   const [filter, setFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
 

@@ -52,6 +52,9 @@ Thumbs.db
 !docs/**
 !assets/**
 
+# Next.js build artifacts
+.next/
+
 # Local Cloudflare tunnel executable
 /cloudflared.exe
 *.tsbuildinfo

@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./utils": "./src/components/utils/cn.ts",
     "./button": "./src/components/Button.tsx",
     "./card": "./src/components/Card.tsx",
     "./badge": "./src/components/Badge.tsx",

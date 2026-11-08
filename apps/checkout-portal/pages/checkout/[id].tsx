@@ -12,9 +12,9 @@ import {
   X
 } from 'lucide-react'
 
-export default function CheckoutPage({ query }) {
+export default function CheckoutPage() {
   const router = useRouter()
-  const paymentId = query.id
+  const paymentId = (router.query as { id?: string }).id
   
   const [status, setStatus] = useState('loading') // 'loading' | 'waiting' | 'verifying' | 'success' | 'error'
   const [amount, setAmount] = useState('0.00')
@@ -185,7 +185,7 @@ export default function CheckoutPage({ query }) {
             '--h': h,
             '--duration': `${duration}s`,
             animationDelay: `${delay}s`,
-          }}
+          } as any}
         />
       )
     })
@@ -312,30 +312,10 @@ export default function CheckoutPage({ query }) {
               <>
                 <button
                   onClick={launchUpiIntent}
-                  className={`w-full rounded-2xl px-6 py-5 text-white font-bold text-lg shadow-2xl flex items-center justify-center gap-2 transition-all duration-200 ${
-                    status === 'success'
-                      ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/40'
-                      : status === 'verifying'
-                        ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/40'
-                        : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-[1.02] shadow-indigo-500/30'
-                  }`}
+              className="w-full rounded-2xl px-6 py-5 text-white font-bold text-lg shadow-2xl flex items-center justify-center gap-2 transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-[1.02] shadow-indigo-500/30"
                 >
-                  {status === 'success' ? (
-                    <>
-                      <CheckCircle2 className="w-5 h-5" />
-                      Paid via UPI
-                    </>
-                  ) : status === 'verifying' ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      Verifying with Bank…
-                    </>
-                  ) : (
-                    <>
-                      <Phone className="w-5 h-5" />
-                      Pay ₹{amount} via UPI App
-                    </>
-                  )}
+                  <Phone className="w-5 h-5" />
+                  Pay ₹{amount} via UPI App
                 </button>
                 
                 {/* ONLY SHOWS AFTER 60 SECONDS */}

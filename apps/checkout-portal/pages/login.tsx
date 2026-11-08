@@ -8,18 +8,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { Button } from '@24-7-pay/ui';
-import { Input } from '@24-7-pay/ui';
+import { useRouter } from 'next/router';
+import { Button } from '@youpi/ui';
+import { Input } from '@youpi/ui';
 import { useAuth } from '../hooks/useAuth';
-import { Lock, Mail, AlertCircle } from 'lucide-react';
+import { Lock, Mail, AlertCircle, X, Eye } from 'lucide-react';
 
-export function LoginPage() {
+export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const router = useRouter();
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,9 +30,9 @@ export function LoginPage() {
     try {
       const result = await login(email, password);
       if (result.mfaRequired) {
-        navigate({ to: '/mfa-challenge' });
+        router.push('/mfa-challenge');
       } else {
-        navigate({ to: '/' });
+        router.push('/');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');

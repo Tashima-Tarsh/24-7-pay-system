@@ -40,7 +40,6 @@ const testFiles = [
   'packages/core/src/__tests__/callback-recovery.test.js',
   'packages/core/src/__tests__/webhook-failure-matrix.test.js',
   'packages/merchant-sdk/src/__tests__/merchant-sdk.test.js',
-  'packages/merchant-sdk/src/__tests__/sanbook-pay-sdk.test.js',
   'packages/merchant-sdk/src/__tests__/youpi-universal-integration.test.js',
   'apps/checkout-portal/src/__tests__/checkout-portal.test.js',
   'apps/checkout-portal/src/__tests__/checkout-payee.test.js',
@@ -68,7 +67,6 @@ const testFiles = [
   'apps/payment-api/src/__tests__/whatsapp-berry-auth.test.js',
   'apps/payment-api/src/__tests__/whitelabel-branding.test.js',
   'apps/payment-api/src/__tests__/cod-parallel-timer-decoupling.test.js',
-  'apps/payment-api/src/__tests__/sanbook-pay-production.test.js',
   'apps/payment-api/src/__tests__/multi-method-and-receipts.test.js',
   'apps/payment-api/src/__tests__/payment-confirmation-regression.test.js',
   'apps/payment-api/src/__tests__/production-hardening.test.js',
@@ -100,7 +98,7 @@ const noForceExit = new Set([
 ]);
 
 console.log('============================================================');
-console.log('🛡️ SANBOOK PAY — FULL REGRESSION TEST RUNNER');
+console.log('🛡️ YOUPI PG — FULL REGRESSION TEST RUNNER');
 console.log(`Running ${testFiles.length} curated test suites...`);
 console.log('============================================================\n');
 

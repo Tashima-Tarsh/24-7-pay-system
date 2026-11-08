@@ -4,17 +4,24 @@
  * Top navigation bar with user profile, test mode toggle, and commands.
  */
 
-import { Command } from 'lucide-react';
-import { Button } from '@24-7-pay/ui';
+import { useRouter } from 'next/router';
+import { Command, Plus } from 'lucide-react';
+import { Button } from '@youpi/ui';
 
 interface HeaderProps {
   user: any;
-  onTestModeToggle: (enabled: boolean) => void;
-  isTestModeActive: boolean;
+  onTestModeToggle?: (enabled: boolean) => void;
+  isTestModeActive?: boolean;
   onCommandPalette: () => void;
 }
 
 export function Header({ user, onCommandPalette }: HeaderProps) {
+  const router = useRouter();
+
+  const handleCreatePayment = () => {
+    router.push('/checkout');
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-neutral-900/50 backdrop-blur-md">
       <div className="flex items-center justify-between h-full px-6">
@@ -42,6 +49,16 @@ export function Header({ user, onCommandPalette }: HeaderProps) {
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
           <Button
+            variant="primary"
+            size="sm"
+            onClick={handleCreatePayment}
+            className="hidden md:flex whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create payment
+          </Button>
+
+          <Button
             onClick={onCommandPalette}
             variant="ghost"
             className="px-3 py-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
@@ -50,19 +67,21 @@ export function Header({ user, onCommandPalette }: HeaderProps) {
             <Command className="w-4 h-4" />
             <span className="hidden sm:inline text-neutral-400 text-sm">Command</span>
             <kbd className="ml-1 px-1.5 py-0.5 text-xs bg-neutral-800 rounded">⌘K</kbd>
-          </button>
+          </Button>
 
-          <div className="ml-3 flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-neutral-100">{user.name}</p>
-                <p className="text-xs text-neutral-500">{user.email}</p>
+          {user && (
+            <div className="ml-3 flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-neutral-100">{user.name}</p>
+                  <p className="text-xs text-neutral-500">{user.email}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </header>

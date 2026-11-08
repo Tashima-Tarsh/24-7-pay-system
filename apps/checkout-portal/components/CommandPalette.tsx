@@ -2,15 +2,16 @@
  * CommandPalette Component — Phase 1: Auth + App Shell
  *
  * Command palette (Cmd+K) for quick navigation and actions.
- * Uses Radix Dialog for accessibility.
+ * Uses Radix Dialog for accessibility. Next.js native routing.
  */
 
 'use client';
 
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from '@radix-ui/react-dialog';
-import { Search } from 'lucide-react';
-import { inputVariants } from '@24-7-pay/ui/components/inputs';
+import { Search, Webhook, FileText, Shield, Users, Settings, LayoutDashboard, CreditCard, Wallet, AlertTriangle } from 'lucide-react';
+import { Button } from '@youpi/ui';
+import { useRouter } from 'next/router';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -18,10 +19,10 @@ interface CommandPaletteProps {
 }
 
 const commands = [
-  { name: 'Overview', href: '/', shortcut: 'g o' },
-  { name: 'Payments', href: '/payments', shortcut: 'g p' },
-  { name: 'VPA Pool', href: '/vpa-pool', shortcut: 'g v' },
-  { name: 'Quarantine', href: '/quarantine', shortcut: 'g q' },
+  { name: 'Overview', href: '/', shortcut: 'g o', icon: LayoutDashboard },
+  { name: 'Payments', href: '/payments', shortcut: 'g p', icon: CreditCard },
+  { name: 'VPA Pool', href: '/vpa-pool', shortcut: 'g v', icon: Wallet },
+  { name: 'Quarantine', href: '/quarantine', shortcut: 'g q', icon: AlertTriangle },
   { name: 'Webhooks', href: '/webhooks', icon: Webhook },
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Audit Log', href: '/audit', icon: Shield },
@@ -32,7 +33,7 @@ const commands = [
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -79,9 +80,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 key={cmd.name}
                 onClick={() => {
                   if (cmd.action === 'create') {
-                    navigate({ to: '/payments/new' });
+                    router.push('/payments/new');
                   } else {
-                    navigate({ to: cmd.href });
+                    router.push(cmd.href);
                   }
                   onClose();
                 }}
@@ -97,8 +98,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 </div>
                 <span className="text-neutral-600 text-xs">{cmd.shortcut}</span>
               </button>
-            ))}
-          </div>
+            )))}
+          )
         </div>
       </DialogContent>
     </Dialog>

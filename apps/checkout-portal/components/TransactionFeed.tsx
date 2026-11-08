@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge } from '@24-7-pay/ui';
+import { Badge } from '@youpi/ui';
 import { api } from '../hooks/useApi';
 import { formatCurrency, formatTime } from '../utils/format';
 import { CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
@@ -71,10 +71,18 @@ export function TransactionFeed() {
       FAILED: 'danger',
       QUARANTINED: 'warning',
       PENDING: 'default',
-    };
+    } as const;
 
     return (
-      <Badge variant={variants[status as keyof typeof variants]}>
+      <Badge
+        variant={variants[status as keyof typeof variants] as
+          | 'success'
+          | 'danger'
+          | 'warning'
+          | 'default'
+          | 'info'
+          | 'outline'}
+      >
         {status}
       </Badge>
     );

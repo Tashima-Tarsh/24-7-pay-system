@@ -3,7 +3,7 @@
  *
  * Drawer view showing detailed payment information including:
  * - Payment status and amount
- * * UTR reference
+ * - UTR reference
  * - Verification stages with status
  * - Investigation timeline with timestamps
  * - Metadata (merchant ID, source, etc.)
@@ -11,7 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Dialog } from '@radix-ui/react-dialog';
-import { Card, Badge, Button } from '@24-7-pay/ui';
+import { Card, Badge, Button } from '@youpi/ui';
 import { api } from '../hooks/useApi';
 import { formatCurrency, formatDate } from '../utils/format';
 import { X, CheckCircle, XCircle, Clock, Shield } from 'lucide-react';
@@ -61,7 +61,7 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
                   {payment.status}
                 </Badge>
               </div>
-            </div>
+            </Card>
 
             {/* UTR */}
             {payment.utr && (
@@ -70,7 +70,7 @@ export function PaymentDetailDrawer({ paymentId, onClose }: PaymentDetailDrawerP
                   <p className="text-sm text-neutral-400 mb-2">UTR (Transaction Reference)</p>
                   <p className="font-mono text-lg text-success-500">{payment.utr}</p>
                 </div>
-              </div>
+              </Card>
             )}
 
             {/* Verification Layers */}

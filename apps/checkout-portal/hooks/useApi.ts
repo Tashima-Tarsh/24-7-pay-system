@@ -18,7 +18,7 @@ export async function apiRequest(
   const token = localStorage.getItem('youpi_merchant_token');
   const headers: Record<string, string> = {
     ...API_HEADERS,
-    ...options.headers,
+    ...(((options.headers as Record<string, string> | undefined) ?? {})),
   };
 
   if (token) {
@@ -72,3 +72,42 @@ export async function apiDelete(path: string): Promise<any> {
   });
   return res.json();
 }
+
+export const api = {
+  getDashboardMetrics: () => apiGet('/api/v1/dashboard/metrics'),
+  getPayments: (params?: { search?: string; status?: string; limit?: number }) =>
+    apiGet('/api/v1/payments', {
+      ...(params?.search ? { search: params.search } : {}),
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.limit ? { limit: String(params.limit) } : {}),
+    }),
+  getPaymentDetail: (paymentId: string) =>
+    apiGet(`/api/v1/payments/${encodeURIComponent(paymentId)}`),
+  getVPAPool: () => apiGet('/api/v1/vpa-pool'),
+  getRecentTransactions: (limit: number) =>
+    apiGet('/api/v1/transactions/recent', { limit: String(limit) }),
+  addVPA: (data: { vpa: string; bank_name: string }) =>
+    apiPost('/api/v1/vpa-pool', data),
+  freezeVPA: (id: string, reason: string) =>
+    apiPost(`/api/v1/vpa-pool/${encodeURIComponent(id)}/freeze`, { reason }),
+  thawVPA: (id: string) =>
+    apiPost(`/api/v1/vpa-pool/${encodeURIComponent(id)}/thaw`, {}),
+  put: (path: string, body: any) => apiPut(path, body),
+  del: (path: string) => apiDelete(path),
+  getWebhookConfig: () => apiGet('/api/v1/webhooks/config'),
+  testWebhook: (webhookUrl: string) =>
+    apiPost('/api/v1/webhooks/test', { webhook_url: webhookUrl }),
+  updateWebhookConfig: (data: { webhook_url: string }) =>
+    apiPost('/api/v1/webhooks/config', data),
+  getAuditLogs: (params?: { filter?: string; sourceFilter?: string }) =>
+    apiGet('/api/v1/audit-logs', params),
+  getReports: (range: string) => apiGet(`/api/v1/reports?range=${encodeURIComponent(range)}`),
+  getQuarantinedOrders: () => apiGet('/api/v1/quarantine'),
+  verifyQuarantinedOrder: (orderId: string) =>
+    apiPost(`/api/v1/quarantine/${encodeURIComponent(orderId)}/verify`, {}),
+  rejectQuarantinedOrder: (orderId: string) =>
+    apiPost(`/api/v1/quarantine/${encodeURIComponent(orderId)}/reject`, {}),
+  getTeamMembers: () => apiGet('/api/v1/team'),
+  addTeamMember: (data: { name: string; email: string; role: string }) =>
+    apiPost('/api/v1/team', data),
+};

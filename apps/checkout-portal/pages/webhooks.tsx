@@ -7,12 +7,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Card, Button, Badge, Input } from '@24-7-pay/ui';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Button, Badge, Input } from '@youpi/ui';
 import { api } from '../hooks/useApi';
 import { Link2, CheckCircle, XCircle } from 'lucide-react';
 
-export function WebhooksPage() {
+export default function WebhooksPage() {
   const queryClient = useQueryClient();
   const [webhookUrl, setWebhookUrl] = useState('');
   const [testing, setTesting] = useState(false);
@@ -46,7 +46,7 @@ export function WebhooksPage() {
     } catch {
       setTestStatus('error');
     } finally {
-      setLoading(false);
+      setTesting(false);
       setTimeout(() => setTestStatus('idle'), 3000);
     }
   };
@@ -86,7 +86,7 @@ export function WebhooksPage() {
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       <Card className="bg-neutral-900/50 border border-neutral-800">
         <div className="p-6">
@@ -113,14 +113,14 @@ export function WebhooksPage() {
             )}</pre>
           </div>
         </div>
-      </div>
+      </Card>
 
       <Card>
         <div className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <h3 className="text-lg font-semibold text-neutral-100">Test Webhook</h3>
-            <Badge variant="info">Test</Badge>
           </div>
+          <Badge variant="info">Test</Badge>
           <p className="text-sm text-neutral-400 mb-4">
             Send a test webhook to your configured endpoint to verify delivery.
           </p>
@@ -142,13 +142,13 @@ export function WebhooksPage() {
             </Button>
 
             {testStatus === 'success' && (
-              <div className="flex items-center gap-2 text-green-500 text-sm">
+              <div className="flex items-center gap-2 text-emerald-400 text-sm">
                 <CheckCircle className="w-4 h-4" />
                 Test sent successfully!
               </div>
             )}
             {testStatus === 'error' && (
-              <div className="flex items-center gap-2 text-red-500 text-sm">
+              <div className="flex items-center gap-2 text-rose-400 text-sm">
                 <XCircle className="w-4 h-4" />
                 Test failed
               </div>

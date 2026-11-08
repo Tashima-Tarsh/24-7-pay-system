@@ -7,11 +7,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, Button, Badge, Input } from '@24-7-pay/ui';
+import { Card, Button, Badge, Input } from '@youpi/ui';
 import { api } from '../hooks/useApi';
-import { User, Link2 } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
+import { User, Link2, CheckCircle, AlertCircle } from 'lucide-react';
 
-export function SettingsPage() {
+export default function AdminPage() {
   const [form, setForm] = useState({
     business_name: '',
     business_email: '',
@@ -21,6 +22,7 @@ export function SettingsPage() {
   });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +38,7 @@ export function SettingsPage() {
       });
       setStatus('success');
       setTimeout(() => setStatus('idle'), 3000);
+      toast.success('Settings saved');
     } catch {
       setStatus('error');
       setTimeout(() => setStatus('idle'), 3000);
@@ -86,7 +89,7 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       <Card>
         <div className="p-6 space-y-6">
@@ -118,13 +121,14 @@ export function SettingsPage() {
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       <Button
         type="submit"
         className="w-full py-3"
         loading={loading}
         disabled={loading}
+        onClick={handleSubmit}
       >
         {loading ? (
           <span className="flex items-center gap-2">
@@ -133,17 +137,17 @@ export function SettingsPage() {
           </span>
         ) : status === 'success' ? (
           <span className="flex items-center gap-2 text-green-500">
-            <span className="w-4 h-4 text-success-500"><CheckCircle className="w-4 h-4"/></span>
+            <CheckCircle className="w-4 h-4" />
             Saved!
           </span>
         ) : status === 'error' ? (
           <span className="flex items-center gap-2 text-red-500">
-            <span className="w-4 h-4 text-red-500"><AlertCircle className="w-4 h-4"/></span>
+            <AlertCircle className="w-4 h-4" />
             Save failed
           </span>
         ) : (
           <span className="flex items-center gap-2">
-            <span className="w-4 h-4 text-neutral-500">Save Changes</span>
+            Save Changes
           </span>
         )}
       </Button>

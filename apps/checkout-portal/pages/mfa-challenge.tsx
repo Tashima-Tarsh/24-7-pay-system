@@ -8,16 +8,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { Button, Input } from '@24-7-pay/ui';
+import { useRouter } from 'next/router';
+import { Button, Input } from '@youpi/ui';
 import { useAuth } from '../hooks/useAuth';
 import { Shield, AlertCircle } from 'lucide-react';
 
-export function MFAChallengePage() {
+export default function MFAChallengePage() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const router = useRouter();
   const { verifyMFA } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,7 +27,7 @@ export function MFAChallengePage() {
 
     try {
       await verifyMFA(code);
-      navigate({ to: '/' });
+      router.push('/');
     } catch (err: any) {
       setError(err.message || 'Verification failed. Please try again.');
     } finally {

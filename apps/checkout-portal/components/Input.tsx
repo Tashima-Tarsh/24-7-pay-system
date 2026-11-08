@@ -1,4 +1,4 @@
-import { cn } from '@24-7-pay/ui/utils';
+import { cn } from '@youpi/ui/utils';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 

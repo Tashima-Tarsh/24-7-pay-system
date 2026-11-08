@@ -15,7 +15,7 @@
 export {
   Button,
   type ButtonProps,
-} from "./components/Button.tsx";
+} from "./components/Button";
 
 export {
   Card,
@@ -25,23 +25,23 @@ export {
   CardFooter,
   CardTitleWithActions,
   type CardProps,
-} from "./components/Card.tsx";
+} from "./components/Card";
 
 export {
   Badge,
   type BadgeProps,
-} from "./components/Badge.tsx";
+} from "./components/Badge";
 
 export {
   Skeleton,
   SkeletonLine,
   SkeletonCircle,
   type SkeletonProps,
-} from "./components/Skeleton.tsx";
+} from "./components/Skeleton";
 
 export {
   Input,
   type InputProps,
-} from "./components/Input.tsx";
+} from "./components/Input";
 
-export { cn } from "./components/utils/cn.ts";
+export { cn } from "./components/utils/cn";

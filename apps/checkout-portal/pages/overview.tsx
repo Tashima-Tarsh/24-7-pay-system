@@ -7,7 +7,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@24-7-pay/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@youpi/ui';
 import { MetricCard } from '../components/MetricCard';
 import { TransactionFeed } from '../components/TransactionFeed';
 import { VPAPoolHealth } from '../components/VPAPoolHealth';
@@ -15,7 +15,7 @@ import { api } from '../hooks/useApi';
 import { formatCurrency } from '../utils/format';
 import { TrendingUp, TrendingDown, CreditCard, Shield } from 'lucide-react';
 
-export function OverviewPage() {
+export default function OverviewPage() {
   const { data: metrics, isLoading } = useQuery({
     queryKey: ['dashboard', 'metrics'],
     queryFn: () => api.getDashboardMetrics(),

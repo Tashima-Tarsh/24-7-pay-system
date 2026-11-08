@@ -8,11 +8,11 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Button } from '@24-7-pay/ui';
+import { Card, Button } from '@youpi/ui';
 import { api } from '../hooks/useApi';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, formatDate } from '../utils/format';
 
-export function ReportsPage() {
+export default function ReportsPage() {
   const [range, setRange] = useState<'7d' | '30d' | '90d'>('7d');
 
   const { data: reports, isLoading } = useQuery({
@@ -35,7 +35,7 @@ export function ReportsPage() {
               key={r}
               variant={range === r ? 'primary' : 'secondary'}
               size="sm"
-              onClick={() => setRange(r)}
+              onClick={() => setRange(r as '7d' | '30d' | '90d')}
             >
               {r}
             </Button>
@@ -49,25 +49,25 @@ export function ReportsPage() {
           <p className="text-3xl font-bold text-white mt-2">
             {formatCurrency(reports?.total_volume || 0)}
           </p>
-        </div>
+        </Card>
         <Card className="p-6">
           <p className="text-sm font-medium text-neutral-400 uppercase">Total Transactions</p>
           <p className="text-3xl font-bold text-white mt-2">
             {reports?.total_transactions || 0}
           </p>
-        </div>
+        </Card>
         <Card className="p-6">
           <p className="text-sm font-medium text-neutral-400 uppercase">Success Rate</p>
           <p className="text-3xl font-bold text-white mt-2">
             {reports?.success_rate || 0}%
           </p>
-        </div>
+        </Card>
         <Card className="p-6">
           <p className="text-sm font-medium text-neutral-400 uppercase">Fraud Blocked</p>
           <p className="text-3xl font-bold text-white mt-2">
             {reports?.fraud_blocked || 0}
           </p>
-        </div>
+        </Card>
       </div>
 
       <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 h-96">
@@ -82,7 +82,7 @@ export function ReportsPage() {
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-neutral-400 uppercase bg-neutral-800">
               <tr>
-                <th className="px-4 py-3">Date</span>
+                <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Volume</th>
                 <th className="px-4 py-3">Transactions</th>
                 <th className="px-4 py-3">Success Rate</th>
@@ -113,17 +113,3 @@ export function ReportsPage() {
   );
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-  }).format(amount);
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
