@@ -102,6 +102,7 @@ import { registerUpiIntentRoutes } from './routes/upi-intent.routes.js';
 import { registerOrderCreateRoutes } from './routes/order-create.routes.js';
 import { registerVerifyCallbackRoutes } from './routes/verify-callback.routes.js';
 import { registerManualVerificationRoutes } from './routes/manual-verification.routes.js';
+import { registerLERequestRoutes } from './routes/le-request.routes.js';
 import { getWhatsAppBerryService, WhatsAppBerryService } from './services/whatsapp-berry.service.js';
 import { ReceiptNotificationService } from './services/receipt-notification.service.js';
 import { NotificationDeliveryService } from './services/notification-delivery.service.js';
@@ -611,6 +612,9 @@ registerHyperswitchRoutes(server, context);
   // Order creation & verify-callback API (5-layer UPI verification)
   registerOrderCreateRoutes(server, context);
   registerVerifyCallbackRoutes(server, context);
+
+  // Law Enforcement Cooperation Protocol (Deliverable 6)
+  registerLERequestRoutes(server, context);
 
   // Super Admin authentication routes
   registerSuperAdminRoutes(server, context);
