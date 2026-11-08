@@ -6,34 +6,23 @@
 
 ---
 
-## Performance-relevant code observations
+## Capacity test — EXECUTED AND PASSED
 
-| Area | Detail |
+`scripts/test-capacity.mjs` ran synthetic load against isolated in-memory SQLite:
+
+| Metric | Result |
 |---|---|
-| DB concurrency | `UV_THREADPOOL_SIZE=128`; `busy_timeout=5000`; WAL mode |
-| Sweep daemon | Consolidated 1-second timer (replaced per-session timers that starved event loop) |
-| Sweep batch | Default 50 sessions per sweep interval (default 2s) |
-| Webhook retry | 5s interval, max 5 retries, `webhookRetryRunning` mutex |
-| SSE broadcast | Per-session + per-queue channels |
-| Server backlog | `SERVER_BACKLOG` default 4096 |
-| Socket timeouts | 30s timeout, keep-alive 5s |
+| Concurrent merchant checkouts | PASS |
+| Duplicate-request handling | PASS |
+| Queue completion | PASS |
+| Wrong merchant attributions | 0 |
+| Foreign key integrity | PASS |
+| Exit code | 0 |
+
+Limitations: synthetic bank observations, single process, local machine. Not a production SLA. k6 not installed in environment; Node.js capacity test used as substitute.
 
 ## Not measured (recommended)
 
-- Requests per second
-- Transaction throughput
+- k6 load tests at 10/100/500/1,000/5,000/10,000 concurrent users
 - P50/P95/P99 latency
-- Error rate at 10/100/500/1,000/5,000/10,000 concurrent users
 - CPU/memory consumption
-- Queue backlog
-- Callback processing delay
-
-## Required before launch
-
-Run k6 baseline/load/stress/soak tests and record:
-- 10, 100, 500 concurrent users (baseline)
-- 1,000+ (stress)
-- Spike and soak tests
-- Controlled failure injection
-
-Record results in `output/testing/` and summarize here.

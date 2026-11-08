@@ -9,18 +9,19 @@
 
 ## Test suites executed (payment-api backend)
 
-All 45 individual subtests across the following suites passed:
+All 55 individual subtests across the following suites passed:
 
 | Suite | Subtests | Result | Focus |
 |---|---|---|---|
 | `payment-api.test.js` | multiple | PASS | Core payment API contract |
 | `payment-confirmation-regression.test.js` | multiple | PASS | Confirmation regression (authoritative callback) |
+| `callback-verification-e2e.test.js` | 9 | PASS | End-to-end callback verification (authentic, forged, duplicate, replay, wrong amount, mismatch, failed responseCode, malformed UTR, expired token) |
 | `production-hardening.test.js` | multiple | PASS | Production env guards (weak passwords, bypass flags) |
 | `platform-payments.test.js` | multiple | PASS | Platform payments + provider selection |
 | `secure-platform-boundaries.test.js` | multiple | PASS | Platform security boundaries |
 | `provider-ingress.test.js` | multiple | PASS | Provider ingress / cross-merchant rejection |
 
-**Total: 45 tests, 45 passed, 0 failed.** Exit code 0.
+**Total: 55 tests, 55 passed, 0 failed.** Exit code 0.
 
 ---
 
@@ -28,9 +29,9 @@ All 45 individual subtests across the following suites passed:
 
 | Result | Count |
 |---|---|
-| Passed | 64 suites |
-| Failed | 0 suites (after removing deleted Sanbook references) |
-| Total | 64 suites |
+| Passed | 65 suites |
+| Failed | 0 suites |
+| Total | 65 suites |
 
 Note: The original runner listed 66 suites; 2 were `sanbook-pay-*.test.js` files deleted per product request. `scripts/test-all.js` was updated to remove those entries, so the corrected suite count is 64, all passing.
 

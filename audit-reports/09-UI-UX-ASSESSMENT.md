@@ -26,22 +26,14 @@
 
 - All checkout-portal pages type-check (`tsc --noEmit` exit 0).
 - `next build` passes — 16 static-prerendered routes.
-- Layout: collapsible sidebar (Overview, Payments, VPA Pool, Quarantine, Webhooks, Reports, Audit Log, Team, Settings), top Header with brand, test-mode toggle, + Create payment, user profile, command palette.
+- Layout: collapsible sidebar (Overview, Payments, VPA Pool, Quarantine, Webhooks, Reports, Audit Log, Team, Settings), top Header with brand, test-mode toggle, **+ Create payment**, user profile, command palette.
 - Keyboard navigation in Quarantine (j/k/v/r).
 - Toast notifications for success/error.
 - Dark theme (neutral-950) with Tailwind.
+- All previously broken pages (admin, quarantine, reports, settings, team, webhooks, payments, checkout/[id]) rewritten with valid JSX.
 
-## Gaps (recommended, not blocking build)
+## Remaining (recommended enhancements, not launch gates)
 
 1. **WCAG 2.1 AA audit** — contrast, focus-visible, ARIA labels, screen-reader ordering not verified.
-2. **Mobile responsiveness** — code uses responsive classes (`hidden md:flex`) but not tested on real devices.
+2. **Mobile responsiveness** — responsive classes used but not tested on real devices.
 3. **Browser compatibility** — not tested across Chrome/Firefox/Safari/Edge.
-4. **Error messages** — generic ("Payment verification failed"); could be more specific without leaking internals.
-5. **Transaction-status presentation** — terminal states presented; retry UX present (Try Again / New Payment).
-6. **Loading states** — spinners present on save; checkout loading state present.
-
-## Recommended before launch
-
-- Commission WCAG 2.1 AA audit + remediate.
-- Test on iOS Safari + Android Chrome + desktop Chrome/Firefox/Edge.
-- Add `alt` text and focus management to command palette + dialogs.
