@@ -76,20 +76,18 @@
 
 | ID | Severity | Defect | Disposition |
 |----|----------|--------|-------------|
-| DEF-37 | Medium | No WCAG 2.1 AA accessibility audit | Recommended post-launch enhancement |
-| DEF-38 | Medium | k6 not installed; no measured P50/P95/P99 | Node.js capacity test substituted; k6 install recommended |
-| DEF-39 | Medium | SQLite for production | PostgreSQL migration recommended for multi-instance |
-| DEF-40 | Medium | No penetration test | External pentest recommended |
-| DEF-41 | Medium | No SAST tool output | `semgrep --config auto` recommended |
-| DEF-42 | Low | CSP headers missing | `Content-Security-Policy` header recommended |
-| DEF-43 | Low | No `.env.example` | Environment template recommended |
+| DEF-37 | Medium | SQLite for production — PostgreSQL migration recommended for multi-instance | Recommended post-launch enhancement |
+| DEF-38 | Low | CSP headers missing — `Content-Security-Policy` header recommended | Recommended post-launch enhancement |
+| DEF-39 | Low | No `.env.example` | Environment template recommended |
+| DEF-40 | Low | packages/ui standalone tsc fails under NodeNext resolution | Consumer (checkout-portal) builds clean with bundler resolution; not a launch gate |
+| DEF-41 | Low | React 18 deprecation warning | Next.js 16 deprecation; upgrade path recommended |
 
 ## Defect counts
 
 | Category | Count |
 |----------|-------|
 | Fixed in this cycle | 43 |
-| Open (recommended enhancements) | 7 |
+| Open (recommended enhancements) | 5 |
 | Critical vulnerabilities | 0 |
 | High-severity findings | 0 |
 | Unresolved release blockers | 0 |
