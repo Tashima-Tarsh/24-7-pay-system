@@ -36,6 +36,8 @@ export interface PaymentDetail {
   status: string;
   method?: string;
   completedAt?: string | null;
+  metadata?: { receivingVpa?: string; upiId?: string; payeeName?: string };
+  receivingVpa?: string;
 }
 
 export interface VerifyCallbackRequest {

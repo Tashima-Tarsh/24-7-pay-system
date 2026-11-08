@@ -14,8 +14,8 @@ interface PaymentDetail {
   status: string;
   method?: string;
   completedAt?: string | null;
+  metadata?: { receivingVpa?: string; upiId?: string; payeeName?: string };
   receivingVpa?: string;
-  receivingAccount?: string;
 }
 
 export default function CheckoutPage({ query }: { query: { id?: string } }) {
@@ -52,7 +52,7 @@ export default function CheckoutPage({ query }: { query: { id?: string } }) {
   async function loadPayment() {
     try {
       const data = await getPayment(query.id!);
-      const receivingVpa = data.metadata?.receivingAccountSnapshot?.upiId || data.metadata?.upiId || '';
+      const receivingVpa = data.metadata?.upiId || data.receivingVpa || '';
       setPayment({ ...data, receivingVpa });
       setAmount(data.amount);
     } catch (err: any) {
