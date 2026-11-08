@@ -14,6 +14,8 @@ interface PaymentDetail {
   status: string;
   method?: string;
   completedAt?: string | null;
+  receivingVpa?: string;
+  receivingAccount?: string;
 }
 
 export default function CheckoutPage({ query }: { query: { id?: string } }) {
@@ -50,7 +52,8 @@ export default function CheckoutPage({ query }: { query: { id?: string } }) {
   async function loadPayment() {
     try {
       const data = await getPayment(query.id!);
-      setPayment(data);
+      const receivingVpa = data.metadata?.receivingAccountSnapshot?.upiId || data.metadata?.upiId || '';
+      setPayment({ ...data, receivingVpa });
       setAmount(data.amount);
     } catch (err: any) {
       setError(err.message || 'Failed to load payment');
@@ -69,8 +72,9 @@ export default function CheckoutPage({ query }: { query: { id?: string } }) {
     CANCELLED: 'text-slate-600 bg-slate-50',
   };
 
-  // Generate UPI QR code URI
-  const upiUri = payment ? `upi://pay?pa=merchant@upi&pn=Merchant&am=${payment.amount.replace('₹', '')}&cu=${payment.currency}&tn=Order%20#${payment.orderId}` : '';
+  // Generate UPI QR code URI using actual receiving VPA from payment metadata
+  const receivingVpa = payment?.receivingVpa || 'merchant@upi';
+  const upiUri = payment ? `upi://pay?pa=${encodeURIComponent(receivingVpa)}&pn=Merchant&am=${payment.amount.replace('₹', '')}&cu=${payment.currency}&tn=Order%20#${payment.orderId}` : '';
 
   async function handleVerify() {
     if (!paymentIdRef.current) return;
@@ -134,6 +138,23 @@ export default function CheckoutPage({ query }: { query: { id?: string } }) {
                 <div className="flex items-baseline gap-2 mb-6">
                   <span className="text-5xl font-bold text-slate-900">{payment?.amount}</span>
                 </div>
+                {payment?.receivingVpa && (
+                  <div className="mb-4">
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pay to VPA</p>
+                    <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                      <span className="font-mono text-sm text-slate-900">{payment.receivingVpa}</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(payment.receivingVpa!);
+                        }}
+                        className="ml-2 px-2 py-1 bg-slate-200 rounded text-slate-700 text-xs hover:bg-slate-300"
+                        title="Copy VPA"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-200 mb-4">
                   <img
                     src={`https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encodeURIComponent(upiUri)}&choe=UTF-8`}

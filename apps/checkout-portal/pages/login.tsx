@@ -28,15 +28,10 @@ export default function LoginPage() {
       } else {
         setError('Invalid merchant ID or API key');
       }
-    } catch {
-      // Fallback: accept any non-empty credentials for demo/dev
-      // In production, always validate against backend
-      if (!merchantId || !merchantKey) {
-        setError('Please enter both Merchant ID and API Key');
-        return;
-      }
-      storeAuth(merchantId, merchantKey);
-      router.push('/');
+    } catch (err) {
+      // No fallback: backend authentication is required
+      setError('Authentication service unavailable. Please try again.');
+      return;
     }
   };
 
