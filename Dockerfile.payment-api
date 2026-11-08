@@ -17,7 +17,6 @@ COPY packages/core/package.json ./packages/core/
 COPY packages/db/package.json ./packages/db/
 COPY packages/observer-sdk/package.json ./packages/observer-sdk/
 COPY packages/merchant-sdk/package.json ./packages/merchant-sdk/
-COPY packages/coin-wallet-store/package.json ./packages/coin-wallet-store/
 COPY apps/payment-api/package.json ./apps/payment-api/
 COPY apps/checkout-portal/package.json ./apps/checkout-portal/
 COPY apps/merchant-admin/package.json ./apps/merchant-admin/
@@ -25,7 +24,6 @@ COPY apps/super-admin/package.json ./apps/super-admin/
 COPY apps/sms-observer/package.json ./apps/sms-observer/
 COPY apps/gmail-observer/package.json ./apps/gmail-observer/
 COPY apps/android-bridge/package.json ./apps/android-bridge/
-COPY apps/android-observer-app/package.json ./apps/android-observer-app/
 
 # Install all workspace dependencies
 RUN npm install --omit=dev --no-audit --no-fund

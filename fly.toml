@@ -1,67 +1,40 @@
-app = "dynamo-pay-api"
-primary_region = "iad"
+# fly.toml app configuration file generated for dynamo-pay-api on 2026-11-09T03:25:58+05:30
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-[build]
-  dockerfile = "Dockerfile.payment-api"
-
-[[env]]
-  key = "NODE_ENV"
-  value = "production"
-
-[[env]]
-  key = "PORT"
-  value = "6100"
-
-[[env]]
-  key = "YOUPI_MODE"
-  value = "localhost"
-
-[[env]]
-  key = "DATABASE_URL"
-  value = ""
-
-[[env]]
-  key = "SQLITE_DB_PATH"
-  value = "/app/data/youpi_pg.sqlite"
-
-[[env]]
-  key = "ENCRYPTION_MASTER_KEY"
-  value = ""
-
-[[env]]
-  key = "JWT_SECRET"
-  value = ""
-
-[[env]]
-  key = "INITIAL_ADMIN_EMAIL"
-  value = ""
-
-[[env]]
-  key = "INITIAL_ADMIN_PASSWORD"
-  value = ""
-
-[[env]]
-  key = "BASE_CHECKOUT_URL"
-  value = "https://dynamo-pay-portal.fly.dev"
+app = 'dynamo-pay-api'
+primary_region = 'iad'
 
 [experimental]
   auto_rollback = true
 
+[build]
+  dockerfile = 'Dockerfile.payment-api'
+
+[env]
+  key = 'BASE_CHECKOUT_URL'
+  value = 'https://dynamo-pay-portal.fly.dev'
+
+[[mounts]]
+  source = 'dynamo-pay-api-data'
+  destination = '/app/data'
+
 [[services]]
+  protocol = ''
   internal_port = 6100
-  external_port = 6100
-  http_checks = []
-  tcp_checks = []
-  grace_period = "10s"
-  restart_limit = 10
+  ports = []
+
   [services.concurrency]
     hard_limit = 25
     soft_limit = 20
 
-[mounts]
-  source = "dynamo-pay-api-data"
-  destination = "/app/data"
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
 
 [[statics]]
-  guest_path = "/app/public"
-  url_path = "/"
+  guest_path = '/app/public'
+  url_prefix = ''
