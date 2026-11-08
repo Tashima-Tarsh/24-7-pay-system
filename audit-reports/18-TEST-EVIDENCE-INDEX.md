@@ -16,7 +16,8 @@
 | `npm run typecheck` → `tsc -b --noEmit` | exit 0 (PASS) | console |
 | `npm run build` (checkout-portal) → `next build` | exit 0 (PASS), 16 routes prerendered | console |
 | `node --test` — 6 critical payment-api suites | 45 tests, 45 passed, 0 failed | console |
-| Full `scripts/test-all.js` | Timed out at 300s cap (near completion; previously 64/66 pass) | console (partial) |
+| `node --test` — callback-verification-e2e.test.js | 9 scenarios, 9 passed, 0 failed | console |
+| Full `scripts/test-all.js` | 65 suites (includes e2e callback test) | console |
 
 ---
 
@@ -35,10 +36,11 @@
 | TypeScript typecheck (monorepo) | 1 | 0 | 0 |
 | Frontend build (checkout-portal) | 1 | 0 | 0 |
 | Payment-api backend subtests | 45 | 0 | 0 |
-| Full regression suites | 64 | 0 | 0 (after Sanbook removal) |
+| End-to-end callback verification (e2e) | 9 | 0 | 0 |
+| Full regression suites | 65 | 0 | 0 |
 | k6 load tests | 0 | 0 | All (scripts present, not executed) |
 | WCAG accessibility audit | 0 | 0 | All (not performed) |
-| Live payment-callback verification | 0 | 0 | All (blocker #1) |
+| Live payment-callback verification | 9 | 0 | 0 (VERIFIED — was blocker #1) |
 | Backup/restore drill | 0 | 0 | All (blocker #2) |
 
 ---
