@@ -1,15 +1,28 @@
-import { cn } from '@youpi/ui/utils';
+import React from 'react';
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
+  error?: string;
+  icon?: React.ReactNode;
+}
 
-export function Input({ className, ...props }: InputProps) {
+export function Input({ label, error, className, id, ...props }: InputProps) {
+  const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
   return (
-    <input
-      className={cn(
-        'flex h-10 w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-neutral-200 placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-50',
-        className
+    <div className="mb-3">
+      {label && (
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700 mb-1">
+          {label}
+        </label>
       )}
-      {...props}
-    />
+      <input
+        id={inputId}
+        className={`block w-full px-3 py-2 text-sm text-slate-900 bg-white border rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 transition-all ${
+          error ? 'border-rose-500 focus:ring-rose-500 focus:border-rose-500' : 'border-slate-300 focus:ring-slate-500 focus:border-slate-500'
+        } ${className ?? ''}`}
+        {...props}
+      />
+      {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+    </div>
   );
 }

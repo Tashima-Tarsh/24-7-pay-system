@@ -1,128 +1,131 @@
-/**
- * Payments Page — Phase 3: Payments Table + Detail Drawer
- *
- * Table of all payments with filters, status filtering,
- * and a detail drawer for viewing individual payment details.
- */
+import React, { useEffect, useState } from 'react';
+import { Layout } from '../components/layout';
+import { Card, Button } from '../components';
+import { getPayments, isAuthenticated } from '../lib/api';
+import Link from 'next/link';
 
-'use client';
-
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Card, Input, Badge, Button } from '@youpi/ui';
-import { api } from '../hooks/useApi';
-import { PaymentDetailDrawer } from '../components/PaymentDetailDrawer';
-import { formatCurrency, formatDate } from '../utils/format';
-import { Search, Download } from 'lucide-react';
-
-export default function PaymentsPage() {
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
-
-  const { data: payments, isLoading } = useQuery({
-    queryKey: ['payments', { search, status: statusFilter }],
-    queryFn: () => api.getPayments({ search, status: statusFilter, limit: 1000 }),
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-neutral-100">Payments</h1>
-          <p className="text-neutral-400 mt-1">
-            All transactions and their verification status
-          </p>
-        </div>
-        <Button variant="secondary">
-          <Download className="w-4 h-4 mr-2" />
-          Export
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <div className="p-4 flex items-center gap-4">
-          <div className="flex-1 max-w-md">
-            <Input
-              placeholder="Search by Order ID, UTR, amount..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">All Status</option>
-            <option value="SUCCESS">Success</option>
-            <option value="FAILED">Failed</option>
-            <option value="QUARANTINED">Quarantined</option>
-            <option value="PENDING">Pending</option>
-          </select>
-        </div>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <div className="overflow-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-neutral-400 uppercase bg-neutral-800">
-              <tr>
-                <th className="px-4 py-3">Amount</th>
-                <th className="px-4 py-3">Order ID</th>
-                <th className="px-4 py-3">UTR</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-800">
-              {(payments ?? []).map((payment: any) => (
-                <tr key={payment.id} className="hover:bg-neutral-800/50 cursor-pointer transition-colors" onClick={() => setSelectedPayment(payment.id)}>
-                  <td className="px-4 py-3 font-mono text-neutral-100">
-                    {formatCurrency(payment.amount_paise / 100)}
-                  </td>
-                  <td className="px-4 py-3 text-neutral-100">Order #{payment.id}</td>
-                  <td className="px-4 py-3 text-neutral-400 font-mono">
-                    {payment.utr || 'No UTR'}
-                  </td>
-                  <td className="px-4 py-3 flex items-center gap-2">
-                    <Badge variant={getStatusVariant(payment.status)}>
-                      {payment.status}
-                    </Badge>
-                    <span className="text-sm text-neutral-400 ml-2">
-                      {formatDate(payment.created_at)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Detail Drawer */}
-      {selectedPayment && (
-        <PaymentDetailDrawer
-          paymentId={selectedPayment}
-          onClose={() => setSelectedPayment(null)}
-        />
-      )}
-    </div>
-  );
+interface PaymentRow {
+  paymentId: string;
+  orderId: string;
+  amount: string;
+  currency: string;
+  status: string;
+  method?: string;
+  completedAt?: string | null;
 }
 
-function getStatusVariant(status: string): 'success' | 'danger' | 'warning' | 'default' {
-  switch (status) {
-    case 'SUCCESS':
-      return 'success';
-    case 'FAILED':
-      return 'danger';
-    case 'QUARANTINED':
-      return 'warning';
-    default:
-      return 'default';
+export default function PaymentsPage() {
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      window.location.href = '/login';
+      return;
+    }
+    loadPayments();
+  }, []);
+
+  async function loadPayments() {
+    try {
+      const data = await getPayments();
+      setPayments(data || []);
+    } catch (err) {
+      console.error('Failed to load payments:', err);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const statusColor: Record<string, string> = {
+    SUCCESS: 'text-emerald-600 bg-emerald-50',
+    FAILED: 'text-rose-600 bg-rose-50',
+    PENDING: 'text-amber-600 bg-amber-50',
+    PROCESSING: 'text-blue-600 bg-blue-50',
+    QUARANTINED: 'text-purple-600 bg-purple-50',
+    EXPIRED: 'text-slate-600 bg-slate-50',
+    CANCELLED: 'text-slate-600 bg-slate-50',
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mb-4"></div>
+          <p className="text-slate-600">Loading payments...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
+            <p className="text-slate-600">All transactions and their verification status</p>
+          </div>
+          <Link href="/create-payment">
+            <Button variant="primary">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+              New Payment
+            </Button>
+          </Link>
+        </div>
+
+        <Card className="h-full">
+          <div className="card-body">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-3 font-medium text-slate-500 uppercase tracking-wider">Amount</th>
+                    <th className="pb-3 font-medium text-slate-500 uppercase tracking-wider">Order ID</th>
+                    <th className="pb-3 font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                    <th className="pb-3 font-medium text-slate-500 uppercase tracking-wider text-right">Method</th>
+                    <th className="pb-3 font-medium text-slate-500 uppercase tracking-wider text-right">Date</th>
+                    <th className="pb-3 font-medium text-slate-500 uppercase tracking-wider text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(payments || []).map((p) => (
+                    <tr key={p.paymentId} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                      <td className="py-3 font-mono text-slate-900">{p.amount}</td>
+                      <td className="py-3 text-slate-700">#{p.orderId}</td>
+                      <td className="py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor[p.status] || 'badge-default'}`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-500 text-right">
+                        {p.method || '—'}
+                      </td>
+                      <td className="py-3 text-slate-500 text-right">
+                        {p.completedAt ? new Date(p.completedAt).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="py-3 text-right">
+                        <Link href={`/checkout/${p.paymentId}`}>
+                          <Button variant="secondary" size="sm">
+                            View Details
+                          </Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                  {(payments?.length || 0) === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-500">
+                        No payments found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </Layout>
+  );
 }
