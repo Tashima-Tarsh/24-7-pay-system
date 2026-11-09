@@ -54,24 +54,46 @@ test('shared-UPI collisions and late alerts remain unassigned and never send a c
  }finally{db.close();}
 });
 
-test('owner-approved deployment policy is scoped, audited once and respects subsequent disable',()=>{
+test('historical owner-specific auto-approval never activates on startup',()=>{
  const db=new Database({inMemory:true});runMigrations(db);
  const accountRepo=new ReceivingAccountRepository(db),merchantRepo=new MerchantRepository(db),sessionRepo=new PaymentSessionRepository(db);
  const webhookEngine=new WebhookEngine({db,merchantRepo});webhookEngine.retryPending=async()=>[];
  const ctx={db,accountRepo,merchantRepo,sessionRepo,webhookEngine};
- const mirror=createReceivingMirror({broadcastSse(){}},ctx),account=accountRepo.findById('00000000-0000-0000-0000-000000000002');
- const deployment={environment:'production',publicOrigin:'https://dynamo-pay.onrender.com'};
- try{
-  assert.equal(applyOwnerApprovedReceivingPolicy(mirror,ctx,{...deployment,publicOrigin:'https://other.example.test'}),false);
-  assert.equal(applyOwnerApprovedReceivingPolicy(mirror,ctx,{...deployment,environment:'test'}),false);
-  assert.equal(db.query('SELECT * FROM pp_receiver_policies').length,0);
-  assert.equal(applyOwnerApprovedReceivingPolicy(mirror,ctx,deployment),true);
-  assert.equal(Number(db.queryOne('SELECT auto_success FROM pp_receiver_policies WHERE merchant_id=?',[account.merchantId]).auto_success),1);
-  assert.equal(db.query("SELECT * FROM audit_logs WHERE action='OWNER_APPROVED_NOTIFICATION_POLICY_DEPLOYED'").length,1);
-  mirror.setPolicy(account.merchantId,account.id,false,'Owner disabled notification acceptance','test-owner');
-  assert.equal(applyOwnerApprovedReceivingPolicy(mirror,ctx,deployment),false);
-  assert.equal(Number(db.queryOne('SELECT auto_success FROM pp_receiver_policies').auto_success),0);
- }finally{webhookEngine.stop();db.close();}
+ const mirror=createReceivingMirror({broadcastSse(){}},ctx);
+ try {
+   assert.equal(applyOwnerApprovedReceivingPolicy(mirror,ctx,{environment:'production',publicOrigin:'https://dynamo-pay.onrender.com'}),false);
+   assert.equal(db.query('SELECT * FROM pp_receiver_policies').length,0);
+ } finally {webhookEngine.stop();db.close();}
+});
+
+test('approved notification policy still cannot settle a production payment',()=>{
+ const db=new Database({inMemory:true});runMigrations(db);
+ const merchantRepo=new MerchantRepository(db),accountRepo=new ReceivingAccountRepository(db),sessionRepo=new PaymentSessionRepository(db),merchant=merchantRepo.getDefault();
+ merchantRepo.update(merchant.id,{webhookUrl:'https://merchant.example.test/callback'});
+ const account=accountRepo.findActiveForMerchant(merchant.id);
+ const webhookEngine=new WebhookEngine({db,merchantRepo});webhookEngine.retryPending=async()=>[];
+ const mirror=createReceivingMirror({broadcastSse(){}},{
+   db,merchantRepo,accountRepo,sessionRepo,webhookEngine,
+   eventEmitter:{emit:(event)=>{if(event==='PAYMENT.SUCCESS')throw Error('Unauthorized observer settlement event');}}
+ });
+ const oldEnv=process.env.NODE_ENV;
+ try {
+   const session=sessionRepo.create({merchantId:merchant.id,receivingAccountId:account.id,
+     orderId:'prod-notification-no-credit',amountPaise:200,status:'ACTIVE',expiresAt:new Date(Date.now()+300000)});
+   mirror.setPolicy(merchant.id,account.id,true,'Legacy notification approval should never settle production','test-owner');
+   process.env.NODE_ENV='production';
+   const result=mirror.record({accountId:account.id,source:'GMAIL',
+     rawText:'Rs 2 credited UPI Ref 123456789012',observedAt:new Date(),amountPaise:200n,
+     bankReference:'123456789012'});
+   assert.equal(result.matchStatus,'DETECTED');
+   assert.notEqual(sessionRepo.findById(session.id).status,'SUCCESS');
+   assert.equal(db.query('SELECT * FROM ledger_transactions').length,0);
+   assert.equal(db.query("SELECT * FROM webhook_deliveries WHERE event_type='SUCCESS'").length,0);
+ } finally {
+   if(oldEnv===undefined)delete process.env.NODE_ENV;
+   else process.env.NODE_ENV=oldEnv;
+   webhookEngine.stop();db.close();
+ }
 });
 
 test('previously detected Gmail receipt confirms once after policy approval and sends immediate SUCCESS',()=>{

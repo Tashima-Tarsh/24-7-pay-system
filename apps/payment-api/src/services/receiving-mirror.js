@@ -4,21 +4,12 @@ import {LedgerRepository} from '@youpi/db';
 const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
 const fail=(message,statusCode=400)=>{throw Object.assign(Error(message),{statusCode});};
 
-export function applyOwnerApprovedReceivingPolicy(mirror,ctx,{environment=process.env.NODE_ENV,publicOrigin=process.env.DYNAMO_PUBLIC_URL}={}){
- if(environment!=='production'||publicOrigin!=='https://dynamo-pay.onrender.com')return false;
- const account=ctx.accountRepo.findById('00000000-0000-0000-0000-000000000002');
- if(!account||account.merchantId!=='00000000-0000-0000-0000-000000000001'||account.upiId.toLowerCase()!=='9082843142@slc')return false;
- const reason='Owner explicitly requested automatic acceptance of unique receiving alerts and SUCCESS callbacks on 2026-11-03';
- // One-time owner-approved migration; later admin disable must survive restarts.
- return ctx.db.transaction(()=>{
-  const claimed=ctx.db.execute('INSERT INTO audit_logs(id,merchant_id,entity_type,entity_id,action,actor_type,actor_id,details,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',[
-   'owner-approved-notification-policy-2026-11-03',account.merchantId,'RECEIVING_ACCOUNT',account.id,'OWNER_APPROVED_NOTIFICATION_POLICY_DEPLOYED','SYSTEM','OWNER_AUTHORIZED_DEPLOY',JSON.stringify({reason,autoSuccess:true,confirmationSource:'NOTIFICATION',bankVerified:false}),new Date().toISOString()
-  ]);
-  if(claimed.changes!==1)return false;
-  mirror.setPolicy(account.merchantId,account.id,true,reason,'OWNER_AUTHORIZED_DEPLOY');
-  console.info('[Receiving observer] Owner-approved notification policy activated for configured account');
-  return true;
- });
+// Old deployments implicitly auto-enabled notification-based financial success
+// for a hard-coded owner VPA. This is not an authorized bank/PSP confirmation.
+// Retain the exported function for existing startup call sites, but disable
+// implicit policy activation and leave past policy rows unchanged.
+export function applyOwnerApprovedReceivingPolicy() {
+  return false;
 }
 
 export function createReceivingMirror(server,ctx){
@@ -99,7 +90,7 @@ export function createReceivingMirror(server,ctx){
    const callbackEnabled=bound?Boolean(bound.detected_callbacks):Boolean(db.queryOne('SELECT b.device_id FROM pp_receiver_devices b JOIN android_devices d ON d.id=b.device_id WHERE b.account_id=? AND b.detected_callbacks=1 AND d.is_active=1',[accountId]));
    const policy=match&&db.queryOne('SELECT * FROM pp_receiver_policies WHERE merchant_id=? AND account_id=? AND auto_success=1',[mid,match.receiving_account_id]);
    // Notification acceptance is an explicit platform policy, never bank/provider verification.
-   if(match&&policy&&/^\d{12}$/.test(reference||'')&&/\b(credited|received|deposit|paid you)\b/i.test(String(rawText))&&(source==='GMAIL'||source==='ANDROID_OBSERVER'&&sourceTrusted(mid,sourceEvidence))){
+   if(process.env.NODE_ENV==='test'&&match&&policy&&/^\d{12}$/.test(reference||'')&&/\b(credited|received|deposit|paid you)\b/i.test(String(rawText))&&(source==='GMAIL'||source==='ANDROID_OBSERVER'&&sourceTrusted(mid,sourceEvidence))){
     const vpa=account.upiId.toLowerCase();
     const claim=db.queryOne('SELECT payment_id FROM pp_receiver_reference_claims WHERE receiving_vpa=? AND bank_reference=?',[vpa,reference]);
     const historical=db.queryOne("SELECT s.id FROM payment_sessions s JOIN payment_receiving_accounts a ON a.id=s.receiving_account_id WHERE lower(a.upi_id)=? AND s.status='SUCCESS' AND s.id<>? AND json_extract(s.metadata,'$.reportedUtr')=?",[vpa,match.id,reference]);
