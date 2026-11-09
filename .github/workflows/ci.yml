@@ -29,7 +29,7 @@ jobs:
       - name: Run Semgrep SAST
         run: |
           docker run --rm -v "${PWD}:/src" -w /src semgrep/semgrep:latest \
-            semgrep scan --config=auto --metrics=off --json \
+            semgrep scan --config=p/ci --metrics=off --json \
             --output=semgrep-results.json \
             --exclude=node_modules --exclude=output --exclude=docs \
             --exclude=audit-reports --exclude=assets
