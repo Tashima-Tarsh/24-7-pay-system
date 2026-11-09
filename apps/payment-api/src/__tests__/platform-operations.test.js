@@ -134,3 +134,63 @@ test('a session billed before provider linkage cannot be billed again as a provi
     const october=await f.request('POST','/api/platform/v1/billing/invoices',{merchantId:'merchant-a',period:'2026-10'});assert.equal(october.status,201);assert.equal(october.body.invoice.usage_count,0);assert.equal(october.body.invoice.total_paise,'0');
   }finally{f.db.close();}
 });
+
+
+test('platform owner sees all merchant KPIs while merchant roles see only their own records',async()=>{
+ const f=fixture();try{
+  f.order('merchant-a-success','merchant-a',10501);
+  f.order('merchant-a-pending','merchant-a',2500,'UPI',undefined,'PENDING');
+  f.order('merchant-b-success','merchant-b',30250);
+  f.order('merchant-b-cod','merchant-b',4500,'COD',undefined,'SUCCESS');
+  const platform=await f.request('GET','/api/platform/v1/dashboard/kpis');
+  assert.equal(platform.status,200);
+  assert.equal(platform.body.scope,'PLATFORM');
+  assert.equal(platform.body.merchantCount,2);
+  assert.equal(platform.body.summary.transactions,4);
+  assert.equal(platform.body.summary.confirmed,3);
+  assert.equal(platform.body.summary.pending,1);
+  assert.equal(platform.body.summary.confirmedPaise,'40751');
+  assert.equal(platform.body.merchantBreakdown.length,2);
+  const selected=await f.request('GET','/api/platform/v1/dashboard/kpis?merchantId=merchant-b');
+  assert.equal(selected.body.summary.transactions,2);
+  assert.equal(selected.body.summary.confirmedPaise,'30250');
+  const tenant=await f.request('GET','/api/platform/v1/dashboard/kpis',undefined,f.tenant);
+  assert.equal(tenant.status,200);
+  assert.equal(tenant.body.scope,'MERCHANT');
+  assert.equal(tenant.body.summary.transactions,2);
+  assert.equal(tenant.body.summary.confirmedPaise,'10501');
+  assert.deepEqual(tenant.body.merchantBreakdown,[]);
+  assert.equal((await f.request('GET','/api/platform/v1/dashboard/kpis?merchantId=merchant-b',undefined,f.tenant)).status,403);
+  assert.equal((await f.request('GET','/api/platform/v1/dashboard/kpis',undefined,{...f.tenant,permissions:[]})).status,403);
+ }finally{f.db.close();}
+});
+
+test('API and callback failures are visible across platform but tenant-isolated for merchants',async()=>{
+ const f=fixture();try{
+  f.order('merchant-a-order','merchant-a',1500);
+  f.order('merchant-b-order','merchant-b',3500);
+  for(const [id,merchant,status] of [['api-a','merchant-a',502],['api-b','merchant-b',401],['api-ok','merchant-a',200]]){
+   f.db.execute('INSERT INTO pp_api_requests(id,key_id,merchant_id,method,path,status,duration_ms,created_at) VALUES(?,?,?,?,?,?,?,?)',
+    [id,null,merchant,'POST','/v1/payments',status,100,'2026-11-09T13:00:00Z']);
+  }
+  for(const [id,merchant,order] of [['delivery-a','merchant-a','merchant-a-order'],['delivery-b','merchant-b','merchant-b-order']]){
+   f.db.execute('INSERT INTO provider_webhook_deliveries(id,merchant_id,payment_id,event_type,payload,endpoint_url,attempt_count,is_successful,next_retry_at) VALUES(?,?,?,?,?,?,?,?,?)',
+    [id,merchant,order,'payment.updated','{}','https://example.test/events',2,0,null]);
+  }
+  const platform=await f.request('GET','/api/platform/v1/dashboard/api-failures');
+  assert.equal(platform.status,200);
+  assert.equal(platform.body.api.recorded,3);
+  assert.equal(platform.body.api.failures,2);
+  assert.equal(platform.body.api.serverErrors,1);
+  assert.equal(platform.body.callbacks.length,2);
+  assert.ok(!JSON.stringify(platform.body).includes('private-secret'));
+  const tenant=await f.request('GET','/api/platform/v1/dashboard/api-failures',undefined,f.tenant);
+  assert.equal(tenant.status,200);
+  assert.equal(tenant.body.api.recorded,2);
+  assert.equal(tenant.body.api.failures,1);
+  assert.equal(tenant.body.callbacks.length,1);
+  assert.equal(tenant.body.callbacks[0].merchantId,'merchant-a');
+  assert.equal((await f.request('GET','/api/platform/v1/dashboard/api-failures?merchantId=merchant-b',undefined,f.tenant)).status,403);
+  assert.equal((await f.request('GET','/api/platform/v1/dashboard/api-failures',undefined,{...f.tenant,permissions:[]})).status,403);
+ }finally{f.db.close();}
+});
