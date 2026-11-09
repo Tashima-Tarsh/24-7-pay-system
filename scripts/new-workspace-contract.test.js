@@ -69,3 +69,14 @@ test('platform scope uses an explicitly selected merchant and never impersonates
  assert.match(js,/Create merchant and invite owner/);
  assert.doesNotMatch(js,/impersonateToken|assumeMerchantSession/);
 });
+
+test('merchant owner invitation is accepted using the public backend route, never a hardcoded login',()=>{
+ const html=fs.readFileSync('public/platform.html','utf8');
+ const script=fs.readFileSync('public/assets/247-portal.js','utf8');
+ assert.match(html,/id="owner-invitation-form"/);
+ assert.match(html,/autocomplete="new-password"/);
+ assert.match(script,/\/owner-invitations\/accept/);
+ assert.match(script,/history\.replaceState/);
+ assert.match(script,/location\.hash\.startsWith\(prefix\)/);
+ assert.doesNotMatch(script,/Anita@906099|24@gmai\.com/);
+});

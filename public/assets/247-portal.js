@@ -155,7 +155,15 @@ async function merchants(){const r=await api('/merchants?limit=50'),c=panel('Mer
    try{
     const data=await api('/merchants','POST',{businessName:business.control.value,contactName:contact.control.value,email:email.control.value,mobile:mobile.control.value});
     const summary=info([['Business',data.businessName],['Merchant ID',data.merchantId],['Owner email',data.ownerEmail],['Invitation sent',data.invitationSent?'Yes':'Pending delivery']]);
-    if(data.invitationPath)add(summary,notice('One-time invitation path: '+data.invitationPath+' — share privately with this owner.'));
+    if(typeof data.invitationPath==='string'&&data.invitationPath.startsWith('/platform#owner-invitation/')){
+     const invitation=el('a','card-link','Open merchant-owner activation link');
+     invitation.href=data.invitationPath;
+     const copy=button('Copy private invitation URL',async()=>{
+       try{await navigator.clipboard.writeText(location.origin+data.invitationPath);copy.textContent='Copied to clipboard';}
+       catch{detail('Copy failed',notice('Use the activation link displayed above; do not share it publicly.',true));}
+     });
+     add(summary,notice('Email delivery is not configured. Share this private one-time invitation only with the merchant owner.'),invitation,copy);
+    }
     detail('Merchant created',summary);
     await loadMerchants();void render('merchants');
    }catch(err){detail('Merchant not created',notice(err.message,true));}finally{submit.disabled=false;}
@@ -264,6 +272,43 @@ async function settings(){if(user.platform&&!selectedMerchantId)return[merchantS
 }
 async function security(){const r=await Promise.all([api('/me'),api('/sessions')]),u=r[0].user||user,p=panel('Your profile','Account access is governed by your backend permissions.');add(p,info([['Email',u.email],['Role',u.role],['Merchant ID',u.merchantId||'Platform team'],['MFA',u.mfaEnabled?'Enabled':'Not enabled'],['Email verified',u.emailVerified?'Yes':'Not yet']]));const perms=panel('Permissions','These permissions also apply on the server.');const tags=el('div','toolbar');(u.permissions||[]).forEach(x=>add(tags,el('span','status-tag',x)));add(perms,tags);const active=panel('Active sessions','Sign out when you finish.');add(active,table(['Created','Expiry'],r[1].sessions||[],x=>[date(x.created_at),date(x.expires_at)]));return[p,perms,active];}
 $('merchant-scope').addEventListener('change',e=>{selectedMerchantId=e.target.value;$('merchant-scope-note').textContent=selectedMerchantId?'Reviewing merchant configuration as a platform operator.':'Platform-wide overview.';void render(current);});
+// Owner invitations are one-time URL fragments; the token is not sent to the
+// server until a person explicitly submits the password creation form.
+let ownerInvitationToken='';
+function initOwnerInvitation(){
+ const prefix='#owner-invitation/';
+ if(!location.hash.startsWith(prefix))return;
+ try{ownerInvitationToken=decodeURIComponent(location.hash.slice(prefix.length));}catch{return;}
+ if(!ownerInvitationToken||ownerInvitationToken.length>512)return;
+ $('login-form').hidden=true;
+ $('owner-invitation-panel').hidden=false;
+ $('owner-invite-password').focus();
+}
+$('owner-invitation-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const submit=$('owner-invite-submit'),error=$('owner-invite-error');
+ error.hidden=true;
+ const password=$('owner-invite-password').value,confirm=$('owner-invite-confirm').value;
+ if(password!==confirm){error.textContent='The passwords must match.';error.hidden=false;return;}
+ if(!ownerInvitationToken){error.textContent='This invitation link is missing or invalid.';error.hidden=false;return;}
+ submit.disabled=true;
+ try{
+  const r=await fetch(API+'/owner-invitations/accept',{method:'POST',credentials:'omit',cache:'no-store',
+   headers:{'Content-Type':'application/json'},body:JSON.stringify({token:ownerInvitationToken,password})});
+  const result=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(result.error||'The activation link is invalid or expired.');
+  ownerInvitationToken='';
+  history.replaceState(null,'',location.pathname+location.search);
+  $('owner-invitation-panel').hidden=true;
+  $('login-form').hidden=false;
+  $('owner-invitation-form').reset();
+  $('auth-error').textContent='Account activated. Sign in using the email address on your invitation.';
+  $('auth-error').hidden=false;
+  $('email').focus();
+ }catch(err){error.textContent=err.message;error.hidden=false;}
+ finally{submit.disabled=false;}
+});
+initOwnerInvitation();
 $('login-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('login-submit');b.disabled=true;$('auth-error').hidden=true;try{await signin($('email').value.trim(),$('password').value);}catch(err){$('auth-error').hidden=false;$('auth-error').textContent=err.message;}finally{b.disabled=false;$('password').value='';}});
 $('logout-button').addEventListener('click',signout);
 $('refresh-button').addEventListener('click',()=>{void health();void render(current);});
