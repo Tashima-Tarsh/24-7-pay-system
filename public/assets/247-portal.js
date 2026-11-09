@@ -216,8 +216,61 @@ async function diagnostics(){
  out.push(callbacks);
  return out;
 }
-async function cases(){const d=await api('/cases?limit=50'),c=panel('Support cases','Select a case to see its history');add(c,table(['Subject','Category','Status','Updated'],d.items||[],x=>[x.title,x.kind,status(x.status),date(x.updated_at)],async x=>{try{detail('Case details',await api('/cases/'+encodeURIComponent(x.id)));}catch(e){detail('Case',notice(e.message,true));}}));const result=[c];if(!user.platform&&allowed('operations.write')){const p=panel('Ask for help','Tell your team what happened.');const form=el('form','form-grid'),title=field('Subject','text','title',{required:true,maxlength:200}),desc=field('What happened?','textarea','description',{required:true}),submit=el('button','primary-button','Create support case');submit.type='submit';add(form,title.container,desc.container,add(el('div','form-actions'),submit));form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{await api('/cases','POST',{kind:'SUPPORT',merchantId:user.merchantId,title:title.control.value,description:desc.control.value});void render('cases');}catch(err){detail('Unable to open case',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);result.unshift(p);}return result;}
-function merchantSelectionCard(){const card=panel('Choose a merchant','Select a business at the top of the workspace to access its settings.');add(card,notice('This does not impersonate a merchant. Access controls remain enforced by the server.'));return card;}
+async function cases(){
+ const scoped=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
+ const data=await api('/cases?limit=50'+(scoped?'&merchantId='+encodeURIComponent(selectedMerchantId):'')),
+  c=panel('Support cases','Case history, evidence and status are saved by the backend.');
+ const transitions={OPEN:['INVESTIGATING','WAITING','RESOLVED'],INVESTIGATING:['WAITING','RESOLVED'],WAITING:['INVESTIGATING','RESOLVED'],RESOLVED:['INVESTIGATING','CLOSED'],CLOSED:[]};
+ async function openCase(item){
+  try{
+   const r=await api('/cases/'+encodeURIComponent(item.id)),record=r.case||{},wrapper=el('div');
+   add(wrapper,info([['Subject',record.title],['Merchant ID',record.merchant_id],['Type',record.kind],
+     ['Status',record.status],['Payment ID',record.payment_id||'Not linked'],['Description',record.description]]));
+   const timeline=panel('Case timeline','All changes are recorded as audit events.');
+   add(timeline,table(['Status','Note','When'],r.timeline||[],x=>[status(x.status),x.note,date(x.created_at)]));
+   add(wrapper,timeline);
+   if(allowed('operations.write')&&(transitions[record.status]||[]).length){
+    const form=el('form','form-grid'),next=el('select'),reason=field('Investigation note','textarea','caseNote',{required:true,minlength:2,maxlength:4000});
+    for(const state of transitions[record.status]||[])next.add(new Option(state.replace(/_/g,' '),state));
+    const label=el('label');add(label,el('span','','Next status'),next);
+    const submit=el('button','primary-button','Record case update');submit.type='submit';
+    add(form,label,reason.container,add(el('div','form-actions'),submit));add(wrapper,form);
+    form.addEventListener('submit',async e=>{
+     e.preventDefault();submit.disabled=true;
+     try{
+      await api('/cases/'+encodeURIComponent(item.id)+'/events','POST',{status:next.value,note:reason.control.value});
+      detail('Case updated',notice('The new state and note are recorded in the case timeline.'));
+      void render('cases');
+     }catch(err){detail('Update not saved',notice(err.message,true));}finally{submit.disabled=false;}
+    });
+   }
+   detail('Case details',wrapper);
+  }catch(e){detail('Unable to load case',notice(e.message,true));}
+ }
+ add(c,table(['Subject','Merchant','Category','Status','Updated'],data.items||[],
+  x=>[x.title,x.merchant_id||'Platform',x.kind,status(x.status),date(x.updated_at)],openCase));
+ const result=[c];
+ if(allowed('operations.write')&&(!user.platform||selectedMerchantId)){
+  const formCard=panel('Open a support case','Document a payment, dispute, reconciliation or operational problem.');
+  const form=el('form','form-grid'),kind=el('select'),kindLabel=el('label'),
+   title=field('Subject','text','caseTitle',{required:true,maxlength:200}),
+   desc=field('What happened?','textarea','caseDescription',{required:true});
+  for(const v of ['SUPPORT','DISPUTE','RECONCILIATION'])kind.add(new Option(v,v));
+  add(kindLabel,el('span','','Case category'),kind);
+  const submit=el('button','primary-button','Open case');submit.type='submit';
+  add(form,kindLabel,title.container,desc.container,add(el('div','form-actions'),submit));
+  form.addEventListener('submit',async e=>{
+   e.preventDefault();submit.disabled=true;
+   try{
+    await api('/cases','POST',{kind:kind.value,merchantId:user.platform?selectedMerchantId:user.merchantId,
+      title:title.control.value,description:desc.control.value});
+    detail('Case created',notice('Your case is open and has been added to the history.'));void render('cases');
+   }catch(err){detail('Case not created',notice(err.message,true));}finally{submit.disabled=false;}
+  });
+  add(formCard,form);result.unshift(formCard);
+ }
+ return result;
+}
 async function receiving(){if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];const d=await api('/receiving-accounts'),c=panel('Receiving accounts','Only accounts belonging to this business are shown.');add(c,table(['Payee','UPI ID','Status','Change'],d.accounts||[],a=>[a.payeeName||a.payee_name,el('span','mono',a.upiId||a.upi_id),status(a.isActive||a.is_active?'ACTIVE':'INACTIVE'),button(a.isActive||a.is_active?'Disable':'Enable',async()=>{if(!confirm('Update this receiving account?'))return;try{await api('/receiving-accounts/'+encodeURIComponent(a.id)+'/state','POST',{active:!(a.isActive||a.is_active)});void render('receiving');}catch(err){detail('Account update failed',notice(err.message,true));}})]));const p=panel('Add a receiving account','New accounts start inactive until you choose to enable them.'),form=el('form','form-grid'),vpa=field('UPI ID','text','upiId',{required:true,maxlength:120,placeholder:'merchant@bank'}),name=field('Payee name','text','payeeName',{required:true,maxlength:150}),submit=el('button','primary-button','Add account');submit.type='submit';add(form,vpa.container,name.container,add(el('div','form-actions'),submit));form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{await api('/receiving-accounts','POST',{upiId:vpa.control.value,payeeName:name.control.value});void render('receiving');}catch(err){detail('Account not added',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);return[c,p];}
 async function developers(){
  if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
@@ -357,9 +410,61 @@ async function connections(){
  return result;
 }
 async function policies(){
- const data=await api('/rules'),c=panel('Payment rules','An overview of the conditions defined for your merchant or platform.');
- add(c,table(['Rule','Target','Status','Reason'],data.rules||[],r=>[r.ruleType+' · '+r.targetType,r.target,status(r.active?'ACTIVE':'INACTIVE'),r.reason]));
- return[c];
+ const data=await api('/rules'),all=data.rules||[],visible=user.platform&&selectedMerchantId
+  ?all.filter(x=>x.global||x.merchantId===selectedMerchantId):all;
+ const c=panel('Payment policies','All policy changes are saved and audited by the backend.');
+ const change=(rule,active)=>{
+  const wrapper=el('div'),form=el('form','form-grid'),
+   reason=field('Reason for this change','textarea','ruleReason',{required:true,minlength:5,maxlength:1000}),
+   submit=el('button','primary-button',active?'Activate rule':'Deactivate rule');
+  submit.type='submit';
+  add(wrapper,info([['Rule',rule.ruleType],['Target',rule.target],['Scope',rule.global?'Platform-wide':rule.merchantId]]));
+  add(form,reason.container,notice('Changing this rule can affect future payment requests; it does not modify past payment results.'),add(el('div','form-actions'),submit));
+  form.addEventListener('submit',async e=>{
+   e.preventDefault();submit.disabled=true;
+   try{
+    await api('/rules/'+encodeURIComponent(rule.id)+'/state','POST',{active,reason:reason.control.value});
+    detail('Policy updated',notice('The new policy state has been saved with an audit revision.'));
+    void render('policies');
+   }catch(e){detail('Policy change failed',notice(e.message,true));}finally{submit.disabled=false;}
+  });add(wrapper,form);detail(active?'Activate payment rule':'Deactivate payment rule',wrapper);
+ };
+ add(c,table(['Rule','Target type','Target','Scope','Status','Actions'],visible,r=>{
+  const actions=el('div','toolbar');
+  add(actions,button('History',async()=>{
+   try{const x=await api('/rules/'+encodeURIComponent(r.id)+'/history');
+    detail('Policy history',table(['Saved revision','Date'],x.revisions||[],i=>[i.id,date(i.created_at)]));
+   }catch(err){detail('History unavailable',notice(err.message,true));}
+  }));
+  add(actions,button(r.active?'Disable':'Activate',()=>change(r,!r.active)));
+  return [r.ruleType,r.targetType,r.target,r.global?'Platform':r.merchantId,status(r.active?'ACTIVE':'INACTIVE'),actions];
+ }));
+ const formCard=panel('Create a policy','Rules are enforced by the backend. New rules are active when saved.');
+ const form=el('form','form-grid'),ruleType=el('select'),targetType=el('select'),
+  typeLabel=el('label'),targetLabel=el('label'),target=field('Match value','text','ruleTarget',{required:true,maxlength:150}),
+  reason=field('Why is this rule needed?','textarea','newRuleReason',{required:true,minlength:5,maxlength:1000}),
+  submit=el('button','primary-button','Create payment rule');submit.type='submit';
+ for(const v of ['WATCH','BLOCK','ALLOW'])ruleType.add(new Option(v,v));
+ for(const v of ['MERCHANT','RECEIVING_VPA','CUSTOMER_VPA','CUSTOMER','PROVIDER'])targetType.add(new Option(v.replace(/_/g,' '),v));
+ add(typeLabel,el('span','','Decision'),ruleType);add(targetLabel,el('span','','Target type'),targetType);
+ const noticeText=user.platform&&!selectedMerchantId?'This will be a PLATFORM-WIDE rule. Select a merchant at the top first to create a merchant-only rule.'
+  :user.platform?'This rule will apply only to the selected merchant.':'This rule will apply to your business only.';
+ add(form,typeLabel,targetLabel,target.container,reason.container,notice(noticeText),add(el('div','form-actions'),submit));
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const global=user.platform&&!selectedMerchantId;
+  if(!confirm(global?'Create a platform-wide rule that may affect every merchant?':'Create a new rule for this merchant?'))return;
+  submit.disabled=true;
+  try{
+   const body={ruleType:ruleType.value,targetType:targetType.value,target:target.control.value,reason:reason.control.value,global};
+   if(user.platform&&!global)body.merchantId=selectedMerchantId;
+   await api('/rules','POST',body);
+   detail('Rule created',notice('Your new policy was saved. Its effects apply to future requests only.'));
+   void render('policies');
+  }catch(err){detail('Rule not created',notice(err.message,true));}finally{submit.disabled=false;}
+ });
+ add(formCard,form);
+ return[c,formCard];
 }
 async function callbacks(){if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
  const data=await api('/webhook-deliveries'),c=panel('Callback deliveries','Whether an event was sent successfully, is pending or requires attention.');
