@@ -646,9 +646,9 @@ async function developers(){
  const baseUrl=location.origin;
  add(setup,info([['API origin',baseUrl],['Payment creation','POST /api/v1/payments'],['Payment status','GET /api/v1/payments/:id'],
  ['Callback authentication','Verify raw-body HMAC and deduplicate event IDs'],['Public documentation','docs/developers/WEBHOOK_INTEGRATION.md']]));
- const docs=el('a','card-link','Read webhook integration guide on GitHub');
+ const docs=el('a','card-link','Webhook integration reference');
  const reference=el('a','card-link','Explore interactive API reference');reference.href='/api-reference.html';reference.target='_blank';reference.rel='noopener noreferrer';add(setup,reference);
- docs.href='https://github.com/Tashima-Tarsh/24-7-pay-system/blob/main/docs/developers/WEBHOOK_INTEGRATION.md';
+ docs.href='/api-reference.html';
  docs.target='_blank';docs.rel='noopener noreferrer';add(setup,docs);
  if(allowed('credentials.manage')&&allowed('webhooks.manage')){
   const packBtn=button('Generate integration pack',async()=>{
