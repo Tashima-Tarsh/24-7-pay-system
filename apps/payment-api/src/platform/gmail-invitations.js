@@ -77,7 +77,7 @@ export function createPlatformGmailInvitationService(db,{env=process.env,googleP
     db.execute('INSERT INTO pp_gmail_oauth_states(state_hash,owner_user_id,expires_at,created_at) VALUES(?,?,?,?)',
       [digest(state),userId,new Date(Date.now()+10*60*1000).toISOString(),now()]);
     return {authorizationUrl:auth.generateAuthUrl({
-      access_type:'offline',prompt:'consent',scope:['https://www.googleapis.com/auth/gmail.send'],state,
+      access_type:'offline',prompt:'consent',scope:['openid','email','https://www.googleapis.com/auth/gmail.send'],state,
       include_granted_scopes:false
     })};
   }
@@ -89,17 +89,21 @@ export function createPlatformGmailInvitationService(db,{env=process.env,googleP
     const old=db.queryOne('SELECT * FROM pp_gmail_oauth_states WHERE state_hash=? AND expires_at>?',[digest(state),now()]);
     if(!old)return returnTo('expired');
     db.execute('DELETE FROM pp_gmail_oauth_states WHERE state_hash=?',[digest(state)]);
+    const owner=db.queryOne("SELECT id FROM pp_users WHERE id=? AND role='SUPER_ADMIN' AND active=1",[old.owner_user_id]);
+    if(!owner)return returnTo('error');
     try{
-      const google=await library(),auth=await oauth();
+      const auth=await oauth();
       const response=await auth.getToken(code);
       const refreshToken=response.tokens?.refresh_token;
       if(!refreshToken)throw Error('Google did not return an offline refresh token');
       const scopes=String(response.tokens?.scope||'');
       if(scopes&&!scopes.split(' ').includes('https://www.googleapis.com/auth/gmail.send'))throw Error('Required Gmail send scope not granted');
-      auth.setCredentials(response.tokens);
-      const profile=await google.gmail({version:'v1',auth}).users.getProfile({userId:'me'});
-      const address=String(profile.data?.emailAddress||'').trim().toLowerCase();
-      if(!validAddress(address))throw Error('Gmail profile email unavailable');
+      const credentials=response.tokens?.id_token;
+      if(!credentials)throw Error('Google identity token is missing');
+      const verified=await auth.verifyIdToken({idToken:credentials,audience:config().clientId});
+      const claims=verified.getPayload();
+      const address=String(claims?.email||'').trim().toLowerCase();
+      if(!claims?.email_verified||!validAddress(address))throw Error('Google account email not verified');
       db.execute('INSERT INTO pp_gmail_sender(id,email,refresh_token_cipher,created_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email,refresh_token_cipher=excluded.refresh_token_cipher,updated_at=excluded.updated_at',
         ['platform',address,encrypt(refreshToken,env),now(),now()]);
       return returnTo('connected');
