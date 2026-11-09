@@ -135,11 +135,79 @@ export function registerPlatformOperations(server, ctx, identity) {
     for(const row of rows){const value=money(row.amount_paise,'recorded amount');amount+=value;if(row.status==='SUCCESS'){successful++;if(row.method!=='COD')successAmount+=value;}else if(['FAILED','EXPIRED','CANCELLED'].includes(row.status))failed++;else pending++;}
     return {transactions:rows.length,successful,failed,pending,amountPaise:amount.toString(),successfulAmountPaise:successAmount.toString()};
   });
+  // KPI values are derived from persisted financial events, never UI counters.
+  // Merchant roles cannot request a different tenant or an all-merchant total.
+  route('GET','/dashboard/kpis','transactions.read',(req,p,q)=>{
+    const {where,args}=filters(req,q);
+    const rows=db.query('SELECT t.merchant_id,t.status,t.method,t.amount_paise FROM ('+normalized+') t'+where,args);
+    const empty=()=>({transactions:0,confirmed:0,failed:0,pending:0,attemptedPaise:0n,confirmedPaise:0n});
+    const overall=empty(),byMerchant=new Map();
+    function take(total,row){
+      const value=money(row.amount_paise,'payment amount');
+      total.transactions++;total.attemptedPaise+=value;
+      if(row.status==='SUCCESS'){total.confirmed++;if(String(row.method||'').toUpperCase()!=='COD')total.confirmedPaise+=value;}
+      else if(['FAILED','EXPIRED','CANCELLED','BLOCKED'].includes(row.status))total.failed++;
+      else total.pending++;
+    }
+    for(const row of rows){
+      take(overall,row);
+      if(req.platform.platform){
+        const key=row.merchant_id||'unknown',entry=byMerchant.get(key)||empty();
+        take(entry,row);byMerchant.set(key,entry);
+      }
+    }
+    const format=x=>({
+      transactions:x.transactions,confirmed:x.confirmed,failed:x.failed,pending:x.pending,
+      attemptedPaise:x.attemptedPaise.toString(),confirmedPaise:x.confirmedPaise.toString(),
+      confirmationRate:x.transactions?Number((BigInt(x.confirmed)*10000n)/BigInt(x.transactions))/100:0
+    });
+    const breakdown=[];
+    if(req.platform.platform){
+      const directory=db.query('SELECT id,business_name FROM merchants'),names=new Map(directory.map(m=>[m.id,m.business_name]));
+      for(const [id,totals]of byMerchant)breakdown.push({merchantId:id,businessName:names.get(id)||id,...format(totals)});
+      breakdown.sort((a,b)=>BigInt(a.confirmedPaise)>BigInt(b.confirmedPaise)?-1:BigInt(a.confirmedPaise)<BigInt(b.confirmedPaise)?1:a.merchantId.localeCompare(b.merchantId));
+    }
+    return {
+      scope:req.platform.platform?'PLATFORM':'MERCHANT',
+      merchantId:scope(req,q.get('merchantId')),
+      merchantCount:req.platform.platform?Number(db.queryOne('SELECT COUNT(*) AS n FROM merchants').n):1,
+      summary:format(overall),merchantBreakdown:breakdown,generatedAt:now(),
+      note:'Verified gross payment volume excludes cash-on-delivery; it is not net revenue or bank settlement.'
+    };
+  });
+  // API telemetry reflects instrumented merchant API key calls only.
+  route('GET','/dashboard/api-failures','operations.read',(req,p,q)=>{
+    const id=scope(req,q.get('merchantId'));
+    const where=id?' AND merchant_id=?':'',args=id?[id]:[];
+    const total=db.queryOne('SELECT COUNT(*) AS n FROM pp_api_requests WHERE 1=1'+where,args);
+    const failed=db.queryOne('SELECT COUNT(*) AS n FROM pp_api_requests WHERE status>=400'+where,args);
+    const serverErrors=db.queryOne('SELECT COUNT(*) AS n FROM pp_api_requests WHERE status>=500'+where,args);
+    const items=db.query('SELECT id,merchant_id,method,path,status,duration_ms,created_at FROM pp_api_requests WHERE status>=400'+where+' ORDER BY created_at DESC,id DESC LIMIT 50',args);
+    const callbacks=[];
+    for(const source of ['webhook_deliveries','provider_webhook_deliveries']){
+      const entries=db.query('SELECT id,merchant_id,event_type,attempt_count,response_status,next_retry_at,created_at FROM '+source+' WHERE is_successful=0'+where+' ORDER BY created_at DESC LIMIT 50',args);
+      callbacks.push(...entries.map(r=>({
+        id:r.id,merchantId:r.merchant_id,eventType:r.event_type,attempts:Number(r.attempt_count||0),
+        responseStatus:r.response_status,nextRetryAt:r.next_retry_at,createdAt:r.created_at,source,
+        state:r.next_retry_at?'PENDING_RETRY':'NEEDS_ATTENTION'
+      })));
+    }
+    callbacks.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+    return {
+      scope:req.platform.platform?'PLATFORM':'MERCHANT',merchantId:id,
+      api:{recorded:Number(total.n),failures:Number(failed.n),serverErrors:Number(serverErrors.n),items},
+      callbacks:callbacks.slice(0,50),checkedAt:now(),
+      note:'API metrics include recorded merchant API-key requests only. Callback redelivery is not proof of a settled payment.'
+    };
+  });
   route('GET','/production-readiness','operations.read',(req,p,q)=>{
     const merchantId=req.platform.platform?(q.get('merchantId')||null):req.platform.merchantId;
     if(merchantId&&!db.queryOne('SELECT id FROM merchants WHERE id=?',[merchantId]))FAIL(404,'Merchant not found');
     const storageReady=process.env.NODE_ENV!=='production'||db.dialect==='postgres';
-    const connectionReady=merchantId?Boolean(ctx.canActivateMerchant?.(merchantId)):null;
+    const connectionReady=merchantId?Boolean(
+      db.queryOne('SELECT id FROM payment_receiving_accounts WHERE merchant_id=? AND is_active=1 AND is_merchant_enabled=1 LIMIT 1',[merchantId]) ||
+      db.queryOne('SELECT c.id FROM provider_connections c JOIN pp_connection_policy p ON p.connection_id=c.id WHERE c.merchant_id=? AND c.is_active=1 AND p.approved=1 AND p.enabled=1 LIMIT 1',[merchantId])
+    ):null;
     return {
       status:!storageReady?'STORAGE_BLOCKED':merchantId&&!connectionReady?'MERCHANT_CONFIGURATION_REQUIRED':'STORAGE_READY',
       storage:{ready:storageReady,engine:db.dialect,productionRequired:'postgres'},
