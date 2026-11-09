@@ -1,37 +1,35 @@
+# Existing Render resources — review the Blueprint plan before adopting.
+# DATABASE_URL is populated by Render from the private Postgres connection:
+# no database credentials are stored in the repository.
+databases:
+  - name: 24-7-pay-trial-db
+    plan: free
+    region: singapore
+    databaseName: db_24_7_pay_trial_db
+    user: db_24_7_pay_trial_db_user
+    ipAllowList: []
+
 services:
   - type: web
-    name: dynamo-pay-live
+    name: 24-7-pay-live
     runtime: node
     repo: https://github.com/Tashima-Tarsh/24-7-pay-system
     branch: main
     plan: free
     region: singapore
-    buildCommand: npm ci --include=dev
-    startCommand: node server.mjs
-    healthCheckPath: /_ready
+    buildCommand: npm ci --install-links && npm run build
+    startCommand: npm run start:hosted
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: GIT_LFS_SKIP_SMUDGE
-        value: "1"
-      - key: NODE_VERSION
-        value: 22.23.4
       - key: NODE_ENV
         value: production
-      - key: SQLITE_DB_PATH
-        value: /opt/render/project/src/data/youpi_pg.sqlite
+      - key: NODE_VERSION
+        value: 22.23.4
       - key: DATABASE_URL
-        sync: false
-      - key: INITIAL_ADMIN_EMAIL
-        sync: false
-      - key: INITIAL_ADMIN_PASSWORD
-        sync: false
-      - key: ENCRYPTION_MASTER_KEY
-        sync: false
-      - key: JWT_SECRET
-        sync: false
-      - key: GMAIL_OAUTH_CLIENT_ID
-        sync: false
-      - key: GMAIL_OAUTH_CLIENT_SECRET
-        sync: false
-      - key: GMAIL_REDIRECT_URI
-        sync: false
+        fromDatabase:
+          name: 24-7-pay-trial-db
+          property: connectionString
+
+# Existing secrets stay in Render's encrypted environment settings.
+# The Free database expires; upgrade and configure backup/restore before real money.
