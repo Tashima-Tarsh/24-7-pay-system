@@ -55,7 +55,8 @@ test('only send-mail OAuth scope plus OpenID identity is requested, state is one
    token:'secure-mock-activation-token',invitationUrl:'https://pay.example.test/platform#owner-invitation/secure-mock-activation-token'});
   assert.equal(x.deliveries.length,1);
   const mime=Buffer.from(x.deliveries[0].requestBody.raw,'base64url').toString('utf8');
-  assert.match(mime,/To: merchant@example.test/);assert.match(mime,/secure-mock-activation-token/);
+  assert.match(mime,/To: merchant@example.test/);const body=Buffer.from(mime.split('\r\n\r\n')[1],'base64').toString('utf8');
+  assert.match(body,/secure-mock-activation-token/);
   assert.doesNotMatch(mime,/refresh-token/);
   assert.rejects(()=>x.service.send({kind:'merchant_owner_invitation',channel:'email',to:'victim@example.test\r\nBcc: attacker@example.test',token:'abc'}));
   x.service.disconnect();assert.equal(x.service.status().connected,false);
