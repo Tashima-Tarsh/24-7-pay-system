@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HttpServer } from '../server.js';
+import { PLATFORM_ACCOUNT_ID } from '@youpi/common';
 
 const PREFIX = '/api/platform/v1';
 const FAIL = (status, message) => { throw Object.assign(new Error(message), { status }); };
@@ -142,7 +143,9 @@ export function registerPlatformOperations(server, ctx, identity) {
   // KPI values are derived from persisted financial events, never UI counters.
   // Merchant roles cannot request a different tenant or an all-merchant total.
   route('GET','/dashboard/kpis','transactions.read',(req,p,q)=>{
-    const {where,args}=filters(req,q);
+    const selected=filters(req,q);
+    const where=(selected.where||' WHERE 1=1')+' AND t.merchant_id<>?';
+    const args=[...selected.args,PLATFORM_ACCOUNT_ID];
     const rows=db.query('SELECT t.merchant_id,t.status,t.method,t.amount_paise FROM ('+normalized+') t'+where,args);
     const empty=()=>({transactions:0,confirmed:0,failed:0,pending:0,attemptedPaise:0n,confirmedPaise:0n});
     const overall=empty(),byMerchant=new Map();
@@ -167,14 +170,14 @@ export function registerPlatformOperations(server, ctx, identity) {
     });
     const breakdown=[];
     if(req.platform.platform){
-      const directory=db.query('SELECT id,business_name FROM merchants'),names=new Map(directory.map(m=>[m.id,m.business_name]));
+      const directory=db.query('SELECT id,business_name FROM merchants WHERE id<>?',[PLATFORM_ACCOUNT_ID]),names=new Map(directory.map(m=>[m.id,m.business_name]));
       for(const [id,totals]of byMerchant)breakdown.push({merchantId:id,businessName:names.get(id)||id,...format(totals)});
       breakdown.sort((a,b)=>BigInt(a.confirmedPaise)>BigInt(b.confirmedPaise)?-1:BigInt(a.confirmedPaise)<BigInt(b.confirmedPaise)?1:a.merchantId.localeCompare(b.merchantId));
     }
     return {
       scope:req.platform.platform?'PLATFORM':'MERCHANT',
       merchantId:scope(req,q.get('merchantId')),
-      merchantCount:req.platform.platform?Number(db.queryOne('SELECT COUNT(*) AS n FROM merchants').n):1,
+      merchantCount:req.platform.platform?Number(db.queryOne('SELECT COUNT(*) AS n FROM merchants WHERE id<>?',[PLATFORM_ACCOUNT_ID]).n):1,
       summary:format(overall),merchantBreakdown:breakdown,generatedAt:now(),
       note:'Verified gross payment volume excludes cash-on-delivery; it is not net revenue or bank settlement.'
     };
