@@ -8,6 +8,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+const browserOwnerPassword='browser-ci-owner-strong-password';
+const browserOwnerSalt=crypto.randomBytes(16).toString('hex');
+const browserOwnerHash='scrypt:'+browserOwnerSalt+':'+crypto.scryptSync(browserOwnerPassword,browserOwnerSalt,64).toString('hex');
 import {chromium} from '@playwright/test';
 
 async function freePort(){
@@ -31,6 +34,9 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     SQLITE_DB_PATH:path.join(folder,'isolated.sqlite'),
     INITIAL_ADMIN_EMAIL:'browser-test@example.test',
     INITIAL_ADMIN_PASSWORD:crypto.randomBytes(28).toString('hex'),
+    ADMIN_LOGIN_EMAIL:'platform-owner-browser@example.test',
+    ADMIN_LOGIN_PASSWORD_HASH:browserOwnerHash,
+    ADMIN_OWNER_BOOTSTRAP_VERSION:'browser-acceptance-v1',
     ENCRYPTION_MASTER_KEY:crypto.randomBytes(32).toString('hex'),
     JWT_SECRET:crypto.randomBytes(32).toString('hex'),
     ORDER_SIGNING_SECRET:crypto.randomBytes(32).toString('hex'),
@@ -93,6 +99,25 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.locator('#logout-button').click();
     await page.waitForSelector('#auth-view:not([hidden])');
     assert.equal((await context.cookies()).some(c=>c.name==='dp_platform_session'),false);
+    // The platform owner must see all merchants, financial KPIs and diagnostics.
+    await page.goto(base+'/platform',{waitUntil:'domcontentloaded'});
+    await page.fill('#email','platform-owner-browser@example.test');
+    await page.fill('#password',browserOwnerPassword);
+    await page.click('#login-submit');
+    await page.waitForSelector('#workspace:not([hidden])',{timeout:12000});
+    await page.getByRole('heading',{name:'Platform performance'}).waitFor({timeout:12000});
+    await page.getByRole('heading',{name:'Merchant performance'}).waitFor({timeout:12000});
+    const selector=page.locator('#merchant-scope');
+    await page.waitForFunction(()=>document.querySelector('#merchant-scope')?.options?.length>1);
+    await selector.selectOption({index:1});
+    await page.getByRole('heading',{name:'Production readiness'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="diagnostics"]').click();
+    await page.getByRole('heading',{name:'Recent API failures'}).waitFor({timeout:12000});
+    await page.getByRole('heading',{name:'Callback delivery queue'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="merchants"]').click();
+    await page.getByRole('heading',{name:'Add a merchant'}).waitFor({timeout:12000});
+    await page.locator('#logout-button').click();
+    await page.waitForSelector('#auth-view:not([hidden])');
     await page.setViewportSize({width:390,height:800});
     await page.goto(base+'/',{waitUntil:'domcontentloaded'});
     await page.locator('#mobile-menu').click();
