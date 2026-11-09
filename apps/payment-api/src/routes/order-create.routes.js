@@ -70,7 +70,7 @@ export function registerOrderCreateRoutes(server, ctx) {
         }
       }
 
-      if (!durableFinancialStorageAvailable(db)) {
+      if (!durableFinancialStorageAvailable(db, process.env.NODE_ENV, ctx.isolatedFinancialTest)) {
         return HttpServer.json(res, 503, {
           error: 'Financial operations require durable PostgreSQL storage in production.',
           code: 'DURABLE_STORAGE_REQUIRED',

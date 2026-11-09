@@ -5,8 +5,10 @@ import { HttpServer } from './server.js';
  * container. SQLite remains supported for local development and isolated tests.
  * Read-only routes and administrative setup stay available to allow migration.
  */
-export function durableFinancialStorageAvailable(db, environment = process.env.NODE_ENV) {
-  return environment !== 'production' || db?.dialect === 'postgres';
+export function durableFinancialStorageAvailable(db, environment = process.env.NODE_ENV, isolatedTest = false) {
+  // Explicit constructor-only fixture support: no HTTP request, service
+  // environment variable, or external provider can enable this exemption.
+  return isolatedTest === true || environment !== 'production' || db?.dialect === 'postgres';
 }
 
 const financialPrefixes = [
@@ -15,8 +17,8 @@ const financialPrefixes = [
   /^\/api\/platform\/v1\/(?:payments|refunds|payouts)(?:\/|$)/
 ];
 
-export function rejectEphemeralFinancialWrite(req, res, pathname, db, environment = process.env.NODE_ENV) {
-  if (durableFinancialStorageAvailable(db, environment)) return false;
+export function rejectEphemeralFinancialWrite(req, res, pathname, db, environment = process.env.NODE_ENV, isolatedTest = false) {
+  if (durableFinancialStorageAvailable(db, environment, isolatedTest)) return false;
   if (!['POST','PUT','PATCH','DELETE'].includes(req.method)) return false;
   if (pathname === '/api/v1/orders') return false; // authenticated inside order-create route
   if (!financialPrefixes.some(regex => regex.test(pathname))) return false;

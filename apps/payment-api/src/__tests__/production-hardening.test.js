@@ -8,7 +8,7 @@ import {authHeaders} from '../../../../scripts/test-support.js';
 import {CashfreeProvider} from '../../../../packages/core/src/providers/cashfree-provider.js';
 
 test('production payment boundaries, observer isolation and refund reservations',async t=>{
- const db=new Database({inMemory:true});runMigrations(db);const app=createPaymentApp(db);
+ const db=new Database({inMemory:true});runMigrations(db);const app=createPaymentApp(db,{isolatedFinancialTest:true});
  await new Promise(r=>app.rawServer.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${app.rawServer.address().port}`;
  const merchants=new MerchantRepository(db),merchant=merchants.getDefault(),ctx=app.context;
  merchants.update(merchant.id,{webhookUrl:null});

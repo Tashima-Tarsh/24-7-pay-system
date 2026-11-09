@@ -127,6 +127,9 @@ export function createPaymentApp(customDb = null, options = {}) {
   ensureDatabaseInitialized(db);
   const { defaultMerchant } = runMigrations(db);
   const isCustom = !!customDb;
+  // Only isolated application constructors (used by the internal test suite)
+  // may opt into simulated financial operations on in-memory SQLite.
+  const isolatedFinancialTest = isCustom && options.isolatedFinancialTest === true;
   const whatsappBerryService = options.whatsappBerryService || (isCustom ? new WhatsAppBerryService({
     sessionId: 'test_berry_session',
     sessionPath: path.resolve(rootDir, 'data/test_berry_auth'),
@@ -515,6 +518,7 @@ export function createPaymentApp(customDb = null, options = {}) {
 
   const context = {
     db,
+    isolatedFinancialTest,
     merchantRepo,
     accountRepo,
     customerRepo,
@@ -593,7 +597,7 @@ export function createPaymentApp(customDb = null, options = {}) {
   });
   // Keep the console running for setup, but reject financial writes on
   // ephemeral SQLite when deployed in production.
-  server.use((req,res,pathname) => rejectEphemeralFinancialWrite(req,res,pathname,db));
+  server.use((req,res,pathname) => rejectEphemeralFinancialWrite(req,res,pathname,db,process.env.NODE_ENV,isolatedFinancialTest));
   // Supplementary Gmail/SMS/Android evidence cannot create financial success
   // in production, regardless of who submits it. Keep read-only diagnostics.
   server.use((req,res,pathname)=>{

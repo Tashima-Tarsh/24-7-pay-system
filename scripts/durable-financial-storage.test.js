@@ -5,6 +5,7 @@ import { durableFinancialStorageAvailable, rejectEphemeralFinancialWrite } from 
 test('financial readiness requires PostgreSQL in production', () => {
   assert.equal(durableFinancialStorageAvailable({dialect:'postgres'},'production'),true);
   assert.equal(durableFinancialStorageAvailable({dialect:'sqlite'},'production'),false);
+  assert.equal(durableFinancialStorageAvailable({dialect:'sqlite'},'production',true),true);
   assert.equal(durableFinancialStorageAvailable({dialect:'sqlite'},'test'),true);
 });
 test('new payments cannot be created on ephemeral production SQLite', () => {
