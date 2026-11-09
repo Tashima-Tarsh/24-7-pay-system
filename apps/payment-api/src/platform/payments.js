@@ -98,7 +98,7 @@ export function registerPlatformPayments(server,ctx,identity){
     code:'MERCHANT_NOT_ACTIVE',
     message:state.status==='SUSPENDED'||state.status==='REJECTED'||state.status==='UNDER_REVIEW'
       ?'Merchant account requires an administrator review before new payments.'
-      :'Complete merchant owner verification or business onboarding to create payments.',
+      :'Finish activating the merchant owner account and complete the business profile to create payments.',
     action:'MERCHANT_ONBOARDING'
   });
   if(!activeAccount)issues.push({code:'NO_RECEIVING_ACCOUNT',message:'Add and enable your business receiving UPI ID to issue payment links.',action:'ADD_RECEIVING_UPI'});
@@ -137,7 +137,7 @@ export function registerPlatformPayments(server,ctx,identity){
    // Preserve the original legacy merchant repository flow when the newer
    // pp_merchants onboarding record does not exist. It cannot be auto-created.
    if(state.active||state.reason==='MERCHANT_NOT_FOUND')return;
-   if(state.reason==='OWNER_EMAIL_UNVERIFIED')throw error(403,'Verify the merchant owner email address to start receiving payments.','MERCHANT_EMAIL_VERIFICATION_REQUIRED');
+   if(state.reason==='OWNER_NOT_ACTIVATED')throw error(403,'Activate your merchant owner account to start receiving payments.','MERCHANT_OWNER_ACTIVATION_REQUIRED');
    if(state.reason==='PROFILE_INCOMPLETE'||state.reason==='INVALID_PROFILE')throw error(403,'Complete your merchant business profile before creating new payments.','MERCHANT_PROFILE_INCOMPLETE');
    throw error(403,'This merchant is not active for new payments. Contact support if the merchant is under review or suspended.','MERCHANT_NOT_ACTIVE');
  }
