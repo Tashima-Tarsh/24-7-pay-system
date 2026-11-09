@@ -5,11 +5,11 @@
 Merchants register a callback URL through the dashboard or API:
 
 `POST /api/platform/v1/webhooks`
-Body: `{ "url": "https://merchant.example.com/webhooks/sanbook" }`
+Body: `{ "url": "https://merchant.example.com/webhooks/payments" }`
 
 ## Incoming Events
 
-Sanbook Pay sends signed POST requests to the merchant's webhook URL with:
+24/7 Pay sends signed POST requests to the merchant's webhook URL with:
 
 ```json
 {
