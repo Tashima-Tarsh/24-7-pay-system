@@ -9,7 +9,7 @@ services:
     buildCommand: cd apps/checkout-portal && npm ci && npm run build && cd ../../ && npm ci --include=dev
     startCommand: node scripts/start-hosted.mjs
     healthCheckPath: /_ready
-    autoDeploy: false
+    autoDeploy: true
     envVars:
       - key: GIT_LFS_SKIP_SMUDGE
         value: "1"
