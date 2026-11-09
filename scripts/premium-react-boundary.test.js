@@ -129,3 +129,18 @@ test('Administrators can manage merchants and staff without exposing payment set
  assert.match(api,/\/api\/platform\/v1\/staff\/invite/);
  assert.doesNotMatch(center,/walletCredit|settleManually|overrideSuccess/);
 });
+
+test('Payment link readiness uses original merchant authorization and guides receiver setup',()=>{
+ const screen=read('premium-studio/src/PaymentLinkStudio.tsx');
+ const api=read('premium-studio/src/api.ts');
+ const backend=read('apps/payment-api/src/platform/payments.js');
+ assert.match(screen,/getPaymentReadiness\(controller\.signal\)/);
+ assert.match(screen,/readiness\?\.ready===true/);
+ assert.match(screen,/onConfigureUpi/);
+ assert.match(screen,/Add receiving UPI ID/);
+ assert.match(api,/\/payment-readiness/);
+ assert.match(backend,/get\('\/payment-readiness','payments\.create'/);
+ assert.match(backend,/NO_RECEIVING_ACCOUNT/);
+ assert.match(backend,/UPI_CHANNEL_DISABLED/);
+ assert.doesNotMatch(screen,/markPaid|forceSuccess|overrideSettlement/);
+});
