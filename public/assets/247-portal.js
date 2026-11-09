@@ -563,21 +563,49 @@ async function settings(){if(user.platform&&!selectedMerchantId)return[merchantS
 async function invitationEmail(){
  if(user?.role!=='SUPER_ADMIN')return[panel('Access denied','Only the platform owner can connect an invitation email account.')];
  const d=await api('/gmail/sender');
- const p=panel('Personal Gmail sender','Use Google permission to send invitations from your own Gmail address. No inbox-reading permission is requested.');
- add(p,info([['Sender',d.email||'Not connected'],['Connection',d.connected?'Connected':'Not connected'],['Google authorization',d.oauthReady?'Available':'Google OAuth client must be configured in Render']]));
- if(d.connected) add(p,button('Disconnect Gmail',async()=>{
-  if(!confirm('Disconnect this Gmail account from invitation sending?'))return;
-  try{await api('/gmail/disconnect','POST',{});void render('invite-email');}catch(e){detail('Disconnect failed',notice(e.message,true));}
- }));
- else if(d.oauthReady)add(p,button('Connect my Gmail',async()=>{
-  try{const r=await api('/gmail/connect','POST',{});const url=new URL(r.authorizationUrl);if(url.hostname!=='accounts.google.com')throw Error('Unexpected Google authorization URL');location.assign(url.href);}
-  catch(e){detail('Gmail connection unavailable',notice(e.message,true));}
- },'primary-button'));
- else add(p,notice('Set GMAIL_SEND_CLIENT_ID and GMAIL_SEND_CLIENT_SECRET in Render and allow the callback URL shown below in Google Cloud OAuth settings.'));
- add(p,info([['Google OAuth redirect URL',d.redirectUri||'Not configured'],['Scope','gmail.send only']]));
- const about=panel('Invitation workflow','Once connected, Create Merchant and Invite Owner will send emails from this Gmail account.');
- add(about,notice('If Gmail is not configured, the application provides a one-time private activation link instead. No invitation is marked sent unless Google accepts it.'));
- return[p,about];
+ const sender=panel('Personal Gmail sender','Send merchant-owner invitations from a Google account you authorize. Gmail permission is limited to sending email.');
+ add(sender,info([['Sender email',d.email||'Not connected'],['Connection',d.connected?'Connected':'Not connected'],
+ ['OAuth application',d.oauthReady?'Ready':'Not configured'],['Permission','Gmail send only · Google account email identity']]));
+ if(d.connected){
+  add(sender,button('Disconnect Gmail',async()=>{
+   if(!confirm('Stop sending invitations from this Gmail address?'))return;
+   try{const r=await api('/gmail/disconnect','POST',{});detail('Gmail disconnected',notice(r.revocationNote));void render('invite-email');}
+   catch(e){detail('Disconnect failed',notice(e.message,true));}
+  }));
+ }else if(d.oauthReady){
+  add(sender,button('Connect my Gmail',async()=>{
+   try{const response=await api('/gmail/connect','POST',{});
+    const url=new URL(response.authorizationUrl);
+    if(url.hostname!=='accounts.google.com'||url.protocol!=='https:')throw Error('Unexpected OAuth authorization address');
+    location.assign(url.href);
+   }catch(e){detail('Google authorization unavailable',notice(e.message,true));}
+  },'primary-button'));
+ }
+ const setup=panel('Set up your Google OAuth application','This is a one-time setup. The credentials are encrypted on the server and never shown again.');
+ const hint=el('p','card-note');hint.textContent='In Google Cloud: enable the Gmail API, configure your OAuth consent screen and create a Web application OAuth client. Add the redirect URL below, then paste the Client ID and Client secret here. You must authorize your own Gmail account before invitations can be sent.';
+ add(setup,hint);
+ const go=el('a','card-link','Open Google Cloud credentials');go.href='https://console.cloud.google.com/apis/credentials';go.target='_blank';go.rel='noopener noreferrer';add(setup,go);
+ add(setup,info([['Authorized redirect URL',d.redirectUri||'Configure your public HTTPS app origin'],
+ ['Stored OAuth configuration',d.clientStored?'Saved privately in PostgreSQL':d.oauthReady?'Configured using Render environment':'Not configured']]));
+ const form=el('form','form-grid'),id=field('Google OAuth Client ID','text','gmailClientId',{required:true,autocomplete:'off',maxlength:220,placeholder:'1234-name.apps.googleusercontent.com'}),
+ secret=field('Google OAuth Client secret','password','gmailClientSecret',{required:true,autocomplete:'new-password',minlength:10,maxlength:300}),
+ submit=el('button','primary-button','Save OAuth configuration');submit.type='submit';
+ add(form,id.container,secret.container,notice('Changing this OAuth application disconnects the previous Gmail sender. You must reconnect Google after saving.'),
+  add(el('div','form-actions'),submit));
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();submit.disabled=true;
+  try{
+   const response=await api('/gmail/client','POST',{clientId:id.control.value.trim(),clientSecret:secret.control.value});
+   secret.control.value='';
+   detail('OAuth application saved',notice('Your OAuth client is stored privately. Connect the Gmail account and approve Google’s permission to send invitations.'));
+   void render('invite-email');
+  }catch(err){detail('Unable to save OAuth application',notice(err.message,true));}
+  finally{submit.disabled=false;}
+ });
+ add(setup,form);
+ const workflow=panel('Merchant invitation workflow','How sending works');
+ add(workflow,notice('After connecting Google, choose Merchants → Add merchant. The application sends a one-time account activation link from your connected Gmail. If Gmail is not connected or sending fails, the platform presents a private activation link instead. Gmail sending never changes payment status.'));
+ return[sender,setup,workflow];
 }
 async function security(){const r=await Promise.all([api('/me'),api('/sessions')]),u=r[0].user||user,p=panel('Your profile','Account access is governed by your backend permissions.');add(p,info([['Email',u.email],['Role',u.role],['Merchant ID',u.merchantId||'Platform team'],['MFA',u.mfaEnabled?'Enabled':'Not enabled'],['Email verified',u.emailVerified?'Yes':'Not yet']]));const perms=panel('Permissions','These permissions also apply on the server.');const tags=el('div','toolbar');(u.permissions||[]).forEach(x=>add(tags,el('span','status-tag',x)));add(perms,tags);const active=panel('Active sessions','Sign out when you finish.');add(active,table(['Created','Expiry'],r[1].sessions||[],x=>[date(x.created_at),date(x.expires_at)]));return[p,perms,active];}
 $('merchant-scope').addEventListener('change',e=>{selectedMerchantId=e.target.value;$('merchant-scope-note').textContent=selectedMerchantId?'Reviewing merchant configuration as a platform operator.':'Platform-wide overview.';void render(current);});
