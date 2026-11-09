@@ -169,7 +169,7 @@ const server = http.createServer(async (req, res) => {
 
   if (route === 'checkout') {
     try {
-      const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'checkout.html'));
+      const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'checkout-next.html'));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
     } catch {

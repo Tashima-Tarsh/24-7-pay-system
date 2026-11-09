@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1120"><meta name="robots" content="noindex,nofollow"><title>Secure UPI checkout | 24/7 Pay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/247-checkout.css"><script src="/assets/247-checkout.js" type="module"></script></head>
+<body>
+<header class="checkout-header"><div class="header-wrap"><a class="brand" href="/" aria-label="24/7 Pay home"><span class="brand-icon">↗</span>24/7 <em>PAY</em></a><div class="header-note"><span class="lock-icon">◇</span> Payment details from your merchant</div></div></header>
+<main class="checkout-main">
+ <div class="page-intro"><p class="eyebrow">YOUR PAYMENT</p><h1 id="page-title">A simpler way to pay.</h1><p id="page-description">We’ll show you everything you need before you open your payment app.</p></div>
+ <section id="loading" class="load-panel" role="status" aria-live="polite"><div class="spinner"></div><h2>Getting your payment ready…</h2><p>We’re checking the latest details from the merchant.</p></section>
+ <section id="checkout-content" class="checkout-grid" hidden>
+   <div class="main-card">
+     <div class="merchant-line"><div class="merchant-symbol">↗</div><div><span class="small-label">YOU'RE PAYING</span><strong id="merchant-name">Your merchant</strong></div></div>
+     <div class="amount-block"><span class="small-label">AMOUNT TO PAY</span><strong id="amount">—</strong><span class="amount-currency">INR · Indian Rupees</span></div>
+     <div class="reference-row"><span>Order reference</span><strong id="order-reference">—</strong></div>
+     <div class="status-box"><span id="status-dot" class="status-dot"></span><div><strong id="status-title">Checking status</strong><p id="status-description">Checking the latest information about this payment.</p></div></div>
+     <div id="payment-instructions" hidden>
+       <div class="payment-divider"><span>PAY WITH UPI</span></div>
+       <div class="qr-panel">
+         <div id="qr-frame" class="qr-frame"><img id="qr" alt="UPI QR code containing this order's payment details" width="204" height="204" hidden><div id="qr-fallback" class="qr-fallback">QR is unavailable. Use the app link if supported.</div></div>
+         <p>Open your UPI app and scan this code. Check the amount and receiving name before you approve.</p>
+       </div>
+       <div class="payee-panel"><div><span class="small-label">RECEIVING ACCOUNT</span><strong id="payee-name">—</strong><span class="mono" id="payee-vpa">—</span></div><button id="copy-vpa" class="copy-button" type="button">Copy UPI ID</button></div>
+       <div id="app-actions" class="app-actions" hidden><a id="upi-open" class="pay-button" rel="nofollow">Open a UPI app <span>↗</span></a><div class="app-grid"><a id="gpay-open" rel="nofollow">Google Pay</a><a id="phonepe-open" rel="nofollow">PhonePe</a><a id="paytm-open" rel="nofollow">Paytm</a></div><p>App availability depends on your device. Scanning the QR is always an alternative.</p></div>
+       <div id="timer" class="timer" hidden>Time left: <strong id="time-left">—</strong></div>
+     </div>
+     <div id="result-panel" class="result-panel" hidden>
+       <span class="result-icon" id="result-icon">◎</span>
+       <h2 id="result-title">Payment update</h2><p id="result-description">Checking the latest result.</p>
+       <div id="reference-details" class="reference-details" hidden><span>Bank reference</span><strong id="utr">—</strong></div>
+       <a id="merchant-return" class="return-button" hidden target="_blank" rel="noopener noreferrer">Return to merchant ↗</a>
+     </div>
+     <div id="retry-area" class="retry-area" hidden><p id="retry-message">We couldn’t reach the payment server. Please check your connection.</p><button id="retry" type="button">Check again</button></div>
+   </div>
+   <aside class="aside-card"><div class="aside-visual" aria-hidden="true"><div class="orb">◎</div><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div></div><p class="eyebrow">GOOD TO KNOW</p><h2>Pay with confidence, not guesswork.</h2><div class="trust-point"><span>01</span><p>Always check the recipient and amount in your payment app before approving.</p></div><div class="trust-point"><span>02</span><p>Opening an app or sharing a reference doesn't mean a payment has been confirmed.</p></div><div class="trust-point"><span>03</span><p>Your payment status updates as trustworthy confirmation becomes available.</p></div></aside>
+ </section>
+ <footer class="checkout-footer"><div>24/7 Pay · A clearer way to follow a payment.</div><div><span id="support">Need help? Contact your merchant.</span></div></footer>
+</main>
+</body></html>
