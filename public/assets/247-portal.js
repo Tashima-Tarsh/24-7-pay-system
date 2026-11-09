@@ -39,6 +39,68 @@ function date(x){const d=new Date(x);return x&&!Number.isNaN(d.getTime())?d.toLo
 function status(s){const x=String(s||'UNKNOWN'),v=el('span','status-tag '+x.toLowerCase().replace(/[^a-z0-9_-]/g,''),x.replace(/_/g,' '));return v;}
 function metric(label,v,hint=''){const m=el('div','metric');add(m,el('span','metric-label',label),el('strong','metric-value',v),el('span','metric-foot',hint));return m;}
 function stats(items){const g=el('div','metric-grid');items.forEach(a=>add(g,metric(...a)));return g;}
+// Progressive, accessible workspace enhancements. No payment-state mutation.
+const premiumGlyphs={
+ chart:'M3 17v4m6-9v9m6-15v15m6-11v11',
+ code:'M8 9l-4 3 4 3m8-6l4 3-4 3m-3-11-2 16',
+ route:'M5 5h6v6H5zM13 13h6v6h-6zM11 8h4a3 3 0 0 1 3 3v2',
+ shield:'M12 2 4 6v5c0 5 3 8 8 11 5-3 8-6 8-11V6zM9 12l2 2 4-4'
+};
+function premiumIcon(name){
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');
+ svg.setAttribute('stroke-width','1.7');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
+ svg.setAttribute('width','20');svg.setAttribute('height','20');svg.setAttribute('aria-hidden','true');
+ const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+ path.setAttribute('d',premiumGlyphs[name]||premiumGlyphs.shield);svg.appendChild(path);return svg;
+}
+function premiumChart(summary){
+ const rows=[['Confirmed',Math.max(0,Number(summary.confirmed)||0),'#196B4B'],['Pending',Math.max(0,Number(summary.pending)||0),'#D9AC63'],['Failed',Math.max(0,Number(summary.failed)||0),'#B84D2F']];
+ const declared=Math.max(0,Number(summary.transactions)||0),known=rows.reduce((n,r)=>n+r[1],0);
+ if(declared>known)rows.push(['Other',declared-known,'#A0ACA0']);
+ const total=rows.reduce((n,r)=>n+r[1],0),card=panel('Payment mix','Backend KPI results. Counts are orders, not bank settlement totals.');
+ const layout=el('div','studio-chart-layout'),svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ svg.setAttribute('viewBox','0 0 220 220');svg.setAttribute('width','220');svg.setAttribute('height','220');
+ svg.setAttribute('role','img');svg.setAttribute('aria-label','Backend payment status distribution: '+rows.map(r=>r[0]+' '+count(r[1])).join(', '));
+ const circle=(radius,stroke,angle,amount)=>{
+  const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  c.setAttribute('cx','110');c.setAttribute('cy','110');c.setAttribute('r',String(radius));c.setAttribute('fill','none');
+  c.setAttribute('stroke',stroke);c.setAttribute('stroke-width','23');c.setAttribute('transform','rotate(-90 110 110)');
+  if(amount!==undefined){const circumference=2*Math.PI*radius;c.setAttribute('stroke-dasharray',String(amount*circumference)+' '+String(circumference));c.setAttribute('stroke-dashoffset',String(-angle*circumference));}
+  return c;
+ };
+ svg.appendChild(circle(76,'#E6E9E3'));
+ let offset=0;
+ for(const [label,n,color] of rows){if(n>0&&total>0){const share=n/total;svg.appendChild(circle(76,color,offset,share));offset+=share;}}
+ const center=document.createElementNS('http://www.w3.org/2000/svg','text');center.setAttribute('x','110');center.setAttribute('y','106');center.setAttribute('text-anchor','middle');center.setAttribute('font-size','29');center.setAttribute('font-weight','700');center.setAttribute('fill','#183D30');center.textContent=count(total);svg.appendChild(center);
+ const subtitle=document.createElementNS('http://www.w3.org/2000/svg','text');subtitle.setAttribute('x','110');subtitle.setAttribute('y','128');subtitle.setAttribute('text-anchor','middle');subtitle.setAttribute('font-size','12');subtitle.setAttribute('fill','#607062');subtitle.textContent='orders';svg.appendChild(subtitle);
+ const legend=el('div','studio-chart-legend');
+ for(const [label,n,color] of rows){const row=el('div','studio-chart-item'),dot=el('span','studio-chart-dot');dot.style.backgroundColor=color;add(row,dot,el('span','',label),el('strong','',count(n)),el('small','',total?(100*n/total).toFixed(1)+'%':'0.0%'));add(legend,row);}
+ add(layout,svg,legend);add(card,layout);return card;
+}
+function premiumEntryPoints(){
+ const p=panel('Your command centre','Jump into live payment operations. These tools use your existing authenticated backend.');
+ const grid=el('div','studio-quick-actions');
+ for(const [name,title,desc,view] of [
+  ['chart','Transactions','Review recorded payments','payments'],
+  ['route','Routing','Inspect provider eligibility','operations'],
+  ['shield','Verification','Audit confirmations','verification'],
+  ['code','Developers','API keys and documentation','developers']
+ ]){
+  const b=el('button','studio-quick-action');b.type='button';b.setAttribute('aria-label',title+': '+desc);
+  add(b,premiumIcon(name),add(el('span','studio-quick-action-text'),el('strong','',title),el('small','',desc)));
+  b.addEventListener('click',()=>select(view));add(grid,b);
+ }
+ add(p,grid);return p;
+}
+function premiumAnimate(root){
+ if(!root||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ if(!Element.prototype.animate)return;
+ root.querySelectorAll('.panel-card,.metric').forEach((node,i)=>{
+  node.animate([{opacity:.65,transform:'translateY(9px)'},{opacity:1,transform:'translateY(0)'}],{duration:270,delay:Math.min(i*25,180),easing:'cubic-bezier(.2,.8,.2,1)'});
+ });
+}
+
 function paymentDistribution(summary){
  const entries=[
   ['Confirmed',summary.confirmed,'confirmed'],
@@ -115,7 +177,7 @@ async function restore(){if(!token){leave();return;}try{const data=await api('/m
 async function signout(){try{if(token)await api('/logout','POST',{});}catch{}leave();}
 function select(name){const b=document.querySelector('.nav-item[data-view="'+name+'"]');if(!b||b.hidden)return;current=name;document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('is-active',x===b));$('sidebar').classList.remove('open');$('sidebar-toggle').setAttribute('aria-expanded','false');void render(name);}
 async function render(name,quiet=false){if(!user)return;const version=++renderVersion;const data=titles[name]||titles.overview;$('page-eyebrow').textContent=data[0];$('page-title').textContent=data[1];$('page-intro').textContent=data[2];$('current-view-name').textContent=name[0].toUpperCase()+name.slice(1);const content=$('view-content');if(!quiet)content.replaceChildren(el('div','loading-panel','Loading your account…'));
-try{let parts;if(name==='overview')parts=await overview();else if(name==='payments')parts=await payments();else if(name==='merchants')parts=await merchants();else if(name==='operations')parts=await operations();else if(name==='verification')parts=await verification();else if(name==='invite-email')parts=await invitationEmail();else if(name==='diagnostics')parts=await diagnostics();else if(name==='cases')parts=await cases();else if(name==='receiving')parts=await receiving();else if(name==='developers')parts=await developers();else if(name==='connections')parts=await connections();else if(name==='policies')parts=await policies();else if(name==='callbacks')parts=await callbacks();else if(name==='billing')parts=await billing();else if(name==='team')parts=await team();else if(name==='settings')parts=await settings();else parts=await security();if(version===renderVersion&&name===current)content.replaceChildren(...parts);}catch(e){if(version===renderVersion&&name===current){const p=panel('This section needs attention','The other workspace sections remain available.');add(p,el('p','notice error',e.message),button('Try again',()=>render(name)));content.replaceChildren(p);}}}
+try{let parts;if(name==='overview')parts=await overview();else if(name==='payments')parts=await payments();else if(name==='merchants')parts=await merchants();else if(name==='operations')parts=await operations();else if(name==='verification')parts=await verification();else if(name==='invite-email')parts=await invitationEmail();else if(name==='diagnostics')parts=await diagnostics();else if(name==='cases')parts=await cases();else if(name==='receiving')parts=await receiving();else if(name==='developers')parts=await developers();else if(name==='connections')parts=await connections();else if(name==='policies')parts=await policies();else if(name==='callbacks')parts=await callbacks();else if(name==='billing')parts=await billing();else if(name==='team')parts=await team();else if(name==='settings')parts=await settings();else parts=await security();if(version===renderVersion&&name===current){content.replaceChildren(...parts);premiumAnimate(content);}}catch(e){if(version===renderVersion&&name===current){const p=panel('This section needs attention','The other workspace sections remain available.');add(p,el('p','notice error',e.message),button('Try again',()=>render(name)));content.replaceChildren(p);}}}
 async function overview(){
  const result=[];
  const scoped=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
@@ -129,6 +191,8 @@ async function overview(){
    ['Failed',count(s.failed),'Failed, expired or cancelled'],
    ['Confirmation rate',String(s.confirmationRate||0)+'%','Share of all recorded payment orders']
   ]));
+  result.unshift(premiumEntryPoints());
+  result.push(premiumChart(s));
   result.push(paymentDistribution(s));
   if(user.platform){
    const header=panel('Platform performance',selectedMerchantId?'Merchant-filtered totals from the authoritative database.':'All registered merchants, platform-wide financial records.');
@@ -590,6 +654,7 @@ async function developers(){
  add(setup,info([['API origin',baseUrl],['Payment creation','POST /api/v1/payments'],['Payment status','GET /api/v1/payments/:id'],
  ['Callback authentication','Verify raw-body HMAC and deduplicate event IDs'],['Public documentation','docs/developers/WEBHOOK_INTEGRATION.md']]));
  const docs=el('a','card-link','Read webhook integration guide on GitHub');
+ const reference=el('a','card-link','Explore interactive API reference');reference.href='/api-reference.html';reference.target='_blank';reference.rel='noopener noreferrer';add(setup,reference);
  docs.href='https://github.com/Tashima-Tarsh/24-7-pay-system/blob/main/docs/developers/WEBHOOK_INTEGRATION.md';
  docs.target='_blank';docs.rel='noopener noreferrer';add(setup,docs);
  if(allowed('credentials.manage')&&allowed('webhooks.manage')){
