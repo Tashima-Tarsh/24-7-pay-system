@@ -33,6 +33,8 @@ try {
   const { startServer } = await import('./apps/payment-api/src/index.js');
   apiServer = await startServer(API_PORT);
   console.log(`[server] Payment API started on port ${apiServer.port || API_PORT}`);
+  // Safe operational fingerprint: backend type only, never credentials.
+  console.log('[server] Payment storage backend:', apiServer.app?.context?.db?.dialect === 'postgres' ? 'postgres' : 'sqlite');
 } catch (err) {
   console.error('[server] Failed to start Payment API in-process:', err);
 }

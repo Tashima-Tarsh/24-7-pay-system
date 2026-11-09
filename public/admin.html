@@ -408,6 +408,12 @@
       'use strict';
 
       let adminToken = null;
+      // Text from merchants and providers is untrusted. Never interpolate it
+      // into executable markup without encoding.
+      function escapeHtml(value) {
+        const table = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+        return String(value ?? '').replace(/[&<>"']/g, char => table[char]);
+      }
 
       // ---- Auth helpers ----
       function getAuthHeaders() {
@@ -454,7 +460,7 @@
           });
           if (res.ok) {
             adminToken = token;
-            localStorage.setItem('admin_token', token);
+            sessionStorage.setItem('admin_token', token);
             loginScreen.classList.add('hide');
             dashboard.classList.remove('hide');
             initDashboard();
@@ -478,7 +484,7 @@
       });
 
       // Check for stored token
-      const storedToken = localStorage.getItem('admin_token');
+      const storedToken = sessionStorage.getItem('admin_token');
       if (storedToken) {
         tokenInput.value = storedToken;
         adminToken = storedToken;
@@ -488,7 +494,7 @@
       // ---- Logout ----
       document.getElementById('logout-btn').addEventListener('click', () => {
         adminToken = null;
-        localStorage.removeItem('admin_token');
+        sessionStorage.removeItem('admin_token');
         dashboard.classList.add('hide');
         loginScreen.classList.remove('hide');
         tokenInput.value = '';
@@ -549,12 +555,15 @@
 
           const row = document.createElement('tr');
           row.innerHTML = `
-            <td class="font-mono text-white">${data.businessName || 'Unknown'}</td>
-            <td class="font-mono text-slate-300">${data.upiId || '—'}</td>
-            <td class="font-mono text-slate-300">${data.payeeName || '—'}</td>
+            <td class="font-mono text-white">${escapeHtml(data.businessName || 'Unknown')}</td>
+            <td class="font-mono text-slate-300">${escapeHtml(data.upiId || '—')}</td>
+            <td class="font-mono text-slate-300">${escapeHtml(data.payeeName || '—')}</td>
             <td><span class="status-badge status-success">ACTIVE</span></td>
-            <td><button class="copy-btn px-2 py-1 bg-white/10 border border-white/10 rounded text-xs" onclick="navigator.clipboard.writeText('${data.upiId || ''}')">Copy VPA</button></td>
+            <td><button class="copy-btn px-2 py-1 bg-white/10 border border-white/10 rounded text-xs" data-action="copy-vpa">Copy VPA</button></td>
           `;
+          row.querySelector('[data-action="copy-vpa"]')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(String(data.upiId || '')).catch(() => {});
+          });
           body.appendChild(row);
         } catch (err) {
           console.error(err);
@@ -582,10 +591,10 @@
                               p.status === 'PENDING' || p.status === 'QUEUED' ? 'status-pending' : 'status-active';
             const row = document.createElement('tr');
             row.innerHTML = `
-              <td class="font-mono text-slate-300">#${p.orderId || '—'}</td>
+              <td class="font-mono text-slate-300">#${escapeHtml(p.orderId || '—')}</td>
               <td class="amount text-white">${p.amountPaise ? (Number(p.amountPaise)/100).toLocaleString('en-IN', {style:'currency',currency:'INR'}) : '₹0.00'}</td>
-              <td class="font-mono text-slate-300">${p.method || '—'}</td>
-              <td><span class="status-badge ${statusClass}">${p.status || '—'}</span></td>
+              <td class="font-mono text-slate-300">${escapeHtml(p.method || '—')}</td>
+              <td><span class="status-badge ${statusClass}">${escapeHtml(p.status || '—')}</span></td>
               <td class="text-slate-400 text-xs">${p.createdAt ? new Date(p.createdAt).toLocaleString() : '—'}</td>
             `;
             body.appendChild(row);
@@ -613,9 +622,9 @@
           tickets.forEach(t => {
             const row = document.createElement('tr');
             row.innerHTML = `
-              <td class="font-mono text-slate-300">#${t.id || '—'}</td>
-              <td class="text-slate-300">${t.merchantId || '—'}</td>
-              <td><span class="status-badge status-pending">${t.status || 'OPEN'}</span></td>
+              <td class="font-mono text-slate-300">#${escapeHtml(t.id || '—')}</td>
+              <td class="text-slate-300">${escapeHtml(t.merchantId || '—')}</td>
+              <td><span class="status-badge status-pending">${escapeHtml(t.status || 'OPEN')}</span></td>
               <td class="text-slate-400 text-xs">${t.createdAt ? new Date(t.createdAt).toLocaleString() : '—'}</td>
               <td><button class="btn btn-outline btn-sm" onclick="alert('Ticket details not available in current API version.')">View</button></td>
             `;
@@ -663,11 +672,11 @@
           upiContent.innerHTML = `
             <div class="flex items-center justify-between">
               <span class="text-sm text-slate-400">Active VPA</span>
-              <span class="font-mono text-sm text-white">${data.account ? data.account.upiId : '—'}</span>
+              <span class="font-mono text-sm text-white">${escapeHtml(data.account ? data.account.upiId : '—')}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-sm text-slate-400">Payee Name</span>
-              <span class="text-sm text-slate-300">${data.account ? data.account.payeeName : '—'}</span>
+              <span class="text-sm text-slate-300">${escapeHtml(data.account ? data.account.payeeName : '—')}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-sm text-slate-400">Merchant Enabled</span>
@@ -686,7 +695,7 @@
           queueContent.innerHTML = `
             <div class="flex items-center justify-between">
               <span class="text-sm text-slate-400">Current Slot</span>
-              <span class="font-mono text-sm text-white">${queueData.currentSlot ? '#' + queueData.currentSlot.orderId : '—'}</span>
+              <span class="font-mono text-sm text-white">${escapeHtml(queueData.currentSlot ? '#' + queueData.currentSlot.orderId : '—')}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-sm text-slate-400">Queued</span>
