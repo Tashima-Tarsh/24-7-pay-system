@@ -145,3 +145,9 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 @media(max-width:850px){.platform-admin-cards{grid-template-columns:1fr}.upi-account-row{flex-wrap:wrap}.upi-account-control{width:100%;justify-content:space-between}}
 @media(max-width:600px){.upi-create-form{grid-template-columns:1fr}.upi-create-form button{grid-column:1;width:100%}.upi-section-heading h2{font-size:30px}.upi-account-row{padding:15px}}
 @media(prefers-reduced-motion:reduce){.upi-account-row,.upi-success{transition:none!important}}
+
+.header-switch-account{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 13px;border:1px solid #d8e2d7;border-radius:999px;background:#fff;color:#376447;font-size:11px;font-weight:700;white-space:nowrap;transition:background .2s ease}
+.header-switch-account:hover{background:#eaf4e6}
+.admin-switch-button{margin-top:21px}
+@media(max-width:850px){.header-switch-account{min-height:40px;padding:8px 11px}}
+@media(prefers-reduced-motion:reduce){.header-switch-account{transition:none!important}}
