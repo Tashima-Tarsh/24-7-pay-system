@@ -214,3 +214,10 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 .payment-readiness-issue button{white-space:nowrap;align-self:center}
 .payment-readiness :focus-visible{outline:3px solid #91d8a8;outline-offset:2px}
 @media(max-width:600px){.payment-readiness{padding:14px}.payment-readiness-issue{flex-direction:row}.payment-readiness-issue button{width:100%;min-height:40px}}
+
+/* Compact studio surfaces, with text that stays inside its container. */
+.studio-content,.studio-content>*{min-width:0}
+.payment-readiness{max-width:100%;padding:14px 16px;overflow-wrap:anywhere}
+.payment-readiness-issue{min-width:0}
+.payment-readiness-issue span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:600px){.payment-readiness{padding:13px}.payment-readiness-header{flex-wrap:wrap}.hero-copy{padding:clamp(22px,5vw,32px)}}
