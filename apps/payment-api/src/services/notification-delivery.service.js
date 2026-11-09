@@ -47,7 +47,7 @@ export class NotificationDeliveryService {
   enqueue(receipt,{email,phone}={}) {
     // CustomerRepository stores Indian mobiles without +91 and may synthesize a login-only email.
     if(typeof phone==='string'&&/^[6-9]\d{9}$/.test(phone))phone='+91'+phone;
-    if(typeof email==='string'&&/@customer\.youpi\.local$/i.test(email))email=undefined;
+    if(typeof email==='string'&&/@customer\.(?:youpi\.local|247pay\.invalid|sanbookpay\.com)$/i.test(email))email=undefined;
     const c=this.config,states={};
     const channels=[['push',Boolean(c.topic),true,{message:'24/7 Pay: a new receipt is available. Sign in to view details.'}],
       ['email',Boolean(c.clientId&&c.clientSecret&&c.refreshToken&&validEmail(c.from)),validEmail(email),{to:email,subject:receipt.emailSubject,html:receipt.emailHtml}],
