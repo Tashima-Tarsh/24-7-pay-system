@@ -327,7 +327,62 @@ async function verification(){
  add(route,button('Provider health',()=>select('operations')),button('Inspect callbacks',()=>select('callbacks')),button('API failures',()=>select('diagnostics')));
  return[c,explain,rows,route];
 }
-async function operations(){const r=await api('/operations/health'+(user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'')),c=r.callbacks||{};const metrics=stats([['Delivered callbacks',count(c.successful),'Delivery records'],['Pending callbacks',count(c.pending),'Awaiting delivery'],['Failed callbacks',count(c.failed),'Need attention'],['Providers',count(r.providers?.length),'Configured records']]);const providers=panel('Provider connections','Live backend configuration status');add(providers,table(['Name','Status','Last check'],r.providers||[],p=>[p.provider_name,status(p.status),date(p.last_tested_at)]));const observers=panel('Additional observations','Notifications are supplementary, not proof of bank credit');add(observers,table(['Device','Active','Last heartbeat'],r.observers||[],o=>[o.device_name||o.id,status(o.is_active?'ACTIVE':'INACTIVE'),date(o.last_heartbeat_at)]));return[metrics,providers,observers];}
+async function operations(){
+ const scope=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
+ const [healthResult,connectionsResult,rulesResult]=await Promise.allSettled([
+  api('/operations/health'+scope),
+  api('/connections'+scope),
+  api('/rules')
+ ]);
+ if(healthResult.status!=='fulfilled')throw healthResult.reason;
+ const r=healthResult.value,c=r.callbacks||{},result=[];
+ const metrics=stats([
+  ['Delivered callbacks',count(c.successful),'HTTP-acknowledged delivery records'],
+  ['Pending callbacks',count(c.pending),'Awaiting delivery'],
+  ['Failed callbacks',count(c.failed),'Delivery records needing attention'],
+  ['Providers',count(r.providers?.length),'Configured provider records']
+ ]);
+ result.push(metrics);
+ const providerPanel=panel('Provider health','Current backend provider status and diagnostic history. A connection test is not a successful payment.');
+ add(providerPanel,table(['Provider','Status','Last check'],r.providers||[],p=>[p.provider_name||p.provider||'—',status(p.status),date(p.last_tested_at)]));
+ add(providerPanel,button('Manage connections',()=>select('connections')));
+ result.push(providerPanel);
+ const routing=panel('Routing control plane','Read-only routing inventory based on approved backend connections and payment policy rules.');
+ if(connectionsResult.status==='fulfilled'){
+  const all=connectionsResult.value.connections||[];
+  add(routing,stats([
+   ['Connections',count(all.length),'In selected business scope'],
+   ['Eligible routes',count(all.filter(x=>x.approved&&x.enabled).length),'Approved and enabled; bank readiness not implied'],
+   ['Disabled routes',count(all.filter(x=>!x.enabled).length),'Unavailable for new payment routing']
+  ]));
+  const board=el('div','premium-route-grid');
+  for(const row of all){
+   const tile=el('div','premium-route-tile');
+   const head=el('div','premium-route-head');
+   add(head,el('strong','',row.provider||'Unnamed provider'),status(row.approved&&row.enabled?'ENABLED':row.approved?'DISABLED':'UNAPPROVED'));
+   add(tile,head,info([['Environment',row.environment||'—'],['Merchant',row.merchantId||'—'],['Last diagnostics',row.status||'Not tested']]));
+   add(board,tile);
+  }
+  if(!all.length)add(board,notice('No payment connections are configured for this scope.'));
+  add(routing,board);
+ }else add(routing,notice('Connection inventory unavailable: '+connectionsResult.reason.message,true));
+ if(rulesResult.status==='fulfilled'){
+  const raw=rulesResult.value.rules||[];
+  const all=user.platform&&selectedMerchantId?raw.filter(x=>x.global||x.merchantId===selectedMerchantId):raw;
+  add(routing,info([
+   ['Active block rules',count(all.filter(x=>x.active&&x.ruleType==='BLOCK').length)],
+   ['Active watch rules',count(all.filter(x=>x.active&&x.ruleType==='WATCH').length)],
+   ['Active allow rules',count(all.filter(x=>x.active&&x.ruleType==='ALLOW').length)]
+  ]));
+ }else add(routing,notice('Rules could not be loaded: '+rulesResult.reason.message,true));
+ add(routing,add(el('div','toolbar'),button('Manage routes',()=>select('connections')),button('Manage policies',()=>select('policies'))),
+  notice('Eligibility is a configuration indicator only. Routing simulations and authorization probabilities are not available in this view.'));
+ result.push(routing);
+ const observers=panel('Additional observations','Supplementary signals are not proof of bank credit.');
+ add(observers,table(['Device','Active','Last heartbeat'],r.observers||[],o=>[o.device_name||o.id,status(o.is_active?'ACTIVE':'INACTIVE'),date(o.last_heartbeat_at)]));
+ result.push(observers);
+ return result;
+}
 async function diagnostics(){
  const scoped=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
  const [data,healthData]=await Promise.all([api('/dashboard/api-failures'+scoped),api('/operations/health'+scoped)]);
@@ -376,6 +431,23 @@ async function cases(){
  const scoped=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
  const data=await api('/cases?limit=50'+(scoped?'&merchantId='+encodeURIComponent(selectedMerchantId):'')),
   c=panel('Support cases','Case history, evidence and status are saved by the backend.');
+ const rows=data.items||[];
+ const reconciliation=rows.filter(x=>String(x.kind||'').toUpperCase()==='RECONCILIATION');
+ const disputes=rows.filter(x=>String(x.kind||'').toUpperCase()==='DISPUTE');
+ const unresolved=rows.filter(x=>!['CLOSED','RESOLVED'].includes(String(x.status||'').toUpperCase()));
+ const summary=panel('Financial investigations','Case counts from the latest 50 backend records. These are workflow cases, not bank-statement reconciliation results.');
+ add(summary,stats([
+  ['Open investigations',count(unresolved.length),'Unresolved cases in the loaded dataset'],
+  ['Reconciliation cases',count(reconciliation.length),'Ledger or bank matching investigations'],
+  ['Dispute cases',count(disputes.length),'Customer or merchant disputes']
+ ]));
+ const filterbar=el('div','premium-payment-toolbar');
+ const category=el('select');category.setAttribute('aria-label','Filter case category');
+ for(const [label,code] of [['All categories',''],['Reconciliation','RECONCILIATION'],['Disputes','DISPUTE'],['Support','SUPPORT']])category.add(new Option(label,code));
+ const state=el('select');state.setAttribute('aria-label','Filter case state');
+ for(const [label,code] of [['All states',''],['Unresolved','unresolved'],['Resolved or closed','resolved']])state.add(new Option(label,code));
+ const counter=el('span','premium-result-count');counter.setAttribute('aria-live','polite');
+ add(filterbar,category,state,counter);
  const transitions={OPEN:['INVESTIGATING','WAITING','RESOLVED'],INVESTIGATING:['WAITING','RESOLVED'],WAITING:['INVESTIGATING','RESOLVED'],RESOLVED:['INVESTIGATING','CLOSED'],CLOSED:[]};
  async function openCase(item){
   try{
@@ -403,9 +475,22 @@ async function cases(){
    detail('Case details',wrapper);
   }catch(e){detail('Unable to load case',notice(e.message,true));}
  }
- add(c,table(['Subject','Merchant','Category','Status','Updated'],data.items||[],
-  x=>[x.title,x.merchant_id||'Platform',x.kind,status(x.status),date(x.updated_at)],openCase));
- const result=[c];
+ const area=el('div');
+ const paint=()=>{
+  const visible=rows.filter(x=>{
+   if(category.value&&String(x.kind||'').toUpperCase()!==category.value)return false;
+   const finished=['RESOLVED','CLOSED'].includes(String(x.status||'').toUpperCase());
+   if(state.value==='unresolved'&&finished)return false;
+   if(state.value==='resolved'&&!finished)return false;
+   return true;
+  });
+  counter.textContent=count(visible.length)+' of '+count(rows.length)+' loaded cases';
+  area.replaceChildren(table(['Subject','Merchant','Category','Status','Updated'],visible,
+   x=>[x.title,x.merchant_id||'Platform',x.kind,status(x.status),date(x.updated_at)],openCase));
+ };
+ category.addEventListener('change',paint);state.addEventListener('change',paint);paint();
+ add(c,filterbar,area,notice('Filters apply to the most recent 50 cases. Settlement verification requires authoritative bank or PSP records.'));
+ const result=[summary,c];
  if(allowed('operations.write')&&(!user.platform||selectedMerchantId)){
   const formCard=panel('Open a support case','Document a payment, dispute, reconciliation or operational problem.');
   const form=el('form','form-grid'),kind=el('select'),kindLabel=el('label'),
