@@ -12,6 +12,16 @@ export async function get<T>(route:string,signal?:AbortSignal):Promise<T>{
  if(!response.ok)throw new Error((body&&typeof body==='object'&&'message'in body?String(body.message):'Unable to load the selected workspace data')+' ('+response.status+')');
  return body as T;
 }
+export type PaymentReadiness={
+ ready:boolean;
+ issues:Array<{code:string;message:string;action:'ADD_RECEIVING_UPI'|'MERCHANT_ONBOARDING'|'UPI_CHANNEL_SETTINGS'|string}>;
+ account:{upiId:string;payeeName:string}|null;
+ merchantStatus:string;
+ maxAmountPaise:number;
+};
+export function getPaymentReadiness(signal?:AbortSignal):Promise<PaymentReadiness>{
+ return get<PaymentReadiness>('/payment-readiness',signal);
+}
 export type PaymentLinkResponse={orderId?:string;amount?:number|string;status?:string;checkoutUrl?:string};
 export type PaymentLinkRequest={orderId:string;amount:string;currency:'INR'};
 export async function createPaymentLink(input:PaymentLinkRequest,idempotencyKey:string):Promise<PaymentLinkResponse>{
