@@ -56,7 +56,7 @@ export function MerchantUpiAccounts({canManage,isPlatform,onAccountsChanged}:Pro
   }catch(err){setError(err instanceof Error?err.message:'Unable to change UPI account status.');}
   finally{setBusy('');}
  }
- if(isPlatform)return <Card><CardTitle>Merchant receiving accounts</CardTitle><p className="upi-empty-info">Platform administrators cannot attach personal UPI IDs to merchant accounts from this workspace. Use the platform administration console for merchant oversight.</p><a href="/platform" className="aside-footer-link">Open platform administration <ArrowSquareOut size={16}/></a></Card>;
+ if(isPlatform)return <Card><CardTitle>Merchant receiving accounts</CardTitle><p className="upi-empty-info">Platform administrators cannot attach personal UPI IDs to merchant accounts from this workspace. View your merchant network using the Merchants section.</p></Card>;
  if(!canManage)return <Card><CardTitle>Receiving UPI account access</CardTitle><p className="upi-empty-info"><LockKey size={19}/> Your assigned merchant role does not include <code>connections.manage</code>. A merchant OWNER or ADMIN can configure receiving UPI accounts. Payment creation separately requires <code>payments.create</code>; only an authorized owner/admin can change role permissions.</p></Card>;
  return <div className="merchant-upi-page">
   <motion.div initial={reduced?false:{opacity:0,y:9}} animate={{opacity:1,y:0}}>
