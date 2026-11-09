@@ -106,7 +106,9 @@ export function registerPlatformPayments(server,ctx,identity){
    // Reconcile only legacy onboarding states once the existing merchant OWNER
    // is active and email-verified; disciplinary states remain blocked.
    const state=activateEligibleMerchant(db,mid,{audit:details=>identity.audit(req,'MERCHANT_ONBOARDING_AUTO_COMPLETED',mid,details)});
-   if(state.active)return;
+   // Preserve the original legacy merchant repository flow when the newer
+   // pp_merchants onboarding record does not exist. It cannot be auto-created.
+   if(state.active||state.reason==='MERCHANT_NOT_FOUND')return;
    if(state.reason==='OWNER_EMAIL_UNVERIFIED')throw error(403,'Verify the merchant owner email address to start receiving payments.','MERCHANT_EMAIL_VERIFICATION_REQUIRED');
    if(state.reason==='PROFILE_INCOMPLETE'||state.reason==='INVALID_PROFILE')throw error(403,'Complete your merchant business profile before creating new payments.','MERCHANT_PROFILE_INCOMPLETE');
    throw error(403,'This merchant is not active for new payments. Contact support if the merchant is under review or suspended.','MERCHANT_NOT_ACTIVE');
