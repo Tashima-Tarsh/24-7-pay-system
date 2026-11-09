@@ -288,3 +288,5 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 @media(max-width:960px){.operations-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:800px){.studio-glass-header{position:static}.studio-main{width:100%;min-width:0}.studio-content{min-width:0}.sidebar-tab{max-width:none}.operations-grid .operations-wide~.operations-wide{grid-column:auto}}
 @media(prefers-reduced-motion:reduce){.premium-control,.sidebar-tab{transition:none!important}}
+
+.trend-card{min-width:0}.trend-chart{min-width:0;overflow:hidden;margin-top:8px}.trend-chart svg{display:block;width:100%;height:auto;max-height:285px}
