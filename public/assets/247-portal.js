@@ -219,12 +219,142 @@ async function diagnostics(){
 async function cases(){const d=await api('/cases?limit=50'),c=panel('Support cases','Select a case to see its history');add(c,table(['Subject','Category','Status','Updated'],d.items||[],x=>[x.title,x.kind,status(x.status),date(x.updated_at)],async x=>{try{detail('Case details',await api('/cases/'+encodeURIComponent(x.id)));}catch(e){detail('Case',notice(e.message,true));}}));const result=[c];if(!user.platform&&allowed('operations.write')){const p=panel('Ask for help','Tell your team what happened.');const form=el('form','form-grid'),title=field('Subject','text','title',{required:true,maxlength:200}),desc=field('What happened?','textarea','description',{required:true}),submit=el('button','primary-button','Create support case');submit.type='submit';add(form,title.container,desc.container,add(el('div','form-actions'),submit));form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{await api('/cases','POST',{kind:'SUPPORT',merchantId:user.merchantId,title:title.control.value,description:desc.control.value});void render('cases');}catch(err){detail('Unable to open case',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);result.unshift(p);}return result;}
 function merchantSelectionCard(){const card=panel('Choose a merchant','Select a business at the top of the workspace to access its settings.');add(card,notice('This does not impersonate a merchant. Access controls remain enforced by the server.'));return card;}
 async function receiving(){if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];const d=await api('/receiving-accounts'),c=panel('Receiving accounts','Only accounts belonging to this business are shown.');add(c,table(['Payee','UPI ID','Status','Change'],d.accounts||[],a=>[a.payeeName||a.payee_name,el('span','mono',a.upiId||a.upi_id),status(a.isActive||a.is_active?'ACTIVE':'INACTIVE'),button(a.isActive||a.is_active?'Disable':'Enable',async()=>{if(!confirm('Update this receiving account?'))return;try{await api('/receiving-accounts/'+encodeURIComponent(a.id)+'/state','POST',{active:!(a.isActive||a.is_active)});void render('receiving');}catch(err){detail('Account update failed',notice(err.message,true));}})]));const p=panel('Add a receiving account','New accounts start inactive until you choose to enable them.'),form=el('form','form-grid'),vpa=field('UPI ID','text','upiId',{required:true,maxlength:120,placeholder:'merchant@bank'}),name=field('Payee name','text','payeeName',{required:true,maxlength:150}),submit=el('button','primary-button','Add account');submit.type='submit';add(form,vpa.container,name.container,add(el('div','form-actions'),submit));form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{await api('/receiving-accounts','POST',{upiId:vpa.control.value,payeeName:name.control.value});void render('receiving');}catch(err){detail('Account not added',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);return[c,p];}
-async function developers(){if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];const settled=await Promise.allSettled([api('/integration-readiness'),api('/api-keys'),api('/webhook-deliveries')]);const p=panel('Integration readiness','Your backend checks whether the merchant configuration is complete.');if(settled[0].status==='fulfilled'){const d=settled[0].value;add(p,info([['Ready to configure',d.configurationReady?'Yes':'Not yet'],['Status',d.message||d.reason||'Review your account settings']]));}else add(p,notice(settled[0].reason.message,true));const k=panel('Your API keys','Existing secret values are never shown.');if(settled[1].status==='fulfilled')add(k,table(['Label','Environment','Scopes','State'],settled[1].value.keys||[],x=>[x.label,x.environment,(x.scopes||[]).join(', '),status(x.revokedAt?'REVOKED':'ACTIVE')]));else add(k,notice(settled[1].reason.message,true));const w=panel('Callback deliveries','See if an event reached your application.');if(settled[2].status==='fulfilled')add(w,table(['Event','State','Attempts','Created'],settled[2].value.deliveries||[],x=>[x.event_type||x.eventType,status(x.is_successful?'DELIVERED':'PENDING'),count(x.attempt_count),date(x.created_at)]));else add(w,notice(settled[2].reason.message,true));return[p,k,w];}
+async function developers(){
+ if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
+ const [keysResult,readinessResult,usageResult]=await Promise.allSettled([
+  api('/api-keys'),api('/integration-readiness'),api('/api-usage')
+ ]);
+ const result=[],readiness=panel('Integration readiness','Status reported by the backend for the currently selected business.');
+ if(readinessResult.status==='fulfilled'){
+  const r=readinessResult.value;
+  add(readiness,info([['Configuration ready',r.configurationReady?'Yes':'Not yet'],['Reason',r.message||r.reason||'Review the required settings']]));
+ }else add(readiness,notice(readinessResult.reason.message,true));
+ result.push(readiness);
+ const keys=panel('Merchant API credentials','Existing secret values are never retrievable. You can revoke or rotate credentials securely.');
+ if(keysResult.status==='fulfilled'){
+  const data=keysResult.value;
+  add(keys,table(['Name','Environment','Scopes','Last used','Status','Action'],data.keys||[],k=>[
+    k.label,k.environment,(k.scopes||[]).join(', '),date(k.lastUsedAt),
+    status(k.revokedAt?'REVOKED':'ACTIVE'),
+    k.revokedAt?'Revoked':button('Revoke',async()=>{
+      if(!confirm('Revoke API access for this credential immediately?'))return;
+      try{await api('/api-keys/'+encodeURIComponent(k.id)+'/revoke','POST',{});
+       detail('API key revoked',notice('The key is no longer accepted for future requests.'));void render('developers');
+      }catch(e){detail('Unable to revoke key',notice(e.message,true));}
+    })
+  ]));
+  const form=el('form','form-grid'),
+   label=field('Credential label','text','keyLabel',{required:true,maxlength:80}),
+   env=el('select'),envLabel=el('label'),scopesWrap=el('div','scope-options');
+  add(envLabel,el('span','','Environment'),env);env.name='environment';
+  for(const v of ['SANDBOX','PRODUCTION'])env.add(new Option(v==='SANDBOX'?'Sandbox':'Production',v));
+  const scopeTitle=el('label','','Allowed API scopes');
+  add(scopesWrap,scopeTitle);
+  for(const name of data.supportedScopes||[]){
+   const labelNode=el('label','scope-option'),input=el('input');
+   input.type='checkbox';input.name='apiScope';input.value=name;
+   if(name==='payments.read'||name==='transactions.read')input.checked=true;
+   add(labelNode,input,el('span','',name));add(scopesWrap,labelNode);
+  }
+  const submit=el('button','primary-button','Issue new API key');submit.type='submit';
+  const hints=notice('Secrets are displayed only once after creation. Store them in a private secrets manager, never in frontend JavaScript.');
+  add(form,label.container,envLabel,scopesWrap,hints,add(el('div','form-actions'),submit));
+  form.addEventListener('submit',async e=>{
+   e.preventDefault();
+   const scopes=Array.from(form.querySelectorAll('input[name="apiScope"]:checked')).map(x=>x.value);
+   if(!scopes.length){detail('Choose API permissions',notice('Select at least one API scope.',true));return;}
+   if(!confirm('Issue a new '+env.value+' API key with the selected permissions?'))return;
+   submit.disabled=true;
+   try{
+    const r=await api('/api-keys','POST',{label:label.control.value,environment:env.value,scopes});
+    const secret=el('code','mono',r.secret),summary=el('div');
+    add(summary,notice('This secret is shown once. Copy it and keep it private.'),
+      info([['Name',r.key?.label],['Environment',r.key?.environment],['Scopes',(r.key?.scopes||[]).join(', ')]]),secret,
+      button('Copy secret',async()=>{try{await navigator.clipboard.writeText(r.secret);}catch{}}));
+    detail('New API key created',summary);void render('developers');
+   }catch(e){detail('Unable to issue key',notice(e.message,true));}
+   finally{submit.disabled=false;}
+  });
+  add(keys,form);
+ }else add(keys,notice(keysResult.reason.message,true));
+ result.push(keys);
+ const usage=panel('API request history','This lists instrumented merchant API-key calls, not every public website request.');
+ if(usageResult.status==='fulfilled'){
+  add(usage,table(['Method','Path','HTTP status','Duration','When'],usageResult.value.requests||[],
+   r=>[r.method,el('span','mono',r.path),status(r.status),String(r.duration_ms)+' ms',date(r.created_at)]));
+ }else add(usage,notice(usageResult.reason.message,true));
+ result.push(usage);
+ return result;
+}
 async function connections(){
- const data=await api('/connections'+(user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'')),c=panel('Payment connections','These are the connections actually configured in your backend.');
- add(c,table(['Provider','Environment','Status','Approved','Enabled'],data.connections||[],r=>[r.provider,r.environment,status(r.status),r.approved?'Yes':'No',r.enabled?'Yes':'No']));
- add(c,notice('Provider readiness depends on approved credentials, active receiving accounts and live provider checks. A connected label alone does not confirm a transfer.'));
- return[c];
+ const scoped=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
+ const data=await api('/connections'+scoped),card=panel('Payment connections','Approved provider routes, their health and last diagnostic results.');
+ const parsedTest=row=>{
+  try{return typeof row.testResult==='string'?JSON.parse(row.testResult):row.testResult||{};}
+  catch{return {};}
+ };
+ const showPolicy=(row,action,payload)=>{
+  const wrapper=el('div'),form=el('form','form-grid'),
+   reason=field('Why are you changing this route?','textarea','routeReason',{required:true,minlength:5,maxlength:500}),
+   submit=el('button','primary-button','Confirm '+action);submit.type='submit';
+  add(wrapper,info([['Provider',row.provider],['Merchant',row.merchantId],['Environment',row.environment],
+    ['Authenticated by test',parsedTest(row).authenticated?'Yes':'Not confirmed']]));
+  add(form,reason.container,notice('Route changes are written to the backend audit log. This does not confirm that money was received.'),add(el('div','form-actions'),submit));add(wrapper,form);
+  form.addEventListener('submit',async e=>{
+   e.preventDefault();submit.disabled=true;
+   try{
+    const updated=await api('/connections/'+encodeURIComponent(row.id)+'/state','POST',{...payload,reason:reason.control.value});
+    detail('Connection updated',info([['Provider',updated.connection?.provider],['Status',updated.connection?.status],['Enabled',updated.connection?.enabled?'Yes':'No']]));
+    void render('connections');
+   }catch(err){detail('Connection update failed',notice(err.message,true));}
+   finally{submit.disabled=false;}
+  });
+  detail(action+' connection',wrapper);
+ };
+ add(card,table(['Merchant','Provider','Environment','Status','Approved','Enabled','Actions'],data.connections||[],r=>{
+  const actions=el('div','toolbar'),test=parsedTest(r);
+  add(actions,button('Test',async()=>{
+    try{
+     const check=await api('/connections/'+encodeURIComponent(r.id)+'/test','POST',{});
+     detail('Provider connection test',info([
+      ['Provider',r.provider],['Environment',r.environment],
+      ['Reachable',check.reachable?'Yes':'No'],['Authenticated',check.authenticated?'Yes':'No'],
+      ['HTTP status',check.httpStatus],['Latency',String(check.latencyMs)+' ms']
+     ]));
+     void render('connections');
+    }catch(err){detail('Connection test failed',notice(err.message,true));}
+  }));
+  if(r.enabled)add(actions,button('Disable',()=>showPolicy(r,'Disable',{enabled:false})));
+  else if(r.approved&&test.authenticated)add(actions,button('Enable',()=>showPolicy(r,'Enable',{enabled:true})));
+  if(user.platform&&!r.approved&&test.authenticated)add(actions,button('Approve',()=>showPolicy(r,'Approve',{enabled:false,approved:true})));
+  return [r.merchantId||user.merchantId,r.provider,r.environment,status(r.status),r.approved?'Yes':'No',r.enabled?'Yes':'No',actions];
+ }));
+ add(card,notice('Testing a connection checks provider authentication. It does not verify a bank credit or authorize automatic settlement.'));
+ const result=[card];
+ if(!user.platform||selectedMerchantId){
+  const newCard=panel('Add provider connection','Only a supported provider with valid credentials can be submitted for review.');
+  const form=el('form','form-grid'),
+   client=field('Provider client ID','text','connectionClient',{required:true,maxlength:300}),
+   secret=field('Provider client secret','password','connectionSecret',{required:true,maxlength:500}),
+   environment=el('select'),label=el('label'),submit=el('button','primary-button','Submit connection for review');
+  environment.add(new Option('Sandbox','SANDBOX'));environment.add(new Option('Production','PRODUCTION'));
+  add(label,el('span','','Environment'),environment);submit.type='submit';
+  add(form,el('p','card-note','Provider: Cashfree (the current backend supported adapter)'),label,client.container,secret.container,
+      notice('Provider credentials stay on the backend and are encrypted. New connections start disabled and unapproved.'),
+      add(el('div','form-actions'),submit));
+  form.addEventListener('submit',async e=>{
+   e.preventDefault();submit.disabled=true;
+   try{
+    const b={provider:'CASHFREE',environment:environment.value,clientId:client.control.value,clientSecret:secret.control.value};
+    if(user.platform)b.merchantId=selectedMerchantId;
+    await api('/connections','POST',b);
+    secret.control.value='';
+    detail('Connection submitted',notice('The connection is awaiting diagnostic testing and approval.'));
+    void render('connections');
+   }catch(err){detail('Connection not created',notice(err.message,true));}finally{submit.disabled=false;}
+  });add(newCard,form);result.push(newCard);
+ }
+ return result;
 }
 async function policies(){
  const data=await api('/rules'),c=panel('Payment rules','An overview of the conditions defined for your merchant or platform.');
