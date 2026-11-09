@@ -1,0 +1,4 @@
+import * as React from 'react';import{cva,type VariantProps}from'class-variance-authority';import{cn}from'../../lib/utils';
+const styles=cva('inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:pointer-events-none disabled:opacity-50',{variants:{variant:{default:'bg-[#183D30] text-white hover:bg-[#285a43]',outline:'border border-[#d8d8ca] bg-white hover:bg-[#f1f3ed]',ghost:'hover:bg-[#e5ebdf] text-[#183d30]'}},defaultVariants:{variant:'default'}});
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>,VariantProps<typeof styles>{}
+export const Button=React.forwardRef<HTMLButtonElement,ButtonProps>(({className,variant,...props},ref)=><button ref={ref} className={cn(styles({variant}),className)} {...props}/>);Button.displayName='Button';
