@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import net from 'node:net';
+import http from 'node:http';
 import {once} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -97,5 +98,69 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     child.kill();
     await Promise.race([closed,pause(4500)]);
     fs.rmSync(folder,{recursive:true,force:true});
+  }
+});
+
+
+test('new customer checkout never shows a stale QR or accepts a browser-reported success',{timeout:45000},async()=>{
+  let state='QUEUED';
+  const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="204" height="204"><rect width="204" height="204" fill="black"/></svg>').toString('base64');
+  const server=http.createServer((req,res)=>{
+    const pathname=new URL(req.url,'http://localhost').pathname;
+    if(pathname==='/api/v1/checkout/e2e-order/events'){
+      res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store'});
+      res.write(': connected\n\n');
+      return;
+    }
+    if(pathname==='/api/v1/checkout/e2e-order/state'){
+      const payable=state==='ACTIVE';
+      res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+      res.end(JSON.stringify({
+        paymentId:'e2e-order',orderId:'ORDER-TEST',merchantName:'Example Merchant',
+        amount:'500.00',currency:'INR',status:state,isTerminal:state==='SUCCESS',
+        payeeVpa:'merchant@upi',payeeName:'Example Merchant',
+        upiUri:payable?'upi://pay?pa=merchant%40upi&pn=Example&am=500.00&cu=INR':null,
+        upiQr:payable?'data:image/svg+xml;base64,'+svg:null,
+        upiDeepLinks:{},timeRemainingSeconds:payable?180:0,
+        upiDetails:state==='SUCCESS'?{utr:'123456789012'}:null
+      }));
+      return;
+    }
+    const assets={
+      '/checkout/e2e-order':['public/checkout-next.html','text/html; charset=utf-8'],
+      '/assets/247-checkout.js':['public/assets/247-checkout.js','text/javascript; charset=utf-8'],
+      '/assets/247-checkout.css':['public/assets/247-checkout.css','text/css; charset=utf-8']
+    };
+    if(assets[pathname]){
+      const [file,mime]=assets[pathname];
+      res.writeHead(200,{'Content-Type':mime});res.end(fs.readFileSync(file));return;
+    }
+    res.writeHead(404);res.end();
+  });
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const base='http://127.0.0.1:'+server.address().port;
+  let browser;
+  try{
+    browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+    const page=await browser.newPage();
+    const visit=async()=>{await page.goto(base+'/checkout/e2e-order',{waitUntil:'domcontentloaded'});await page.waitForSelector('#checkout-content:not([hidden])');};
+    await visit();
+    assert.match(await page.locator('#status-title').textContent(),/being prepared/);
+    assert.equal(await page.locator('#payment-instructions').isVisible(),false,'Queued session must not expose payment instructions');
+    state='ACTIVE';await visit();
+    assert.equal(await page.locator('#payment-instructions').isVisible(),true,'Active session must show payment details');
+    assert.equal(await page.locator('#qr').isVisible(),true,'Active session must display server-supplied QR');
+    assert.equal(await page.getByText("I've Paid").count(),0,'No manual customer success button');
+    state='VERIFICATION_PENDING';await visit();
+    assert.equal(await page.locator('#payment-instructions').isVisible(),false,'Verification must hide stale payable QR');
+    assert.match(await page.locator('#status-title').textContent(),/Checking payment confirmation/);
+    state='SUCCESS';await visit();
+    await page.waitForSelector('#result-panel:not([hidden])');
+    assert.match(await page.locator('#result-title').textContent(),/Payment confirmed/);
+    assert.equal(await page.locator('#payment-instructions').isVisible(),false);
+  }finally{
+    if(browser)await browser.close();
+    server.closeAllConnections();
+    await new Promise(resolve=>server.close(resolve));
   }
 });

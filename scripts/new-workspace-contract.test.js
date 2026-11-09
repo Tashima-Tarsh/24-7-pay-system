@@ -28,3 +28,15 @@ test('portal views are backed by real payment, identity and operations APIs',()=
  assert.match(server,/pathname === '\/merchant'.*pathname === '\/platform'/);
  assert.match(server,/platform\.html/);
 });
+
+test('new checkout is an independent payment-status client without manual completion',()=>{
+ const html=fs.readFileSync('public/checkout-next.html','utf8');
+ const js=fs.readFileSync('public/assets/247-checkout.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(js,{filename:'247-checkout.js'}));
+ assert.match(html,/id="payment-instructions"/);
+ assert.match(html,/id="result-panel"/);
+ assert.match(js,/terminalStates\.has\(status\)/);
+ assert.match(js,/new EventSource/);
+ assert.doesNotMatch(js,/document\.cookie|credentials:\s*['"]include['"]/);
+ assert.doesNotMatch(html,/I've Paid|Submit UTR|Mark as paid/);
+});

@@ -35,6 +35,10 @@ test('unified server.mjs serves public pages and proxies /api/* to the in-proces
    assert.equal((await fetch(base+'/assets/247-portal.js')).status,200,'workspace JS asset must be served');
    assert.equal((await fetch(base+'/assets/247-portal.css')).status,200,'workspace CSS asset must be served');
    assert.equal((await fetch(base+'/checkout/test-order')).status,200,'checkout page must return 200');
+   const modernCheckout=await fetch(base+'/checkout/test-order');
+   assert.match(await modernCheckout.text(),/247-checkout\.js/,'checkout should use the new standalone experience');
+   assert.equal((await fetch(base+'/assets/247-checkout.js')).status,200);
+   assert.equal((await fetch(base+'/assets/247-checkout.css')).status,200);
    const apiRes=await fetch(base+'/api/v1/checkout/nonexistent/state');
    assert.equal(apiRes.status,404,'/api/* must be proxied to the payment API (404 from API for unknown session)');
   }finally{child.kill();await closed;}
