@@ -44,7 +44,7 @@ test('Real checkout link creation enforces merchant permissions, idempotency and
  assert.match(creator,/supported UPI app intents/);
  assert.doesNotMatch(creator,/Mark as paid|I have paid|submitUTR|forceSuccess|settlePayment/i);
  assert.match(api,/x-247-auth-mode/);
- assert.match(app,/tab==='payment-links'/);
+ assert.match(app,/effectiveTab==='payment-links'/);
  assert.match(app,/permissions\?\.includes\('payments\.create'\)/);
 });
 test('Cinematic system has accessible login and reduced-motion controls',()=>{
