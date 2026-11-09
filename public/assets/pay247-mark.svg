@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128" role="img" aria-labelledby="brandTitle brandDesc">
+<title id="brandTitle">24/7 Pay</title><desc id="brandDesc">A copper continuity loop and directional stroke inside a forest-green rounded square.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#264C39"/><stop offset="1" stop-color="#102B20"/>
+  </linearGradient>
+  <linearGradient id="ring" x1="0" y1="1" x2="1" y2="0">
+    <stop offset="0" stop-color="#C78253"/><stop offset=".52" stop-color="#D8A866"/><stop offset="1" stop-color="#F1D59F"/>
+  </linearGradient>
+</defs>
+<rect width="128" height="128" rx="32" fill="url(#bg)"/>
+<path d="M34.5 30.5A44 44 0 1 1 23 83" fill="none" stroke="url(#ring)" stroke-width="10" stroke-linecap="round"/>
+<path d="M35 83L82 36M52 36H82V65" fill="none" stroke="#FFF6DE" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14 103H114" stroke="#F2DCA3" stroke-opacity=".16" stroke-width="1.2"/>
+</svg>
