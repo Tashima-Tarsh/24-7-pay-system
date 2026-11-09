@@ -1016,10 +1016,10 @@ export function registerUpiMirrorRoutes(server, ctx) {
       }
 
       const downloadUrl = process.env.DYNAMO_BRIDGE_APK_URL
-        || 'https://github.com/Tashima-Tarsh/Sanbookpay/releases/latest/download/app-debug.apk';
+        || '';
 
       const checksumUrl = process.env.DYNAMO_BRIDGE_APK_CHECKSUM_URL
-        || 'https://github.com/Tashima-Tarsh/Sanbookpay/releases/latest/download/app-debug.apk.sha256';
+        || '';
 
       // QR code payload: the download URL (merchant scans this on their phone)
       const qrPayload = JSON.stringify({
