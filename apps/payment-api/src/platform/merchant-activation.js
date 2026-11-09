@@ -7,7 +7,7 @@
  */
 export function activateEligibleMerchant(db,merchantId,{audit}={}){
  if(!merchantId)return {active:false,reason:'NO_MERCHANT'};
- const merchant=db.queryOne('SELECT merchant_id,status,profile FROM pp_merchants WHERE merchant_id=?',[merchantId]);
+ const merchant=db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',[merchantId]);
  if(!merchant)return {active:false,reason:'MERCHANT_NOT_FOUND'};
  if(merchant.status==='ACTIVE')return {active:true,changed:false,status:'ACTIVE'};
  const eligible=new Set(['PROFILE_INCOMPLETE','EMAIL_PENDING','APPROVED']);
@@ -15,7 +15,7 @@ export function activateEligibleMerchant(db,merchantId,{audit}={}){
  const owner=db.queryOne("SELECT id,active,email_verified FROM pp_users WHERE merchant_id=? AND role='OWNER' ORDER BY created_at LIMIT 1",[merchantId]);
  if(!owner||!owner.active||!owner.email_verified)return {active:false,changed:false,status:merchant.status,reason:'OWNER_EMAIL_UNVERIFIED'};
  let profile;
- try{profile=JSON.parse(merchant.profile||'{}');}catch{return {active:false,changed:false,status:merchant.status,reason:'INVALID_PROFILE'};}
+ try{const record=db.queryOne('SELECT profile FROM pp_merchants WHERE merchant_id=?',[merchantId]);profile=JSON.parse(record?.profile||'{}');}catch{return {active:false,changed:false,status:merchant.status,reason:'INVALID_PROFILE'};}
  if(!profile||typeof profile!=='object'||!String(profile.businessName||'').trim()||!String(profile.contactName||'').trim()||!/^\+?[0-9]{10,15}$/.test(String(profile.mobile||''))){
   return {active:false,changed:false,status:merchant.status,reason:'PROFILE_INCOMPLETE'};
  }
