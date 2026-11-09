@@ -85,6 +85,17 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.waitForFunction(()=>document.querySelector('#page-title')?.textContent?.includes('Every order'));
     await page.waitForSelector('#view-content .panel-card',{timeout:12000});
     await page.getByRole('heading',{name:'Payment history'}).waitFor({timeout:12000});
+    // Exercise the actual timeline renderer with synthetic browser-only data.
+    const timeline=await page.evaluate(()=>{
+      const events=[{event_type:'SUPPLEMENTARY_OBSERVATION',source:'MAIL',created_at:'2026-11-09T10:00:00Z'},
+        {event_type:'CALLBACK_DELIVERY',is_successful:1,response_status:200,created_at:'2026-11-09T10:00:01Z'}];
+      const element=paymentEventTimeline(events,{status:'PENDING',created_at:'2026-11-09T10:00:00Z'});
+      return {count:element.children.length,text:element.textContent};
+    });
+    assert.equal(timeline.count,2);
+    assert.match(timeline.text,/not payment proof/);
+    assert.match(timeline.text,/HTTP acknowledgement/);
+
     await page.locator('button[data-view="receiving"]').click();
     await page.waitForFunction(()=>document.querySelector('#page-title')?.textContent?.includes('where payments'));
     await page.waitForSelector('#view-content form',{timeout:12000});
@@ -153,6 +164,9 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.getByRole('heading',{name:'Callback deliveries'}).waitFor({timeout:12000});
     await page.locator('button[data-view="settings"]').click();
     await page.getByRole('heading',{name:'Business profile and callback configuration'}).waitFor({timeout:12000});
+    await page.getByRole('heading',{name:'Test webhook endpoint'}).waitFor({timeout:12000});
+    await page.getByText('No webhook destination is configured.').waitFor({timeout:12000});
+
     await page.locator('button[data-view="overview"]').click();
 
     await page.getByRole('heading',{name:'Production readiness'}).waitFor({timeout:12000});

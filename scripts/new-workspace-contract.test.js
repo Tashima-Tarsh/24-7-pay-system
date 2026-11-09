@@ -94,3 +94,21 @@ test('merchant scope helper and payment health UI are reachable from every requi
  assert.match(js,/\/dashboard\/kpis/);
  assert.match(js,/\/transactions\//);
 });
+
+test('payment detail timeline and test webhook UI are bound to actual workspace surfaces',()=>{
+ const js=fs.readFileSync('public/assets/247-portal.js','utf8');
+ const server=fs.readFileSync('apps/payment-api/src/routes/webhooks.routes.js','utf8');
+ assert.match(js,/function paymentEventTimeline\(events,transaction\)/);
+ assert.match(js,/paymentEventTimeline\(r\.timeline,x\)/);
+ assert.match(js,/function webhookTester\(savedUrl\)/);
+ assert.match(js,/api\('\/webhooks\/test','POST',\{\}\)/);
+ assert.match(js,/return\[main,webhookProbe,details\]/);
+ assert.match(js,/return\[c,webhookTester\(null\)\]/);
+ assert.match(server,/event:'WEBHOOK_TEST'/);
+ assert.match(server,/X-Gateway-Signature/);
+ assert.match(server,/fetchPublic/);
+ assert.doesNotMatch(server,/event:'payment\.succeeded'|utr:'SBI/);
+ const standalone=fs.readFileSync('apps/merchant-console/src/components/PaymentTimeline.tsx','utf8');
+ assert.match(standalone,/export function PaymentTimeline/);
+ assert.match(fs.readFileSync('apps/merchant-console/src/pages/WebhooksPage.tsx','utf8'),/export function WebhookTester/);
+});

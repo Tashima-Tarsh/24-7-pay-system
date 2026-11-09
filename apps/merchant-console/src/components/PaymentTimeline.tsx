@@ -25,7 +25,7 @@ const STATUS_CONFIG = {
   PENDING: { icon: Clock, color: 'text-slate-300', bg: 'bg-slate-900', border: 'border-slate-600' }
 } as const;
 
-function maskedMetadata(key: string, value: PaymentTimelineEvent['metadata'][string]) {
+function maskedMetadata(key: string, value: NonNullable<PaymentTimelineEvent['metadata']>[string]) {
   if (value === undefined || value === null) return '—';
   const string = String(value);
   if (/bank.?reference|utr/i.test(key)) return string.length > 4 ? '••••' + string.slice(-4) : '••••';
