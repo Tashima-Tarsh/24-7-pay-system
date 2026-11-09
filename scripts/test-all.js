@@ -65,6 +65,7 @@ const testFiles = [
   'apps/payment-api/src/__tests__/callback-verification-e2e.test.js',
   'apps/payment-api/src/__tests__/production-hardening.test.js',
   'apps/payment-api/src/__tests__/platform-identity.test.js',
+  'apps/payment-api/src/__tests__/merchant-activation.test.js',
   'apps/payment-api/src/__tests__/platform-account-separation.test.js',
   'apps/payment-api/src/__tests__/platform-operations.test.js',
   'apps/payment-api/src/__tests__/platform-payments.test.js',
