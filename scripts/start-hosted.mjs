@@ -37,68 +37,55 @@ export async function startCheckoutServer(port = null, options = {}) {
   const finalPort = port || Number(process.env.CHECKOUT_PORTAL_PORT || 6002);
   const bindHost = process.env.YOUPI_BIND_HOST || '127.0.0.1';
   const checkoutAppDir = path.join(root, 'apps', 'checkout-portal');
+  const checkoutDistDir = path.join(checkoutAppDir, 'dist');
 
-  try {
-    const createNextServer = (await import('next')).default;
-    const app = createNextServer({
-      dev: false,
-      dir: checkoutAppDir,
-      conf: { distDir: '.next' },
-      quiet: false,
-      customServer: false,
-    });
-    await app.prepare();
-    const handler = app.getRequestHandler();
-    const server = http.createServer((req, res) => {
-      const url = new URL(req.url, 'http://localhost');
-      const pathname = url.pathname;
-      if (pathname.startsWith('/_next/static/')) {
-        const filePath = path.join(checkoutAppDir, '.next', pathname.slice('/_next'.length));
-        fs.promises.access(filePath).then(() => {
-          const ext = path.extname(filePath).toLowerCase();
-          const type = { '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2' }[ext] || 'application/octet-stream';
-          res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable' });
-          fs.createReadStream(filePath).pipe(res);
-        }).catch(() => {
-          res.writeHead(404); res.end('Not Found');
-        });
-        return;
-      }
-      handler(req, res).catch(err => {
-        if (!res.headersSent) { res.writeHead(500); res.end('Server Error'); }
-        console.error('[Checkout Portal] handler error:', err.message);
+  const assetTypes = {
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.json': 'application/json',
+    '.ico': 'image/x-icon',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.eot': 'application/vnd.ms-fontobject',
+  };
+
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://localhost');
+    const pathname = url.pathname;
+
+    if (pathname.startsWith('/assets/') || pathname.startsWith('/_next/')) {
+      const filePath = path.join(checkoutDistDir, pathname);
+      fs.promises.access(filePath).then(() => {
+        const ext = path.extname(filePath).toLowerCase();
+        const type = assetTypes[ext] || 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable' });
+        fs.createReadStream(filePath).pipe(res);
+      }).catch(() => {
+        res.writeHead(404); res.end('Not Found');
       });
+      return;
+    }
+
+    const indexPath = path.join(checkoutDistDir, 'index.html');
+    fs.promises.access(indexPath).then(() => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      fs.createReadStream(indexPath).pipe(res);
+    }).catch(() => {
+      res.writeHead(404); res.end('Checkout portal not built. Run: npm run build --workspace=checkout-portal');
     });
-    return new Promise((resolve) => {
-      server.listen(finalPort, bindHost, () => {
-        console.log('[Checkout Portal] Next.js server listening on port ' + finalPort);
-        resolve({ port: finalPort, close: () => new Promise((cb) => server.close(cb)) });
-      });
+  });
+
+  return new Promise((resolve) => {
+    server.listen(finalPort, bindHost, () => {
+      console.log('[Checkout Portal] Vite static server listening on port ' + finalPort);
+      resolve({ port: finalPort, close: () => new Promise((cb) => server.close(cb)) });
     });
-  } catch (err) {
-    console.log('[Checkout Portal] Next.js not available, using simple server: ' + err.message);
-    return new Promise((resolve) => {
-      const server = http.createServer((req, res) => {
-        const url = new URL(req.url, 'http://localhost');
-        const pathname = url.pathname;
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        if (pathname === '/' || pathname === '/checkout') {
-          res.writeHead(200);
-          res.end('<h1>24/7 Pay - Checkout</h1><p>Checkout portal is running.</p>');
-        } else if (pathname.startsWith('/qr/')) {
-          res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-          res.end('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="100%" height="100%" fill="%23f0f0f0"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="14" fill="%23666">QR Code</text></svg>');
-        } else {
-          res.writeHead(404);
-          res.end('Not Found');
-        }
-      });
-      server.listen(finalPort, bindHost, () => {
-        console.log('[Checkout Portal] Simple server listening on port ' + finalPort);
-        resolve({ port: finalPort, close: () => new Promise((cb) => server.close(cb)) });
-      });
-    });
-  }
+  });
 }
 
 const gateway = http.createServer((req, res) => {
@@ -115,7 +102,7 @@ const gateway = http.createServer((req, res) => {
     res.end(JSON.stringify({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }));
     return;
   }
-  const target = pathname === '/' ? checkout.port : /^\/(checkout|pay\/|qr\/|youpi\.js|sdk\/|icons\/|_next|login|payments|settings|create-payment)/.test(pathname) ? checkout.port : /^\/(api\/platform\/|api\/v1\/|v1\.0\/|health$)/.test(pathname) ? api.port : admin.port;
+  const target = pathname === '/' ? checkout.port : /^\/(checkout|pay\/|qr\/|youpi\.js|sdk\/|icons\/|assets|_next|login|payments|settings|create-payment)/.test(pathname) ? checkout.port : /^\/(api\/platform\/|api\/v1\/|v1\.0\/|health$)/.test(pathname) ? api.port : admin.port;
   const remote = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
   const forwarded = process.env.RENDER === 'true' ? String(req.headers['x-forwarded-for'] || '').split(',').at(-1).trim() : remote;
   const headers = { ...req.headers, host: `127.0.0.1:${target}`, 'x-forwarded-host': new URL(origin).host, 'x-forwarded-proto': new URL(origin).protocol.slice(0, -1), 'x-gateway-token': getInternalServiceToken(), 'cf-connecting-ip': isIP(forwarded) ? forwarded : remote };

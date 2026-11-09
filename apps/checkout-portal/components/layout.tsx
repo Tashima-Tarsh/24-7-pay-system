@@ -1,6 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { Link, useLocation } from '@tanstack/react-router';
 
 interface NavItem {
   label: string;
@@ -23,7 +22,8 @@ function getNavItemClass(href: string, pathname: string): string {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const location = useLocation();
+  const pathname = location.pathname;
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -36,7 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 px-4 py-4 space-y-1">
           {NAV_ITEMS.map((item) => (
-            <Link key={item.label} href={item.href} className={getNavItemClass(item.href, pathname)}>
+            <Link key={item.label} to={item.href} className={getNavItemClass(item.href, pathname)}>
               {item.icon}
               <span>{item.label}</span>
             </Link>
