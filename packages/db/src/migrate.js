@@ -218,11 +218,12 @@ export function runMigrations(targetDb) {
     feature_flags TEXT DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CONSTRAINT uq_merchant_vpa UNIQUE(merchant_id, LOWER(vpa))
+    CONSTRAINT uq_merchant_vpa UNIQUE(merchant_id, vpa)
   );`); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_upi_connections_merchant ON merchant_upi_connections (merchant_id);"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_upi_connections_state ON merchant_upi_connections (connection_state);"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_upi_connections_vpa ON merchant_upi_connections (LOWER(vpa));"); } catch {}
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_upi_connections_merchant_lower_vpa ON merchant_upi_connections (merchant_id, LOWER(vpa));"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_upi_connections_observer_device ON merchant_upi_connections (observer_device_id);"); } catch {}
 
   try { db.exec(`CREATE TABLE IF NOT EXISTS merchant_observer_devices (
@@ -614,8 +615,28 @@ export function runMigrations(targetDb) {
   try { db.exec("ALTER TABLE payment_orders ADD COLUMN sender_vpa TEXT;"); } catch {}
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_payment_orders_sender_vpa ON payment_orders (sender_vpa);"); } catch {}
 
-  // Phase 4 Deliverable 4: pp_audit table (immutable audit log)
-  // Add columns to existing pp_audit table if they don't exist
+  // Phase 4 Deliverable 4: append-only financial audit log.
+  // Both the API logger and callback fulfillment use textual UUID identifiers.
+  db.exec(`CREATE TABLE IF NOT EXISTS pp_audit (
+    id TEXT PRIMARY KEY,
+    merchant_id TEXT,
+    entity_id TEXT,
+    details TEXT,
+    actor_type TEXT,
+    actor_id TEXT,
+    action TEXT,
+    resource_type TEXT,
+    resource_id TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    device_fingerprint TEXT,
+    request_payload TEXT DEFAULT '{}',
+    response_payload TEXT DEFAULT '{}',
+    outcome TEXT,
+    rejection_reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  // Add columns to an existing pre-revision table if they don't exist.
   try { db.exec("ALTER TABLE pp_audit ADD COLUMN actor_type VARCHAR(20);"); } catch {}
   try { db.exec("ALTER TABLE pp_audit ADD COLUMN actor_id BIGINT;"); } catch {}
   try { db.exec("ALTER TABLE pp_audit ADD COLUMN action VARCHAR(50);"); } catch {}
@@ -629,21 +650,25 @@ export function runMigrations(targetDb) {
   try { db.exec("ALTER TABLE pp_audit ADD COLUMN outcome VARCHAR(20);"); } catch {}
   try { db.exec("ALTER TABLE pp_audit ADD COLUMN rejection_reason VARCHAR(100);"); } catch {}
 
-  // Append-only trigger: prevent DELETE and UPDATE on pp_audit
-  try { db.exec(`
-    CREATE TRIGGER IF NOT EXISTS pp_audit_no_delete
-    BEFORE DELETE ON pp_audit
-    BEGIN
-      SELECT RAISE(ABORT, 'pp_audit is append-only');
-    END;
-  `); } catch {}
-  try { db.exec(`
-    CREATE TRIGGER IF NOT EXISTS pp_audit_no_update
-    BEFORE UPDATE ON pp_audit
-    BEGIN
-      SELECT RAISE(ABORT, 'pp_audit is append-only');
-    END;
-  `); } catch {}
+  // SQLite and PostgreSQL use different trigger syntax.
+  if (db.dialect === 'postgres') {
+    db.exec(`CREATE OR REPLACE FUNCTION pp_audit_block_mutation()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'pp_audit is append-only'; END; $$;`);
+    db.exec('DROP TRIGGER IF EXISTS pp_audit_no_delete ON pp_audit');
+    db.exec('DROP TRIGGER IF EXISTS pp_audit_no_update ON pp_audit');
+    db.exec('CREATE TRIGGER pp_audit_no_delete BEFORE DELETE ON pp_audit FOR EACH ROW EXECUTE FUNCTION pp_audit_block_mutation()');
+    db.exec('CREATE TRIGGER pp_audit_no_update BEFORE UPDATE ON pp_audit FOR EACH ROW EXECUTE FUNCTION pp_audit_block_mutation()');
+  } else {
+    db.exec(`CREATE TRIGGER IF NOT EXISTS pp_audit_no_delete
+      BEFORE DELETE ON pp_audit BEGIN
+        SELECT RAISE(ABORT, 'pp_audit is append-only');
+      END;`);
+    db.exec(`CREATE TRIGGER IF NOT EXISTS pp_audit_no_update
+      BEFORE UPDATE ON pp_audit BEGIN
+        SELECT RAISE(ABORT, 'pp_audit is append-only');
+      END;`);
+  }
 
   // Phase 4 Deliverable 7: Merchant tiering
   try { db.exec(`
@@ -689,7 +714,7 @@ export function runMigrations(targetDb) {
       officer VARCHAR(100) NOT NULL,
       target_type VARCHAR(30) NOT NULL,
       target_id TEXT NOT NULL,
-      report_blob BLOB NOT NULL,
+      report_blob ${db.dialect === 'postgres' ? 'BYTEA' : 'BLOB'} NOT NULL,
       report_key TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       retention_until TEXT NOT NULL

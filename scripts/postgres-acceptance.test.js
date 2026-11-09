@@ -19,6 +19,17 @@ test('Postgres: schema, API collection, queue, bank matching and rollback',{skip
  const db=new PostgresDatabase(process.env.DYNAMO_POSTGRES_TEST_URL);const schema='trial_test_'+crypto.randomBytes(8).toString('hex');let app,server;
  try{
   db.exec(`CREATE SCHEMA ${schema}; SET search_path TO ${schema}, public`);runMigrations(db);
+  // Missing listener, dispute and audit tables used to be silently swallowed by
+  // SQLite-compatible migrations, yielding a misleading green integration test.
+  for(const table of [
+    'merchant_upi_connections','merchant_observer_devices','observer_source_configs',
+    'connection_health_events','upi_mirror_observations','pp_audit','le_reports'
+  ]){
+    const row=db.queryOne('SELECT table_name FROM information_schema.tables WHERE table_schema=? AND table_name=?',[schema,table]);
+    assert.ok(row,'Required PostgreSQL table missing after migrations: '+table);
+  }
+  db.execute('INSERT INTO pp_audit(id,action,created_at) VALUES (?,?,?)',[crypto.randomUUID(),'PG_AUDIT_TEST',new Date().toISOString()]);
+  assert.throws(()=>db.execute("DELETE FROM pp_audit WHERE action='PG_AUDIT_TEST'"),/append-only/);
   assert.throws(()=>db.transaction(()=>{db.execute("INSERT INTO operational_alerts(id,severity,category,title,message) VALUES ('rollback','INFO','TEST','Test','Test')");throw Error('rollback');}),/rollback/);
   assert.equal(db.queryOne("SELECT id FROM operational_alerts WHERE id='rollback'"),null);
   const {createPaymentApp}=await import('../apps/payment-api/src/index.js');app=createPaymentApp(db);server=app.rawServer;await new Promise(r=>server.listen(0,'127.0.0.1',r));

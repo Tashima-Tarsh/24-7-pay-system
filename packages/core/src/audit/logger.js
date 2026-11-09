@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 /**
  * Immutable Audit Log — Phase 4 Deliverable 4: Regulatory Defense.
  *
@@ -37,12 +39,13 @@ export class AuditLogger {
   async log(entry) {
     this.db.execute(`
       INSERT INTO pp_audit (
-        actor_type, actor_id, action, resource_type, resource_id,
+        id, actor_type, actor_id, action, resource_type, resource_id,
         ip_address, user_agent, device_fingerprint,
         request_payload, response_payload, outcome, rejection_reason,
         created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     `, [
+      crypto.randomUUID(),
       entry.actorType,
       entry.actorId,
       entry.action,
