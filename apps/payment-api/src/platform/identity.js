@@ -173,6 +173,14 @@ export function registerPlatformIdentity(server,ctx){
     res.setHeader('Cache-Control','no-store');
     json(res,200,gmailSender.status());
   });
+  route('POST','/gmail/client',async(req,res,body)=>{
+    if(req.platform.role!=='SUPER_ADMIN')fail(403,'Only platform owner may configure Google OAuth');
+    sensitive(req);
+    const result=gmailSender.saveClient({clientId:body.clientId,clientSecret:body.clientSecret});
+    audit(req,'GMAIL_OAUTH_CLIENT_CONFIGURED',req.platform.userId,{clientStored:true});
+    res.setHeader('Cache-Control','no-store');
+    json(res,200,result);
+  });
   route('POST','/gmail/connect',async(req,res)=>{
     if(req.platform.role!=='SUPER_ADMIN')fail(403,'Only platform owner may connect Gmail');
     sensitive(req);
