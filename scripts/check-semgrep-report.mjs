@@ -23,3 +23,11 @@ if(report.errors.length){
 }
 // Findings are uploaded for triage. The scan itself must run successfully;
 // a green build does not imply zero untriaged SAST findings.
+
+if(report.results.length){
+ console.error('[Semgrep] Blocking CI: '+report.results.length+' unreviewed static-analysis findings.');
+ for(const item of report.results.slice(0,15)) {
+   console.error(item.path+':'+item.start?.line+' ['+item.check_id+'] '+String(item.extra?.message||'').slice(0,180));
+ }
+ process.exit(1);
+}
