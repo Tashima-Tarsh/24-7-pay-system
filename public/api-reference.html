@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#F6F1E6"><title>24/7 Pay — API Reference</title>
+<link rel="icon" href="/assets/pay247-mark.svg" type="image/svg+xml">
+<style>
+:root{color-scheme:light}body{margin:0;background:#f6f1e6;color:#183d30;font-family:ui-sans-serif,system-ui,sans-serif}
+.api-navigation{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 22px;background:#183d30;color:white}
+.api-navigation a{color:white;text-decoration:none;font-weight:700}.api-navigation a:focus-visible{outline:3px solid #d9ac63;outline-offset:3px}
+.api-navigation small{font-weight:400;opacity:.85}.api-fallback{padding:18px 22px;background:#fffaf0;border-bottom:1px solid #d8d8ca;font-size:13px}
+.api-fallback a{color:#183d30;text-decoration:underline}
+</style>
+</head><body>
+<header class="api-navigation"><a href="/platform">← 24/7 Pay workspace</a><small>Merchant operations · API reference</small></header>
+<div class="api-fallback">This page documents selected public API contracts. <a href="/api-reference.json">Download the OpenAPI document</a>.
+Never enter real production secrets into a third-party browser or proxy. Payment success requires an authorized source record.</div>
+<div id="scalar-api" aria-label="Interactive API reference"></div>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+<script>
+if(window.Scalar&&typeof window.Scalar.createApiReference==='function'){
+  window.Scalar.createApiReference('#scalar-api',{url:'/api-reference.json',hideClientButton:true,showSidebar:true});
+}else{
+  const info=document.createElement('p');info.textContent='The interactive reference could not load. Use the OpenAPI JSON link above.';info.style.padding='24px';document.getElementById('scalar-api').appendChild(info);
+}
+</script>
+</body></html>
