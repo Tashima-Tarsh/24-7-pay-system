@@ -18,7 +18,7 @@ test('the new portal client parses and has no dependency on old cookie auth',()=
 });
 test('portal views are backed by real payment, identity and operations APIs',()=>{
  const js=fs.readFileSync('public/assets/247-portal.js','utf8');
- for(const route of ['/transactions','/analytics','/merchants','/operations/health','/cases','/receiving-accounts','/integration-readiness','/api-keys','/sessions'])
+ for(const route of ['/transactions','/analytics','/merchants','/operations/health','/cases','/receiving-accounts','/integration-readiness','/api-keys','/sessions','/connections','/rules','/webhook-deliveries','/billing/invoices','/staff','/settings'])
    assert.ok(js.includes(route),'UI does not request route '+route);
  const identity=fs.readFileSync('apps/payment-api/src/platform/identity.js','utf8');
  assert.match(identity,/req\.platformBearer=Boolean\(bearer\)/);
