@@ -189,3 +189,13 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 @media(max-width:800px){.studio-sidebar{padding:15px}.sidebar-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,1fr);grid-template-columns:unset;gap:8px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;padding:0 0 7px}.sidebar-tab{min-height:48px;scroll-snap-align:start;padding:10px 13px;grid-template-columns:20px minmax(0,1fr)}.studio-sidebar .workspace-identity{display:none}.admin-intro{align-items:flex-start}.studio-header{min-height:0}}
 @media(max-width:570px){.saas-kpis{grid-template-columns:1fr}.saas-merchant-form{grid-template-columns:1fr;padding:14px}.saas-form-foot{flex-direction:column;align-items:stretch}.admin-intro{flex-direction:column}.admin-intro>button{align-self:flex-start}.header-actions{justify-content:flex-start}.sidebar-tab{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.sidebar-tab,.header-switch-account{transition:none!important}}
+
+/* Unified one-login account access and staff controls */
+.auth-mode-tabs{display:grid;grid-template-columns:1fr 1.4fr;gap:5px;background:#eff3ec;border:1px solid #e0e7de;padding:5px;border-radius:13px;margin-top:27px}
+.auth-mode-tabs button{min-height:43px;border:0;border-radius:9px;background:transparent;color:#617768;font-size:11px;font-weight:750;transition:background .18s,color .18s;white-space:normal}
+.auth-mode-tabs button.selected{background:white;color:#174432;box-shadow:0 3px 11px #1a3d2611}
+.auth-mode-tabs button:focus-visible{outline:3px solid #acdfac;outline-offset:2px}
+.auth-mode-tabs+.premium-login-form{margin-top:24px}
+.auth-right-panel{overflow-y:auto}
+.saas-merchant-form select{min-height:47px;border:1px solid #d8e3d9;border-radius:12px;padding:11px 13px;background:white;font:inherit;min-width:0}
+@media(prefers-reduced-motion:reduce){.auth-mode-tabs button{transition:none!important}}
