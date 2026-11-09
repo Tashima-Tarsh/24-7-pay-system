@@ -616,7 +616,7 @@ components:
           type: string
         merchantVpa:
           type: string
-          example: sanbookpay@hdfcbank
+          example: merchant@hdfcbank
     CreatePaymentRequest:
       type: object
       required:
