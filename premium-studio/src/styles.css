@@ -221,3 +221,35 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 .payment-readiness-issue{min-width:0}
 .payment-readiness-issue span{min-width:0;overflow-wrap:anywhere}
 @media(max-width:600px){.payment-readiness{padding:13px}.payment-readiness-header{flex-wrap:wrap}.hero-copy{padding:clamp(22px,5vw,32px)}}
+
+/* Mobile workspace: final cascade override after desktop shell declarations. */
+@media (max-width: 800px) {
+  .studio-shell { display: block; width: 100%; min-width: 0; }
+  .studio-sidebar { position: relative; top: auto; width: 100%; height: auto; min-height: 0; padding: 12px 16px 9px; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.15); }
+  .studio-brand { padding: 2px 0 10px; gap: 10px; }
+  .studio-brand .logo-mark { width: 34px; height: 34px; flex-basis: 34px; font-size: 14px; }
+  .studio-brand strong { font-size: 13px; }
+  .studio-brand small { font-size: 10px; }
+  .studio-sidebar .sidebar-label, .studio-sidebar .sidebar-bottom, .studio-sidebar .workspace-identity { display: none; }
+  .studio-sidebar .sidebar-tabs { display: flex; width: 100%; max-width: 100%; min-width: 0; flex-wrap: nowrap; gap: 7px; overflow-x: auto; overflow-y: hidden; grid-template-columns: none; grid-auto-flow: unset; grid-auto-columns: unset; scrollbar-width: thin; overscroll-behavior-x: contain; padding: 0 0 7px; }
+  .studio-sidebar .sidebar-tab { flex: 0 0 auto; display: flex; width: auto; min-width: 112px; min-height: 44px; gap: 8px; padding: 9px 12px; font-size: 12px; white-space: nowrap; border-radius: 10px; }
+  .studio-main { width: 100%; min-width: 0; }
+  .studio-header { width: 100%; min-width: 0; min-height: 0; padding: 23px 18px 20px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
+  .studio-header > div { min-width: 0; }
+  .studio-header h1 { max-width: 100%; font-size: clamp(27px, 7vw, 34px); overflow-wrap: anywhere; }
+  .studio-header p { overflow-wrap: anywhere; }
+  .header-actions { display: flex; width: 100%; min-width: 0; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+  .header-actions > * { min-width: 0; max-width: 100%; }
+  .studio-content { width: 100%; min-width: 0; padding: 16px 14px 32px; }
+  .studio-content .card, .studio-content .stat-card, .studio-content .chart-card, .studio-content .attention-card { min-width: 0; max-width: 100%; }
+  .cinematic-hero, .hero-copy { min-width: 0; max-width: 100%; }
+  .cinematic-hero h2 { font-size: clamp(32px, 9vw, 46px); overflow-wrap: anywhere; }
+  .stats-grid, .primary-grid, .chart-grid, .developer-grid { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+  .studio-content .stat-card { min-height: 116px; padding: 18px 20px; }
+  .table-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+}
+@media (max-width: 380px) {
+  .studio-header { padding-inline: 14px; }
+  .studio-content { padding-inline: 12px; }
+  .studio-sidebar { padding-inline: 12px; }
+}
