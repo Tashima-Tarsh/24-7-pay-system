@@ -45,7 +45,7 @@ test('private owner configuration creates a real SUPER_ADMIN and never re-applie
     assert.equal(db.queryOne('SELECT password_hash FROM pp_users WHERE email=?',[account]).password_hash,firstHash);
     const rotated=provisionPlatformOwner(db,{ownerEmail:account,ownerHash:scryptPassword('other-new-password-2026'),version:'ci-two-time-v2'});
     assert.equal(rotated.status,'updated');
-    assert.equal(db.queryOne('SELECT id FROM pp_sessions WHERE user_id=?',[row.id]),undefined);
+    assert.ok(!db.queryOne('SELECT id FROM pp_sessions WHERE user_id=?',[row.id]));
     assert.equal(verifyPlatformPassword(password,db.queryOne('SELECT password_hash FROM pp_users WHERE email=?',[account]).password_hash),false);
     assert.throws(()=>provisionPlatformOwner(db,{ownerEmail:'owner-invalid@example.test',ownerHash:'plaintext',version:'bad'}),/scrypt/);
   }finally{
