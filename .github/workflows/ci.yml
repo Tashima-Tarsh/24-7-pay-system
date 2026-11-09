@@ -27,10 +27,21 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Run Semgrep SAST
-        uses: returntocorp/semgrep-action@v1
+        run: |
+          docker run --rm -v "${PWD}:/src" -w /src semgrep/semgrep:latest \
+            semgrep scan --config=auto --metrics=off --json \
+            --output=semgrep-results.json \
+            --exclude=node_modules --exclude=output --exclude=docs \
+            --exclude=audit-reports --exclude=assets
+          node scripts/check-semgrep-report.mjs
+
+      - name: Upload Semgrep findings
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          config: auto
-        continue-on-error: true
+          name: semgrep-findings
+          path: semgrep-results.json
+          if-no-files-found: warn
 
       - name: Type check
         run: npm run typecheck
