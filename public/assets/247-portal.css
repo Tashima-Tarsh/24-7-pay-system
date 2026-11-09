@@ -6,3 +6,25 @@
 @media(max-width:760px){.auth-layout{grid-template-columns:1fr}.auth-story{display:none}.auth-mobile-brand{display:block;font:700 23px var(--display);margin-bottom:75px}.auth-form-side{padding:40px 24px;min-height:100svh}.workspace{display:block}.sidebar{position:fixed;left:0;top:0;bottom:0;width:265px;height:100dvh;transform:translateX(-101%);transition:transform .25s}.sidebar.open{transform:translateX(0);box-shadow:0 0 0 999px #020913ba}.mobile-sidebar-button{display:block;background:none;border:0;color:#bcd2e4;font-size:20px}.panel-header{padding:0 18px}.header-right{gap:10px}.connection-status{max-width:125px}.header-right .small-outline{padding:8px}.content-panel main{padding:30px 18px 70px}.page-heading{display:block}.page-heading h1{font-size:30px}.heading-date{display:block;text-align:left;margin-top:15px}.metric-grid,.grid-two,.form-grid{grid-template-columns:1fr}.form-grid label.full,.form-actions{grid-column:auto}.panel-card{padding:19px}.panel-footer{padding:18px;display:block}.panel-footer a{display:block;margin-top:9px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 .scope-panel{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFFDF8;border:1px solid #D3D7C8;border-radius:15px;padding:16px 19px;margin-bottom:22px;box-shadow:0 8px 25px #233A2710}.scope-panel label{font-size:12px;font-weight:700;color:#294A36}.scope-panel select{background:#F8F4EB;border:1px solid #C6CCBC;border-radius:9px;color:#203F2D;min-height:42px;padding:9px;max-width:100%;flex:1;min-width:210px}.scope-panel p{width:100%;color:#617162;font-size:12px;margin:0;line-height:1.5}@media(max-width:760px){.scope-panel{display:block}.scope-panel label{display:block;margin-bottom:8px}.scope-panel select{width:100%}.scope-panel p{margin-top:9px}}
+
+/* Payment event timeline. This matches the live non-React workspace. */
+.payment-timeline{list-style:none;margin:22px 0 8px;padding:0 0 0 29px;border-left:2px solid var(--line2)}
+.payment-timeline-item{position:relative;margin:0 0 19px;padding:0;min-width:0}
+.payment-timeline-dot{position:absolute;top:12px;left:-42px;width:24px;height:24px;display:grid;place-items:center;border:2px solid var(--line2);background:var(--panel);border-radius:50%;font-size:13px;font-weight:800}
+.payment-timeline-item.success .payment-timeline-dot,.payment-timeline-item.delivered .payment-timeline-dot{border-color:#58c5a2;color:#9ef7d3}
+.payment-timeline-item.failed .payment-timeline-dot{border-color:#e78c90;color:#ffd3d6}
+.payment-timeline-item.observed .payment-timeline-dot{border-color:#dbbb77;color:#fff0b4}
+.payment-timeline-item.processing .payment-timeline-dot,.payment-timeline-item.pending .payment-timeline-dot{border-color:#6ba7d7;color:#a7dafa}
+.payment-timeline-card{padding:15px 16px;border-radius:12px;background:var(--panel2);border:1px solid var(--line2);min-width:0}
+.payment-timeline-item.success .payment-timeline-card,.payment-timeline-item.delivered .payment-timeline-card{border-color:#3f806e}
+.payment-timeline-item.failed .payment-timeline-card{border-color:#965363}
+.payment-timeline-item.observed .payment-timeline-card{border-color:#9b7d45}
+.payment-timeline-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:13px;color:var(--text)}
+.payment-timeline-time{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.payment-timeline-description{color:var(--muted);font-size:12px;line-height:1.6;margin:7px 0 0}
+.payment-timeline-meta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:7px 12px;padding-top:12px;margin:12px 0 0;border-top:1px solid var(--line2);font-size:11px;overflow-wrap:anywhere}
+.payment-timeline-meta dt{color:var(--muted);text-transform:capitalize}
+.payment-timeline-meta dd{color:var(--text);margin:0;font-family:monospace}
+.webhook-test-result{margin-top:18px;overflow-wrap:anywhere}
+.webhook-test-result .info-list{width:100%}
+@media(max-width:550px){.payment-timeline-heading{display:grid}.payment-timeline-meta{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}}

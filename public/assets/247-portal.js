@@ -2,7 +2,7 @@ const API='/api/platform/v1',KEY='247pay-new-workspace-session';
 const $=x=>document.getElementById(x);
 let token=sessionStorage.getItem(KEY)||'',user=null,current='overview',renderVersion=0,stream=null,heartbeat=null;
 let selectedMerchantId='',merchantDirectory=[];
-const scopedEndpoints=['/receiving-accounts','/api-keys','/api-usage','/integration-readiness','/webhook-deliveries','/settings'];
+const scopedEndpoints=['/receiving-accounts','/api-keys','/api-usage','/integration-readiness','/webhook-deliveries','/webhooks/test','/settings'];
 function withMerchantScope(path){
  if(!user?.platform)return path;
  const base=path.split('?')[0];
@@ -140,7 +140,62 @@ async function overview(){
 async function payments(){const scope=user.platform&&selectedMerchantId?'&merchantId='+encodeURIComponent(selectedMerchantId):'';
  const d=await api('/transactions?limit=50'+scope),rows=d.items||[],c=panel('Payment history','Select a payment to see its recorded events and delivery history.');const search=el('input');search.type='search';search.placeholder='Search payments';search.setAttribute('aria-label','Search payments');const area=el('div');const paint=()=>area.replaceChildren(table(['Order','Amount','Method','Status','Created'],rows.filter(x=>(String(x.order_id||x.id)+' '+x.status+' '+x.method).toLowerCase().includes(search.value.toLowerCase())),x=>[el('span','mono',x.order_id||x.id),currency(x.amount_paise),x.method,status(x.status),date(x.created_at)],x=>transaction(x.id)));search.addEventListener('input',paint);paint();add(c,add(el('div','toolbar'),search),area);
 const result=[c];if(!user.platform&&allowed('payments.create')){const p=panel('Create a payment request','This uses your real payment configuration, not a demo.');const form=el('form','form-grid'),order=field('Order reference','text','orderId',{required:true,pattern:'[-A-Za-z0-9_]{1,120}',maxlength:120}),amount=field('Amount in rupees','number','amount',{required:true,min:0.01,step:0.01});order.control.value='ORDER-'+Date.now();const submit=el('button','primary-button','Create payment');submit.type='submit';const actions=add(el('div','form-actions'),submit);add(form,order.container,amount.container,actions);form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{const r=await api('/payments','POST',{orderId:order.control.value,amount:amount.control.value,currency:'INR'},{'Idempotency-Key':crypto.randomUUID()});const body=info([['Order',r.orderId],['Amount',r.amount],['Status',r.status]]);if(r.checkoutUrl){const u=new URL(r.checkoutUrl,location.origin);if(u.origin===location.origin)add(body,add(el('p'),(()=>{const a=el('a','card-link','Open customer checkout');a.href=u.pathname;return a;})()));}detail('Payment request',body);void render('payments');}catch(err){detail('Payment not created',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);result.unshift(p);}return result;}
-async function transaction(id){try{const r=await api('/transactions/'+encodeURIComponent(id)),x=r.transaction||{},box=el('div');add(box,info([['Order',x.order_id],['Payment ID',x.id],['Amount',currency(x.amount_paise)],['Method',x.method],['Status',x.status],['Created',date(x.created_at)]]));const c=panel('Order timeline','Recorded events and delivery updates');add(c,table(['Event','When'],r.timeline||[],e=>[e.event_type||e.action||e.outcome,date(e.created_at)]));add(box,c);detail('Payment details',box);}catch(err){detail('Payment details',notice(err.message,true));}}
+function paymentEventTimeline(events,transaction){
+ const list=el('ol','payment-timeline');
+ list.setAttribute('aria-label','Payment history and callback timeline');
+ const allowedKeys=['previous_status','new_status','response_status','attempt_count','source',
+  'attribution_status','actor_type','amount_paise','bank_reference_number'];
+ const items=Array.isArray(events)&&events.length?events:[{event_type:'PAYMENT_RECORDED',new_status:transaction.status,created_at:transaction.created_at}];
+ for(const event of items){
+  const type=String(event.event_type||event.action||'PAYMENT_EVENT').toUpperCase();
+  const isCallback=type==='CALLBACK_DELIVERY';
+  const isObservation=type==='SUPPLEMENTARY_OBSERVATION';
+  const rawStatus=String(event.new_status||event.status||'').toUpperCase();
+  const failed=['FAILED','EXPIRED','CANCELLED','BLOCKED'].includes(rawStatus);
+  const done=['SUCCESS','SUCCEEDED','CONFIRMED'].includes(rawStatus);
+  const variant=isCallback?(event.is_successful?'delivered':'processing'):isObservation?'observed':failed?'failed':done?'success':'pending';
+  const title=isCallback?(event.is_successful?'Callback acknowledged':'Callback delivery attempt'):
+   isObservation?'Supplementary observation (not payment proof)':
+   type.replace(/_/g,' ').toLowerCase().replace(/^./,c=>c.toUpperCase());
+  const stateNote=isCallback?'HTTP acknowledgement is separate from confirmation of funds':
+   isObservation?'A notification or observation cannot independently confirm bank credit':
+   rawStatus?'Recorded state: '+rawStatus.replace(/_/g,' '):'Recorded payment event';
+  const item=el('li','payment-timeline-item '+variant),dot=el('span','payment-timeline-dot',variant==='success'?'✓':variant==='failed'?'×':variant==='delivered'?'↗':variant==='observed'?'!':'•');
+  dot.setAttribute('aria-hidden','true');
+  const head=el('div','payment-timeline-heading'),titleNode=el('strong','',title);
+  const when=el('time','payment-timeline-time',date(event.created_at||event.observed_at||event.ingested_at));
+  if(event.created_at)when.dateTime=event.created_at;
+  add(head,titleNode,when);
+  const detailNode=el('p','payment-timeline-description',stateNote);
+  const metadata=el('dl','payment-timeline-meta');
+  for(const key of allowedKeys){
+   const value=event[key];
+   if(value===null||value===undefined||value==='')continue;
+   let display=String(value);
+   if(key==='bank_reference_number')display=display.length>4?'••••'+display.slice(-4):'••••';
+   if(display.length>160)display=display.slice(0,160)+'…';
+   const label=el('dt','',key.replace(/_/g,' ')),result=el('dd','',display);
+   add(metadata,label,result);
+  }
+  const card=el('div','payment-timeline-card');
+  add(card,head,detailNode);
+  if(metadata.children.length)add(card,metadata);
+  add(item,dot,card);add(list,item);
+ }
+ return list;
+}
+async function transaction(id){
+ try{
+  const r=await api('/transactions/'+encodeURIComponent(id)),x=r.transaction||{},box=el('div');
+  add(box,info([['Order',x.order_id||x.id],['Payment ID',x.id],['Amount',currency(x.amount_paise)],
+    ['Method',x.method],['Recorded status',x.status],['Created',date(x.created_at)]]));
+  const section=panel('Payment event timeline','Stored state changes, supplementary evidence and callback delivery results, shown separately.');
+  add(section,paymentEventTimeline(r.timeline,x),
+    notice('A delivered callback confirms HTTP delivery only. Bank settlement must be reconciled separately.'));
+  add(box,section);
+  detail('Payment details',box);
+ }catch(err){detail('Payment details',notice(err.message,true));}
+}
 async function merchants(){const r=await api('/merchants?limit=50'),c=panel('Merchant directory','Visible only to authorized platform operators.');add(c,table(['Business','Status','Merchant ID','Created'],r.merchants||[],x=>[x.profile?.businessName||x.merchant_id,status(x.status),el('span','mono',x.merchant_id),date(x.created_at)],async x=>{try{detail('Merchant details',await api('/merchants/'+encodeURIComponent(x.merchant_id)));}catch(e){detail('Merchant',notice(e.message,true));}}));add(c,notice('Showing '+count((r.merchants||[]).length)+' of '+count(r.total)+' merchants.'));
  const result=[c];
  if(user.role==='SUPER_ADMIN'){
@@ -526,6 +581,27 @@ async function policies(){
  add(formCard,form);
  return[c,formCard];
 }
+function webhookTester(savedUrl){
+ const p=panel('Test webhook endpoint','Send one signed WEBHOOK_TEST event to the saved destination; no payment is created.');
+ if(savedUrl===null) add(p,notice('Uses the webhook URL saved for this merchant. The test works without sending any money.'));
+ else if(!savedUrl){add(p,notice('No webhook destination is configured. Set your public HTTPS callback URL in Business settings first.'));return p;}
+ else add(p,info([['Saved destination',savedUrl],['Signature format','X-Gateway-Signature: sha256=<HMAC of JSON body>']]));
+ const control=button('Send test payload',async()=>{
+  control.disabled=true;control.textContent='Testing endpoint…';result.replaceChildren(el('p','notice','Waiting for the merchant endpoint (up to five seconds)…'));
+  try{
+   const r=await api('/webhooks/test','POST',{});
+   result.replaceChildren(info([['Connectivity',r.success?'Acknowledged':'Not acknowledged'],
+    ['HTTP status',r.status_code??'No response'],['Round-trip',r.duration_ms+' ms'],
+    ['Diagnostic event ID',r.delivery_id],['Outcome',r.message],
+    ['Response excerpt',r.response_body||'—']]),
+    notice('This is a WEBHOOK_TEST only. No payment success, UTR or bank credit was created.'));
+  }catch(err){result.replaceChildren(notice(err.message,true));}
+  finally{control.disabled=false;control.textContent='Send test payload';}
+ },'primary-button');
+ const result=el('div','webhook-test-result');result.setAttribute('role','status');result.setAttribute('aria-live','polite');
+ add(p,control,result);
+ return p;
+}
 async function callbacks(){
  if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
  const result=await api('/webhook-deliveries');
@@ -552,7 +628,7 @@ async function callbacks(){
  add(c,table(['Event','Source','Attempts','HTTP','Next retry','Status / action'],entries,
   x=>[x.event_type,x.source||'—',count(x.attempt_count),x.response_status||'—',date(x.next_retry_at),renderAction(x)]));
  add(c,notice('Callbacks do not prove bank settlement. Merchants should validate webhook HMAC signatures and deduplicate event IDs.'));
- return[c];
+ return[c,webhookTester(null)];
 }
 async function billing(){
  const selected=user.platform&&selectedMerchantId?'&merchantId='+encodeURIComponent(selectedMerchantId):'';const [invoices,subscriptions]=await Promise.allSettled([api('/billing/invoices?limit=30'+selected),api('/billing/subscriptions?limit=30'+selected)]);
@@ -602,10 +678,11 @@ async function settings(){
   finally{submit.disabled=false;}
  });
  add(main,form);
+ const webhookProbe=webhookTester(data.webhookUrl||'');
  const details=panel('Account ownership','Merchant-scope access is enforced on the backend. Your business cannot access another business’s payment records.');
  add(details,info([['Merchant ID',data.merchantId],['Contact email',data.contactEmail],['Contact phone',data.contactPhone],['Webhook URL',data.webhookUrl||'Not configured']]));
  const link=button('Check callback deliveries',()=>select('callbacks'));add(details,link);
- return[main,details];
+ return[main,webhookProbe,details];
 }
 async function invitationEmail(){
  if(user?.role!=='SUPER_ADMIN')return[panel('Access denied','Only the platform owner can connect an invitation email account.')];
