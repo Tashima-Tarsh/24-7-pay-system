@@ -380,3 +380,12 @@ body[data-pay-surface="workspace"] .premium-switcher-link span:nth-child(2){flex
 body[data-pay-surface="workspace"] .premium-switcher-link small{display:block;margin-top:3px;font-size:10px;font-weight:500;opacity:.74}
 body[data-pay-surface="workspace"] .premium-switcher-link:focus-visible{outline:var(--pay-focus);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){body[data-pay-surface="workspace"] .premium-switcher-link{transition:none!important}body[data-pay-surface="workspace"] .premium-switcher-link:hover{transform:none}}
+
+/* Workspace density and readable text, preserving existing theme and components. */
+body[data-pay-surface="workspace"] .panel-card{min-width:0;max-width:100%;padding:clamp(16px,2vw,24px)}
+body[data-pay-surface="workspace"] .metric{min-width:0;padding:clamp(14px,1.5vw,20px)}
+body[data-pay-surface="workspace"] .metric-value,body[data-pay-surface="workspace"] .card-head h2,body[data-pay-surface="workspace"] .info-item strong{overflow-wrap:anywhere}
+body[data-pay-surface="workspace"] .card-head h2{font-size:clamp(17px,1.6vw,21px);line-height:1.3}
+body[data-pay-surface="workspace"] .card-head p,body[data-pay-surface="workspace"] .card-note{line-height:1.6}
+body[data-pay-surface="workspace"] .grid-two>*{min-width:0}
+@media(max-width:760px){body[data-pay-surface="workspace"] .panel-card{padding:16px}body[data-pay-surface="workspace"] .metric-grid{gap:12px}}
