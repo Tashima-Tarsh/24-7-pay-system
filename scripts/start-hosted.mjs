@@ -36,23 +36,43 @@ servers.push(admin);
 export async function startCheckoutServer(port = null, options = {}) {
   const finalPort = port || Number(process.env.CHECKOUT_PORTAL_PORT || 6002);
   const bindHost = process.env.YOUPI_BIND_HOST || '127.0.0.1';
-  const checkoutDistDir = path.join(root, 'apps', 'checkout-portal', '.next');
+  const checkoutAppDir = path.join(root, 'apps', 'checkout-portal');
 
   try {
-    const { NextServer } = await import('next');
-    const app = NextServer({
+    const createNextServer = (await import('next')).default;
+    const app = createNextServer({
       dev: false,
-      conf: { distDir: checkoutDistDir },
+      dir: checkoutAppDir,
+      conf: { distDir: '.next' },
       quiet: false,
+      customServer: false,
     });
+    await app.prepare();
     const handler = app.getRequestHandler();
-    return app.prepare().then(() => {
-      const server = http.createServer(handler);
-      return new Promise((resolve) => {
-        server.listen(finalPort, bindHost, () => {
-          console.log('[Checkout Portal] Next.js server listening on port ' + finalPort);
-          resolve({ port: finalPort, close: () => new Promise((cb) => server.close(cb)) });
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url, 'http://localhost');
+      const pathname = url.pathname;
+      if (pathname.startsWith('/_next/static/')) {
+        const filePath = path.join(checkoutAppDir, '.next', pathname.slice('/_next'.length));
+        fs.promises.access(filePath).then(() => {
+          const ext = path.extname(filePath).toLowerCase();
+          const type = { '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2' }[ext] || 'application/octet-stream';
+          res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable' });
+          fs.createReadStream(filePath).pipe(res);
+        }).catch(() => {
+          res.writeHead(404); res.end('Not Found');
         });
+        return;
+      }
+      handler(req, res).catch(err => {
+        if (!res.headersSent) { res.writeHead(500); res.end('Server Error'); }
+        console.error('[Checkout Portal] handler error:', err.message);
+      });
+    });
+    return new Promise((resolve) => {
+      server.listen(finalPort, bindHost, () => {
+        console.log('[Checkout Portal] Next.js server listening on port ' + finalPort);
+        resolve({ port: finalPort, close: () => new Promise((cb) => server.close(cb)) });
       });
     });
   } catch (err) {
@@ -95,7 +115,7 @@ const gateway = http.createServer((req, res) => {
     res.end(JSON.stringify({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }));
     return;
   }
-  const target = pathname === '/' ? checkout.port : /^\/(checkout|pay\/|qr\/|youpi\.js|sdk\/|icons\/)/.test(pathname) ? checkout.port : /^\/(api\/platform\/|api\/v1\/|v1\.0\/|health$)/.test(pathname) ? api.port : admin.port;
+  const target = pathname === '/' ? checkout.port : /^\/(checkout|pay\/|qr\/|youpi\.js|sdk\/|icons\/|_next|login|payments|settings|create-payment)/.test(pathname) ? checkout.port : /^\/(api\/platform\/|api\/v1\/|v1\.0\/|health$)/.test(pathname) ? api.port : admin.port;
   const remote = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
   const forwarded = process.env.RENDER === 'true' ? String(req.headers['x-forwarded-for'] || '').split(',').at(-1).trim() : remote;
   const headers = { ...req.headers, host: `127.0.0.1:${target}`, 'x-forwarded-host': new URL(origin).host, 'x-forwarded-proto': new URL(origin).protocol.slice(0, -1), 'x-gateway-token': getInternalServiceToken(), 'cf-connecting-ip': isIP(forwarded) ? forwarded : remote };
