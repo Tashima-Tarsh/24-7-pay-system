@@ -1,8 +1,8 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const rootDir = path.dirname(__filename);
@@ -16,29 +16,26 @@ const API_HOST = '127.0.0.1';
 const dbPath = process.env.SQLITE_DB_PATH || path.join(rootDir, 'data', 'youpi_pg.sqlite');
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-let apiChild = null;
+// Ensure required security environment variables have valid values if unset
+process.env.NODE_ENV ||= 'production';
+process.env.SQLITE_DB_PATH ||= dbPath;
+process.env.YOUPI_BIND_HOST ||= '127.0.0.1';
+process.env.PAYMENT_API_PORT ||= String(API_PORT);
+process.env.ENCRYPTION_MASTER_KEY ||= crypto.randomBytes(32).toString('hex');
+process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
+process.env.ORDER_SIGNING_SECRET ||= crypto.randomBytes(32).toString('hex');
+process.env.INITIAL_ADMIN_EMAIL ||= 'admin@247pay.local';
+process.env.INITIAL_ADMIN_PASSWORD ||= crypto.randomBytes(16).toString('hex');
 
-function spawnApi() {
-  apiChild = spawn(process.execPath, ['apps/payment-api/src/index.js'], {
-    cwd: rootDir,
-    env: {
-      ...process.env,
-      PAYMENT_API_PORT: String(API_PORT),
-      NODE_ENV: process.env.NODE_ENV || 'production',
-      YOUPI_BIND_HOST: '127.0.0.1',
-      SQLITE_DB_PATH: dbPath,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  apiChild.stdout.on('data', (d) => process.stdout.write(`[api] ${d}`));
-  apiChild.stderr.on('data', (d) => process.stderr.write(`[api-err] ${d}`));
-  apiChild.on('close', (code) => {
-    console.error(`[api] exited with code ${code}`);
-    apiChild = null;
-  });
+// Start backend payment API directly in-process
+let apiServer = null;
+try {
+  const { startServer } = await import('./apps/payment-api/src/index.js');
+  apiServer = await startServer(API_PORT);
+  console.log(`[server] Payment API started on port ${apiServer.port || API_PORT}`);
+} catch (err) {
+  console.error('[server] Failed to start Payment API in-process:', err);
 }
-
-spawnApi();
 
 function mimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -135,7 +132,7 @@ const server = http.createServer(async (req, res) => {
   // Health check
   if (route === 'health') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, status: 'UP' }));
+    res.end(JSON.stringify({ ok: true, status: 'UP', apiOnline: Boolean(apiServer) }));
     return;
   }
 
@@ -205,11 +202,14 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] Proxying API routes to http://${API_HOST}:${API_PORT}`);
 });
 
-process.on('SIGTERM', () => {
-  if (apiChild) apiChild.kill('SIGTERM');
-  server.close(() => process.exit(0));
-});
-process.on('SIGINT', () => {
-  if (apiChild) apiChild.kill('SIGINT');
-  server.close(() => process.exit(0));
-});
+const shutdown = async () => {
+  console.log('[server] Shutting down cleanly...');
+  server.close();
+  if (apiServer?.close) {
+    try { await apiServer.close(); } catch {}
+  }
+  process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
