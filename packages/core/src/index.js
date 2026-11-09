@@ -57,3 +57,4 @@ export {
 export { DisputeCaseManager } from './dispute-case-manager.js';
 
 
+export { inspectUpiIntent, validateUpiParameters, evaluateVpaHealth, rankEligibleVpas } from './vpa/intent-reliability.js';
