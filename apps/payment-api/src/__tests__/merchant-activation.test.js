@@ -50,3 +50,13 @@ test('missing merchant cannot auto-create status, unrelated tenant cannot be aff
   assert.equal(db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',['test-merchant']).status,'PROFILE_INCOMPLETE');
  }finally{db.close();}
 });
+
+test('legacy payment fixtures with only merchant status remain compatible',()=>{
+ const db=new Database({inMemory:true});
+ try{
+  db.execute('CREATE TABLE pp_merchants(merchant_id TEXT PRIMARY KEY,status TEXT)');
+  db.execute('INSERT INTO pp_merchants VALUES(?,?)',['legacy-id','ACTIVE']);
+  assert.equal(activateEligibleMerchant(db,'legacy-id').active,true);
+  assert.equal(activateEligibleMerchant(db,'no-record').reason,'MERCHANT_NOT_FOUND');
+ }finally{db.close();}
+});
