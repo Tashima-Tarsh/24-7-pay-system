@@ -69,6 +69,17 @@ export async function adminCreateMerchant(data:{businessName:string;contactName:
  if(!payload||typeof payload!=='object')throw new Error('Merchant response was invalid');
  return payload as {businessName:string;merchantId:string;invitationSent?:boolean};
 }
+export async function adminInviteStaff(data:{email:string;role:string}):Promise<void>{
+ const token=sessionStorage.getItem(SESSION_KEY);if(!token)throw new AuthRequired('Please sign in.');
+ const res=await fetch('/api/platform/v1/staff/invite',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  body:JSON.stringify(data)
+ });
+ const body:unknown=await res.json().catch(()=>null);
+ if(res.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Session expired.');}
+ if(!res.ok)throw new Error(body&&typeof body==='object'&&'error'in body?String(body.error):'Could not send invitation ('+res.status+')');
+}
 export type ReceivingAccount={
  id:string;merchantId:string;upiId:string;payeeName:string;isActive:boolean;
  isMerchantEnabled:boolean;isSlotBusy?:boolean;currentActiveSessionId?:string|null;
