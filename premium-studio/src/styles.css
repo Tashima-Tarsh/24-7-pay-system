@@ -151,3 +151,41 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 .admin-switch-button{margin-top:21px}
 @media(max-width:850px){.header-switch-account{min-height:40px;padding:8px 11px}}
 @media(prefers-reduced-motion:reduce){.header-switch-account{transition:none!important}}
+
+/* Unified SaaS shell: fixed rhythm, equal nav targets and single responsive workspace. */
+.studio-sidebar{width:100%;padding-inline:18px}
+.sidebar-tabs{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:stretch}
+.sidebar-tab{position:relative;display:grid;grid-template-columns:23px minmax(0,1fr);align-items:center;justify-items:start;gap:13px;width:100%;min-height:52px;padding:13px 16px;text-align:left;line-height:1.25;border-radius:14px;font-size:12px;letter-spacing:.005em}
+.sidebar-tab svg{flex:none;justify-self:center}
+.sidebar-label{margin-bottom:6px}
+.studio-sidebar .workspace-identity{display:grid;gap:3px;margin-top:18px;border-top:1px solid #ffffff20;padding-top:17px;color:#d8ebde;font-size:11px}
+.workspace-identity span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.workspace-identity small{color:#afcbb8;font-size:10px;text-transform:capitalize}
+.studio-header{min-height:118px}
+.header-actions{align-items:center;gap:12px}
+.header-switch-account{padding-inline:20px;min-height:44px}
+.saas-admin{display:grid;gap:21px}
+.admin-intro{display:flex;align-items:center;justify-content:space-between;gap:19px}
+.admin-intro h2{font-size:clamp(26px,3vw,40px);font-weight:720;letter-spacing:-.065em;margin:7px 0}
+.admin-intro p{max-width:660px;font-size:13px;line-height:1.7;color:#63776a}
+.saas-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
+.saas-kpis>div{display:grid;gap:9px}
+.saas-kpis strong{font-size:clamp(26px,3vw,40px);line-height:1.2;letter-spacing:-.065em}
+.saas-kpis small{color:#809084;font-size:11px}
+.saas-merchant-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;padding:20px;margin-bottom:22px;background:#f6faf3;border:1px solid #dfebdc;border-radius:18px}
+.saas-merchant-form label,.saas-search{display:grid;gap:8px;font-size:12px;font-weight:650}
+.saas-merchant-form input,.saas-search input{min-height:47px;border:1px solid #d8e3d9;border-radius:12px;padding:11px 13px;background:white;font:inherit;min-width:0}
+.saas-merchant-form input:focus-visible,.saas-search input:focus-visible{outline:3px solid #aee0b2;outline-offset:2px}
+.saas-form-foot{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:14px}
+.saas-form-foot span{font-size:11px;color:#708374}
+.saas-search{margin:15px 0 22px}
+.saas-admin-note{display:flex;gap:16px;align-items:flex-start;background:#edf6eb!important}
+.saas-admin-note>svg{color:#318255;flex:none}
+.saas-admin-note p{font-size:12px;line-height:1.7;margin-top:8px;color:#617967}
+.upi-ownership-check{grid-column:1/-1;display:flex;align-items:flex-start;gap:12px;font-size:12px;line-height:1.55;color:#526f56}
+.upi-ownership-check input{width:18px;height:18px;flex:0 0 18px;accent-color:#215b3b;margin-top:2px}
+.upi-ownership-check span{max-width:720px}
+@media(max-width:1000px){.saas-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){.studio-sidebar{padding:15px}.sidebar-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,1fr);grid-template-columns:unset;gap:8px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;padding:0 0 7px}.sidebar-tab{min-height:48px;scroll-snap-align:start;padding:10px 13px;grid-template-columns:20px minmax(0,1fr)}.studio-sidebar .workspace-identity{display:none}.admin-intro{align-items:flex-start}.studio-header{min-height:0}}
+@media(max-width:570px){.saas-kpis{grid-template-columns:1fr}.saas-merchant-form{grid-template-columns:1fr;padding:14px}.saas-form-foot{flex-direction:column;align-items:stretch}.admin-intro{flex-direction:column}.admin-intro>button{align-self:flex-start}.header-actions{justify-content:flex-start}.sidebar-tab{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.sidebar-tab,.header-switch-account{transition:none!important}}
