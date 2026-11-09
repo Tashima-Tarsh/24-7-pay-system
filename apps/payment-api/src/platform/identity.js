@@ -49,18 +49,36 @@ export function registerPlatformIdentity(server,ctx){
   const publicPaths=new Set(['/register','/login','/login/mfa','/login/recovery','/owner-invitations/accept','/verify','/invitations/accept','/password-reset/request','/password-reset/confirm']);
   function originCheck(req){const expected=process.env.DYNAMO_PUBLIC_URL||process.env.RENDER_EXTERNAL_URL;const origin=req.headers.origin;if(origin){let target;try{target=new URL(expected||`http://${req.headers.host}`).origin;}catch{fail(403,'Invalid origin');}if(origin!==target)fail(403,'Cross-origin request denied');}if(req.headers['sec-fetch-site']==='cross-site')fail(403,'Cross-origin request denied');}
   async function guard(req,res,pathname){if(!pathname.startsWith(prefix+'/'))return false;try{if(req.method!=='GET')originCheck(req);const route=pathname.slice(prefix.length);if(publicPaths.has(route)&&req.method==='POST')return false;
-    const raw=/(?:^|;\s*)dp_platform_session=([^;]+)/.exec(req.headers.cookie||'')?.[1];if(!raw)fail(401,'Platform login required');
+    // New workspace uses an Authorization header rather than legacy cookies.
+    // Retain cookie compatibility only for existing integrations.
+    const bearer=/^Bearer ([A-Za-z0-9_-]{32,256})$/.exec(String(req.headers.authorization||''));
+    const raw=bearer?.[1] || /(?:^|;\s*)dp_platform_session=([^;]+)/.exec(req.headers.cookie||'')?.[1];
+    if(!raw)fail(401,'Platform login required');
     const session=db.queryOne('SELECT * FROM pp_sessions WHERE token_hash = ? AND expires_at > ?',[hash(raw),now()]);const user=session&&db.queryOne('SELECT * FROM pp_users WHERE id = ? AND active = 1',[session.user_id]);if(!user)fail(401,'Session expired');if(user.merchant_id===PLATFORM_ACCOUNT_ID)fail(403,'Use a platform operator account; the bootstrap account is not a customer workspace.');
-    req.platform={userId:user.id,merchantId:user.merchant_id,role:user.role,permissions:permissions(user),platform:!user.merchant_id&&platformRoles.includes(user.role),sessionId:session.id,mfaVerified:!!session.mfa_verified,mfaEnabled:!!user.mfa_secret};req.platformUser=user;req.platformSession=session;
+    req.platform={userId:user.id,merchantId:user.merchant_id,role:user.role,permissions:permissions(user),platform:!user.merchant_id&&platformRoles.includes(user.role),sessionId:session.id,mfaVerified:!!session.mfa_verified,mfaEnabled:!!user.mfa_secret};req.platformUser=user;req.platformSession=session;req.platformBearer=Boolean(bearer);
     if(req.method!=='GET')res.once('finish',()=>{if(res.statusCode<300){server.broadcastSse('platform:operations','invalidate',{changed:true});if(user.merchant_id)server.broadcastSse('platform:merchant:'+user.merchant_id,'invalidate',{changed:true});}});
-    if(req.method!=='GET'&&!equal(req.headers['x-csrf-token'],session.csrf_token))fail(403,'CSRF token required');
+    // Explicit Authorization bearer tokens are not ambient browser credentials,
+    // so require CSRF only when the legacy cookie path is used.
+    if(req.method!=='GET'&&!bearer&&!equal(req.headers['x-csrf-token'],session.csrf_token))fail(403,'CSRF token required');
     if(req.method!=='GET'&&!['/logout','/mfa/enroll','/mfa/confirm','/sessions/revoke'].includes(route)&&false)fail(403,'MFA verification required');
     return false;
   }catch(error){HttpServer.json(res,error.statusCode||500,{error:error.statusCode?error.message:'Authentication unavailable'});return true;}}
   function route(method,url,handler){server.register(method,prefix+url,async(req,res,params)=>{try{const body=method==='GET'?{}:await HttpServer.parseBody(req);await handler(req,res,body,params);}catch(error){HttpServer.json(res,error.statusCode||500,{error:error.statusCode?error.message:'Platform operation failed'});}});}
   const json=(res,status,data)=>HttpServer.json(res,status,data);
   function publicUser(user){return {id:user.id,merchantId:user.merchant_id,email:user.email,role:user.role,active:!!user.active,emailVerified:!!user.email_verified,mobileVerified:!!user.mobile_verified,mfaEnabled:!!user.mfa_secret,permissions:permissions(user),platform:!user.merchant_id};}
-  function issue(req,res,user,mfa=false){const token=random(),csrf=random();db.execute('INSERT INTO pp_sessions (id,user_id,token_hash,csrf_token,mfa_verified,expires_at,created_at) VALUES (?,?,?,?,?,?,?)',[crypto.randomUUID(),user.id,hash(token),csrf,mfa?1:0,later(8*3600000),now()]);res.setHeader('Set-Cookie',`dp_platform_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${process.env.NODE_ENV==='production'||req.socket.encrypted?'; Secure':''}`);res.setHeader('Cache-Control','no-store');return {user:publicUser(user),csrfToken:csrf};}
+  function issue(req,res,user,mfa=false){
+    const token=random(),csrf=random();
+    db.execute('INSERT INTO pp_sessions (id,user_id,token_hash,csrf_token,mfa_verified,expires_at,created_at) VALUES (?,?,?,?,?,?,?)',
+      [crypto.randomUUID(),user.id,hash(token),csrf,mfa?1:0,later(8*3600000),now()]);
+    res.setHeader('Cache-Control','no-store');
+    if(req.headers['x-247-auth-mode']==='bearer'){
+      // A separate first-party workspace transport. It never sets or reads a
+      // login cookie, and the raw secret is never written to logs or a URL.
+      return {user:publicUser(user),sessionToken:token,tokenType:'Bearer',expiresIn:28800};
+    }
+    res.setHeader('Set-Cookie',`dp_platform_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${process.env.NODE_ENV==='production'||req.socket.encrypted?'; Secure':''}`);
+    return {user:publicUser(user),csrfToken:csrf};
+  }
   function token(kind,user,payload={},ttl=15*60000){const raw=random();db.execute('INSERT INTO pp_tokens (id,user_id,merchant_id,kind,token_hash,payload,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?)',[crypto.randomUUID(),user.id,user.merchant_id||null,kind,hash(raw),JSON.stringify(payload),later(ttl),now()]);return raw;}
   function consume(raw,kind){const row=db.queryOne('SELECT * FROM pp_tokens WHERE token_hash = ? AND kind = ? AND expires_at > ?',[hash(String(raw||'')),kind,now()]);if(!row||row.attempts>=5)fail(400,'Invalid or expired token');return row;}
   function limit(req,key){const id=hash(resolveClientIp(req)+':'+key),row=db.queryOne('SELECT * FROM pp_login_limits WHERE key = ?',[id]);if(!row||row.reset_at<now()){db.execute('INSERT INTO pp_login_limits (key,attempts,reset_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET attempts=excluded.attempts,reset_at=excluded.reset_at',[id,1,later(60000)]);return;}if(row.attempts>=10)fail(429,'Too many attempts; retry in one minute');db.execute('UPDATE pp_login_limits SET attempts = attempts + 1 WHERE key = ?',[id]);}
@@ -85,7 +103,7 @@ export function registerPlatformIdentity(server,ctx){
     });json(res,200,result);
   });
   route('GET','/me',async(req,res)=>{res.setHeader('Cache-Control','no-store');json(res,200,{user:publicUser(req.platformUser),csrfToken:req.platformSession.csrf_token,mfaSetupRequired:false});});
-  route('POST','/logout',async(req,res)=>{db.execute('DELETE FROM pp_sessions WHERE id = ?',[req.platform.sessionId]);res.setHeader('Set-Cookie','dp_platform_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');json(res,200,{ok:true});});
+  route('POST','/logout',async(req,res)=>{db.execute('DELETE FROM pp_sessions WHERE id = ?',[req.platform.sessionId]);if(!req.platformBearer)res.setHeader('Set-Cookie','dp_platform_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');json(res,200,{ok:true});});
   route('GET','/sessions',async(req,res)=>json(res,200,{sessions:db.query('SELECT id,created_at,expires_at FROM pp_sessions WHERE user_id = ?',[req.platform.userId])}));
   route('GET','/stream',async(req,res)=>{const topic=req.platform.platform?'platform:operations':`platform:merchant:${tenant(req)}`;server.initSse(topic,res);const check=setInterval(()=>{const session=db.queryOne('SELECT id FROM pp_sessions WHERE id = ? AND expires_at > ?',[req.platform.sessionId,now()]),user=db.queryOne('SELECT active FROM pp_users WHERE id = ?',[req.platform.userId]);if(!session||!user?.active){res.write('event: session-revoked\ndata: {"reauthenticate":true}\n\n');res.end();}},5000);check.unref();res.on('close',()=>clearInterval(check));});
   route('POST','/sessions/revoke',async(req,res,body)=>{if(body.all)db.execute('DELETE FROM pp_sessions WHERE user_id = ?',[req.platform.userId]);else db.execute('DELETE FROM pp_sessions WHERE id = ? AND user_id = ?',[String(body.sessionId),req.platform.userId]);audit(req,'SESSION_REVOKED',String(body.sessionId||'all'));json(res,200,{ok:true});});
