@@ -1,2 +1,0 @@
-# Merchant portal design
-The portal uses dark, cool ink surfaces with indigo as the primary action color, warm-neutral warning surfaces and Inter typography. A persistent navigation rail or mobile navigation strip separates configuration from monitoring. Section dividers and open layouts are preferred to repeated cards. Tables preserve readable numbers and scroll horizontally on small screens. Charts reflect API evidence and show empty states when no events are recorded.
