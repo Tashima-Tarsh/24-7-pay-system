@@ -39,6 +39,32 @@ function date(x){const d=new Date(x);return x&&!Number.isNaN(d.getTime())?d.toLo
 function status(s){const x=String(s||'UNKNOWN'),v=el('span','status-tag '+x.toLowerCase().replace(/[^a-z0-9_-]/g,''),x.replace(/_/g,' '));return v;}
 function metric(label,v,hint=''){const m=el('div','metric');add(m,el('span','metric-label',label),el('strong','metric-value',v),el('span','metric-foot',hint));return m;}
 function stats(items){const g=el('div','metric-grid');items.forEach(a=>add(g,metric(...a)));return g;}
+function paymentDistribution(summary){
+ const entries=[
+  ['Confirmed',summary.confirmed,'confirmed'],
+  ['Pending',summary.pending,'pending'],
+  ['Failed / expired',summary.failed,'failed']
+ ];
+ const total=Number(summary.transactions)||0;
+ const section=panel('Payment outcome distribution','Computed from real dashboard totals. Unclassified orders are shown separately.');
+ const bar=el('div','premium-outcome-bar');bar.setAttribute('role','img');bar.setAttribute('aria-label','Payment outcomes as a percentage of all recorded orders');
+ const legend=el('div','premium-outcome-legend');
+ let used=0;
+ for(const [label,raw,tone] of entries){
+  const number=Math.max(0,Number(raw)||0),percentage=total>0?Math.min(100,number/total*100):0;
+  used+=number;
+  if(percentage>0){const segment=el('span','premium-segment '+tone);segment.style.width=percentage+'%';segment.title=label+': '+count(number)+' ('+percentage.toFixed(1)+'%)';add(bar,segment);}
+  const item=el('div','premium-outcome-item');
+  add(item,el('span','premium-outcome-dot '+tone),el('span','premium-outcome-label',label),el('strong','',count(number)),el('span','premium-outcome-percent',percentage.toFixed(1)+'%'));
+  add(legend,item);
+ }
+ const unknown=Math.max(0,total-used);
+ if(unknown){const percentage=total>0?unknown/total*100:0;const segment=el('span','premium-segment other');segment.style.width=percentage+'%';add(bar,segment);add(legend,add(el('div','premium-outcome-item'),el('span','premium-outcome-dot other'),el('span','premium-outcome-label','Other recorded states'),el('strong','',count(unknown)),el('span','premium-outcome-percent',percentage.toFixed(1)+'%')));}
+ if(!total)add(bar,el('span','premium-outcome-empty','No orders recorded yet'));
+ add(section,bar,legend);
+ return section;
+}
+
 function info(items){const l=el('div','info-list');items.forEach(a=>{const c=el('div','info-item');add(c,el('span','',a[0]),el('strong','',value(a[1])));add(l,c);});return l;}
 function table(headers,items,fields,open){const wrap=el('div','data-wrap'),t=el('table','data-table'),thead=el('thead'),tr=el('tr');headers.forEach(h=>add(tr,el('th','',h)));add(thead,tr);add(t,thead);const body=el('tbody');items.forEach(item=>{const row=el('tr',open?'row-click':'');fields(item).forEach(v=>{const td=el('td');if(v instanceof Node)add(td,v);else td.textContent=value(v);add(row,td);});if(open){row.tabIndex=0;row.setAttribute('aria-label','Open details');row.addEventListener('click',()=>open(item));row.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();open(item);}});}add(body,row);});if(!items.length){const row=el('tr'),cell=el('td','empty-state','Nothing here yet.');cell.colSpan=headers.length;add(row,cell);add(body,row);}add(t,body);return add(wrap,t);}
 function field(label,type,name,attrs={}){const container=el('label',''),control=el(type==='textarea'?'textarea':'input');control.name=name;control.id='field-'+name;if(type!=='textarea')control.type=type;Object.entries(attrs).forEach(([k,v])=>{if(k==='required')control.required=true;else control.setAttribute(k,String(v));});add(container,el('span','',label),control);return {container,control};}
@@ -103,6 +129,7 @@ async function overview(){
    ['Failed',count(s.failed),'Failed, expired or cancelled'],
    ['Confirmation rate',String(s.confirmationRate||0)+'%','Share of all recorded payment orders']
   ]));
+  result.push(paymentDistribution(s));
   if(user.platform){
    const header=panel('Platform performance',selectedMerchantId?'Merchant-filtered totals from the authoritative database.':'All registered merchants, platform-wide financial records.');
    add(header,info([['Merchants registered',count(k.merchantCount)],['View',selectedMerchantId?'Selected merchant':'All merchants'],['Volume reporting','Gross confirmed value, not net revenue or settlement']]),notice(k.note));
@@ -137,9 +164,56 @@ async function overview(){
  if(!result.length){const c=panel('Welcome','Your account is ready.');add(c,notice('Choose a section to review the tools available to this role.'));result.push(c);}
  return result;
 }
-async function payments(){const scope=user.platform&&selectedMerchantId?'&merchantId='+encodeURIComponent(selectedMerchantId):'';
- const d=await api('/transactions?limit=50'+scope),rows=d.items||[],c=panel('Payment history','Select a payment to see its recorded events and delivery history.');const search=el('input');search.type='search';search.placeholder='Search payments';search.setAttribute('aria-label','Search payments');const area=el('div');const paint=()=>area.replaceChildren(table(['Order','Amount','Method','Status','Created'],rows.filter(x=>(String(x.order_id||x.id)+' '+x.status+' '+x.method).toLowerCase().includes(search.value.toLowerCase())),x=>[el('span','mono',x.order_id||x.id),currency(x.amount_paise),x.method,status(x.status),date(x.created_at)],x=>transaction(x.id)));search.addEventListener('input',paint);paint();add(c,add(el('div','toolbar'),search),area);
-const result=[c];if(!user.platform&&allowed('payments.create')){const p=panel('Create a payment request','This uses your real payment configuration, not a demo.');const form=el('form','form-grid'),order=field('Order reference','text','orderId',{required:true,pattern:'[-A-Za-z0-9_]{1,120}',maxlength:120}),amount=field('Amount in rupees','number','amount',{required:true,min:0.01,step:0.01});order.control.value='ORDER-'+Date.now();const submit=el('button','primary-button','Create payment');submit.type='submit';const actions=add(el('div','form-actions'),submit);add(form,order.container,amount.container,actions);form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{const r=await api('/payments','POST',{orderId:order.control.value,amount:amount.control.value,currency:'INR'},{'Idempotency-Key':crypto.randomUUID()});const body=info([['Order',r.orderId],['Amount',r.amount],['Status',r.status]]);if(r.checkoutUrl){const u=new URL(r.checkoutUrl,location.origin);if(u.origin===location.origin)add(body,add(el('p'),(()=>{const a=el('a','card-link','Open customer checkout');a.href=u.pathname;return a;})()));}detail('Payment request',body);void render('payments');}catch(err){detail('Payment not created',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);result.unshift(p);}return result;}
+async function payments(){
+ const scope=user.platform&&selectedMerchantId?'&merchantId='+encodeURIComponent(selectedMerchantId):'';
+ const d=await api('/transactions?limit=50'+scope),rows=d.items||[];
+ const c=panel('Payment history','Search and filter the latest 50 backend records. Open a payment for its source-backed event history.');
+ const toolbar=el('div','premium-payment-toolbar');
+ const search=el('input');search.type='search';search.placeholder='Search order, method or status';search.setAttribute('aria-label','Search payment records');
+ const filter=el('select');filter.setAttribute('aria-label','Filter payment status');
+ for(const [label,v] of [['All statuses',''],['Confirmed','confirmed'],['Pending','pending'],['Failed or expired','failed']])filter.add(new Option(label,v));
+ const counter=el('span','premium-result-count');counter.setAttribute('aria-live','polite');
+ const area=el('div');
+ const stateOf=x=>String(x.status||'').toUpperCase();
+ const passes=x=>{
+  const state=stateOf(x);
+  if(filter.value==='confirmed'&&!['SUCCESS','SUCCEEDED','CONFIRMED','COMPLETED'].includes(state))return false;
+  if(filter.value==='pending'&&!['PENDING','PROCESSING','REQUIRES_CUSTOMER_ACTION','CREATED','INITIATED'].includes(state))return false;
+  if(filter.value==='failed'&&!['FAILED','EXPIRED','CANCELLED','CANCELED','BLOCKED'].includes(state))return false;
+  const haystack=[x.order_id,x.id,x.status,x.method].map(v=>String(v??'')).join(' ').toLowerCase();
+  return haystack.includes(search.value.trim().toLowerCase());
+ };
+ const paint=()=>{
+  const matches=rows.filter(passes);
+  counter.textContent=count(matches.length)+' of '+count(rows.length)+' loaded orders';
+  area.replaceChildren(table(['Order','Amount','Method','Status','Created'],matches,
+   x=>[el('span','mono',x.order_id||x.id),currency(x.amount_paise),x.method,status(x.status),date(x.created_at)],x=>transaction(x.id)));
+ };
+ search.addEventListener('input',paint);filter.addEventListener('change',paint);
+ add(toolbar,search,filter,counter);paint();add(c,toolbar,area,
+  notice('This view shows at most 50 loaded orders, not a full-history export. Payment status is sourced from your backend.'));
+ const result=[c];
+ if(!user.platform&&allowed('payments.create')){
+  const p=panel('Create a payment request','This uses your real payment configuration, not a demo.');
+  const form=el('form','form-grid'),order=field('Order reference','text','orderId',{required:true,pattern:'[-A-Za-z0-9_]{1,120}',maxlength:120}),amount=field('Amount in rupees','number','amount',{required:true,min:0.01,step:0.01});
+  order.control.value='ORDER-'+Date.now();
+  const submit=el('button','primary-button','Create payment');submit.type='submit';
+  add(form,order.container,amount.container,add(el('div','form-actions'),submit));
+  form.addEventListener('submit',async e=>{
+   e.preventDefault();submit.disabled=true;
+   try{
+    const r=await api('/payments','POST',{orderId:order.control.value,amount:amount.control.value,currency:'INR'},{'Idempotency-Key':crypto.randomUUID()});
+    const body=info([['Order',r.orderId],['Amount',r.amount],['Status',r.status]]);
+    if(r.checkoutUrl){const u=new URL(r.checkoutUrl,location.origin);if(u.origin===location.origin)add(body,add(el('p'),(()=>{const a=el('a','card-link','Open customer checkout');a.href=u.pathname;return a;})()));}
+    detail('Payment request',body);void render('payments');
+   }catch(err){detail('Payment not created',notice(err.message,true));}
+   finally{submit.disabled=false;}
+  });
+  add(p,form);result.unshift(p);
+ }
+ return result;
+}
+
 function paymentEventTimeline(events,transaction){
  const list=el('ol','payment-timeline');
  list.setAttribute('aria-label','Payment history and callback timeline');
