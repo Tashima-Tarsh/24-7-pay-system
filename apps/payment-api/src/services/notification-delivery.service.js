@@ -49,7 +49,7 @@ export class NotificationDeliveryService {
     if(typeof phone==='string'&&/^[6-9]\d{9}$/.test(phone))phone='+91'+phone;
     if(typeof email==='string'&&/@customer\.youpi\.local$/i.test(email))email=undefined;
     const c=this.config,states={};
-    const channels=[['push',Boolean(c.topic),true,{message:'Sanbook Pay: a new receipt is available. Sign in to view details.'}],
+    const channels=[['push',Boolean(c.topic),true,{message:'24/7 Pay: a new receipt is available. Sign in to view details.'}],
       ['email',Boolean(c.clientId&&c.clientSecret&&c.refreshToken&&validEmail(c.from)),validEmail(email),{to:email,subject:receipt.emailSubject,html:receipt.emailHtml}],
       ['sms',Boolean(c.smsUrl&&c.smsUser&&c.smsPassword),typeof phone==='string'&&/^\+[1-9]\d{7,14}$/.test(phone),{to:phone,message:receipt.smsMessage}]];
     for(const [channel,configured,valid,payload] of channels) {
@@ -69,7 +69,7 @@ export class NotificationDeliveryService {
     if(job.channel==='email') {
       if(!validEmail(payload.to)||!validEmail(c.from)||/[\r\n]/.test(payload.subject))throw Object.assign(new Error('Invalid email headers'),{permanent:true});
       const raw=Buffer.from([`From: ${c.from}`,`To: ${payload.to}`,`Subject: =?UTF-8?B?${Buffer.from(payload.subject).toString('base64')}?=`,
-        `Message-ID: <${job.id}@sanbookpay.local>`,'MIME-Version: 1.0','Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',Buffer.from(payload.html).toString('base64').match(/.{1,76}/g)?.join('\r\n')||''].join('\r\n')).toString('base64url');
+        `Message-ID: <${job.id}@notifications.247pay.invalid>`,'MIME-Version: 1.0','Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',Buffer.from(payload.html).toString('base64').match(/.{1,76}/g)?.join('\r\n')||''].join('\r\n')).toString('base64url');
       if(this.gmailSend)return this.gmailSend(raw);
       const auth=new google.auth.OAuth2(c.clientId,c.clientSecret);auth.setCredentials({refresh_token:c.refreshToken});
       await google.gmail({version:'v1',auth}).users.messages.send({userId:'me',requestBody:{raw}},{timeout:15000,retry:false});
