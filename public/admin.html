@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Merchant Admin | 24/7 Pay</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    min-height: 100vh;
+    color: #f8fafc;
+  }
+  .glass {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  }
+  .glass-panel {
+    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 20px 40px 0 rgba(0,0,0,0.4);
+  }
+  .sidebar-item {
+    transition: all 0.2s;
+  }
+  .sidebar-item.active {
+    background: rgba(16, 185, 129, 0.15);
+    border-right: 3px solid #34d399;
+    color: #34d399;
+  }
+  .sidebar-item:hover:not(.active) {
+    background: rgba(255,255,255,0.05);
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .status-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-active { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .status-pending { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-failed { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+  .status-connected { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-disconnected { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+  .status-standby { background: rgba(156, 163, 175, 0.15); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.3); }
+  .pulse-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-top-color: #34d399;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hide { display: none !important; }
+  .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .slide-up { animation: slideUp 0.4s ease-out forwards; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .amount { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .copy-btn {
+    transition: all 0.2s;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+  }
+  .copy-btn.copied { background: #22c55e; color: #ffffff; }
+  input, select, button, textarea {
+    font-family: inherit;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; }
+  tr:hover { background: rgba(255,255,255,0.02); }
+  .empty-state { text-align: center; padding: 40px 20px; color: #94a3b8; }
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 6px; }
+  .form-input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #ffffff;
+    font-size: 0.875rem;
+  }
+  .form-input:focus { outline: none; border-color: #34d399; ring: 1px solid #34d399; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: #34d399; color: #064e3b; }
+  .btn-primary:hover { background: #4ade80; }
+  .btn-secondary { background: rgba(255,255,255,0.1); color: #ffffff; border: 1px solid rgba(255,255,255,0.2); }
+  .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+  .btn-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+  .btn-outline { background: transparent; color: #94a3b8; border: 1px solid rgba(255,255,255,0.1); }
+  .btn-outline:hover { background: rgba(255,255,255,0.05); color: #ffffff; }
+  .btn-sm { padding: 6px 12px; font-size: 0.75rem; }
+  .alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 0.875rem;
+  }
+  .alert-error { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; }
+  .alert-success { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; }
+  .alert-info { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; }
+  .tab-content { min-height: 300px; }
+  .metric-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .metric-value { font-size: 1.5rem; font-weight: 700; color: #ffffff; font-variant-numeric: tabular-nums; }
+  .metric-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+  .observer-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body class="antialiased">
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="glass-panel min-h-screen flex items-center justify-center p-6 fade-in">
+    <div class="w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+          <span class="text-emerald-400 font-bold text-2xl">24</span>
+        </div>
+        <h2 class="text-2xl font-bold text-white mb-2">Merchant Admin</h2>
+        <p class="text-sm text-slate-400">Sign in to your admin console</p>
+      </div>
+
+      <div class="glass rounded-2xl p-6">
+        <div class="form-group">
+          <label class="form-label">Admin API Token</label>
+          <input type="password" id="admin-token" class="form-input" placeholder="Enter your ADMIN_API_TOKEN">
+        </div>
+        <div id="login-error" class="alert alert-error hide mb-4"></div>
+        <button id="login-btn" class="btn btn-primary w-full">
+          <span>Sign In</span>
+        </button>
+        <p class="text-xs text-slate-500 mt-6 text-center">
+          Your ADMIN_API_TOKEN is set via the ADMIN_API_TOKEN environment variable on the server.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Dashboard -->
+  <div id="admin-dashboard" class="hide h-screen flex overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-64 glass border-r border-white/10 flex-shrink-0 flex flex-col">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+          <span class="text-emerald-400 font-bold text-xl">24</span>
+        </div>
+        <span class="font-bold text-white text-sm tracking-wide">24/7 Pay</span>
+      </div>
+      <nav class="flex-1 px-3 py-4 space-y-1">
+        <button class="sidebar-item active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300" data-tab="merchants">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.291M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 008 0zM12 12.754a5.5 5.5 0 11-7.778 0 10.017 10.017 0 001.89 6.325c.216.447.863.815 1.548.815.685 0 1.331-.368 1.548-.815a10.017 10.017 0 001.89-6.325z"></path></svg>
+          <span>Merchants</span>
+        </button>
+        <button class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white" data-tab="orders">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 002 2z"></path></svg>
+          <span>Orders</span>
+        </button>
+        <button class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white" data-tab="payouts">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 20V8m0 0v12a6 6 0 006-6zM11 3.355a12.1 12.1 0 01-1.142 1.548M16.11 4.243a12.11 12.11 0 01-2.713 3.75M16.11 4.243a12.11 12.11 0 01-2.713 3.75M12 20c4.139 0 6.504-2.205 6.504-6.086a5.2 5.2 0 00-1.576-3.531M12 20a5.2 5.2 0 011.576-3.531m1.576 3.531c0-.865-.49-1.612-1.192-2.145m-6.564-.163c-.65-.552-1.192-1.28-1.192-2.145a5.2 5.2 0 011.576-3.531m-1.576 3.531c0-.865-.49-1.612-1.192-2.145m6.175 2.43c.344.523.566 1.138.566 1.849a5.203 5.203 0 01-7.778 2.096M12 20a5.2 5.2 0 01-1.576-3.531m1.576 3.531c0-.865-.49-1.612-1.192-2.145m6.175 2.43c.344.523.566 1.138.566 1.849a5.203 5.203 0 01-7.778 2.096"></path></svg>
+          <span>Payouts</span>
+        </button>
+        <button class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white" data-tab="disputes">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          <span>Disputes</span>
+        </button>
+        <button class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white" data-tab="providers">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.414-.586l-4.828-4.828a2 2 0 00-2.828 0l-4.828 4.828a2 2 0 00-1.414.586m7.072 0a2 2 0 011.414-.586l4.828-4.828a2 2 0 012.828 0l4.828 4.828a2 2 0 011.414.586m-15.556 0a2 2 0 01-1.414-.586l-4.828-4.828a2 2 0 01-2.828 0l-4.828 4.828a2 2 0 01-1.414.586m7.072 0a2 2 0 011.414-.586l4.828-4.828a2 2 0 012.828 0l4.828 4.828a2 2 0 011.414.586m-15.556 0a2 2 0 01-1.414-.586l-4.828-4.828a2 2 0 01-2.828 0l-4.828 4.828a2 2 0 01-1.414.586m7.072 0a2 2 0 011.414-.586l4.828-4.828a2 2 0 012.828 0l4.828 4.828a2 2 0 011.414.586"></path></svg>
+          <span>Providers</span>
+        </button>
+      </nav>
+      <div class="p-4 border-t border-white/10">
+        <button id="logout-btn" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-300 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+          <span>Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <header class="sticky top-0 z-10 bg-slate-900/80 backdrop-blur border-b border-white/10 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 id="page-title" class="text-lg font-bold text-white">Merchants</h1>
+          <p class="text-xs text-slate-400" id="page-subtitle">Manage your merchant profiles</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-xs text-slate-400">System Online</span>
+        </div>
+      </header>
+
+      <main class="flex-1 overflow-y-auto p-6">
+        <!-- Alert -->
+        <div id="admin-alert" class="hide mb-6"></div>
+
+        <!-- Metrics -->
+        <div id="metrics-row" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 hide"></div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+          <!-- Merchants Tab -->
+          <div id="tab-merchants" class="tab-content-panel fade-in">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-lg font-bold text-white">Merchant Directory</h3>
+                <p class="text-sm text-slate-400">View and manage merchant profiles</p>
+              </div>
+              <button class="btn btn-secondary btn-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                Refresh
+              </button>
+            </div>
+            <div class="glass rounded-xl overflow-hidden">
+              <table class="w-full text-left">
+                <thead>
+                  <tr>
+                    <th class="w-1/4">Merchant Name</th>
+                    <th class="w-1/6">UPI ID</th>
+                    <th class="w-1/6">Payee Name</th>
+                    <th class="w-1/6">Status</th>
+                    <th class="w-1/6">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="merchants-table-body">
+                  <tr><td colspan="5" class="empty-state">Loading merchants...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Orders Tab -->
+          <div id="tab-orders" class="tab-content-panel hide">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-lg font-bold text-white">Orders</h3>
+                <p class="text-sm text-slate-400">View payment sessions</p>
+              </div>
+              <button class="btn btn-secondary btn-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                Refresh
+              </button>
+            </div>
+            <div class="glass rounded-xl overflow-hidden">
+              <table class="w-full text-left">
+                <thead>
+                  <tr>
+                    <th class="w-1/5">Order ID</th>
+                    <th class="w-1/6">Amount</th>
+                    <th class="w-1/6">Method</th>
+                    <th class="w-1/6">Status</th>
+                    <th class="w-1/6">Created</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-table-body">
+                  <tr><td colspan="5" class="empty-state">Loading orders...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Payouts Tab -->
+          <div id="tab-payouts" class="tab-content-panel hide">
+            <div class="glass rounded-xl p-8 text-center">
+              <div class="w-12 h-12 rounded-lg bg-amber-500/20 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 20V8m0 0v12a6 6 0 006-6z"></path></svg>
+              </div>
+              <h3 class="text-lg font-bold text-white mb-2">Payouts</h3>
+              <p class="text-sm text-slate-400">Payout management is not available on the current API version.</p>
+            </div>
+          </div>
+
+          <!-- Disputes Tab -->
+          <div id="tab-disputes" class="tab-content-panel hide">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-lg font-bold text-white">Disputes / Tickets</h3>
+                <p class="text-sm text-slate-400">Customer support tickets</p>
+              </div>
+              <button class="btn btn-secondary btn-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                Refresh
+              </button>
+            </div>
+            <div class="glass rounded-xl overflow-hidden">
+              <table class="w-full text-left">
+                <thead>
+                  <tr>
+                    <th class="w-1/5">Ticket ID</th>
+                    <th class="w-1/4">Merchant</th>
+                    <th class="w-1/4">Status</th>
+                    <th class="w-1/5">Created</th>
+                    <th class="w-1/5">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="disputes-table-body">
+                  <tr><td colspan="5" class="empty-state">Loading disputes...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Providers / Circuit Breaker Tab -->
+          <div id="tab-providers" class="tab-content-panel hide">
+            <div class="glass rounded-xl p-6">
+              <h3 class="text-lg font-bold text-white mb-6">Observer &amp; Provider Status</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div class="observer-card">
+                  <div>
+                    <div class="text-xs text-slate-400 uppercase tracking-wider">Gmail Observer</div>
+                    <div class="text-sm font-medium text-white" id="observer-gmail-status">Checking...</div>
+                  </div>
+                  <span id="observer-gmail-badge" class="status-badge status-standby">STANDBY</span>
+                </div>
+                <div class="observer-card">
+                  <div>
+                    <div class="text-xs text-slate-400 uppercase tracking-wider">SMS Gateway</div>
+                    <div class="text-sm font-medium text-white" id="observer-sms-status">Checking...</div>
+                  </div>
+                  <span id="observer-sms-badge" class="status-badge status-standby">STANDBY</span>
+                </div>
+                <div class="observer-card">
+                  <div>
+                    <div class="text-xs text-slate-400 uppercase tracking-wider">Android Devices</div>
+                    <div class="text-sm font-medium text-white" id="observer-android-status">Checking...</div>
+                  </div>
+                  <span id="observer-android-badge" class="status-badge status-standby">STANDBY</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="glass rounded-xl p-5">
+                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">UPI Settings</h4>
+                  <div class="space-y-4" id="upi-settings-content">
+                    <div class="empty-state">Loading...</div>
+                  </div>
+                </div>
+                <div class="glass rounded-xl p-5">
+                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">Queue Status</h4>
+                  <div class="space-y-4" id="queue-content">
+                    <div class="empty-state">Loading...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      let adminToken = null;
+
+      // ---- Auth helpers ----
+      function getAuthHeaders() {
+        return adminToken ? { 'Authorization': `Bearer ${adminToken}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' };
+      }
+
+      async function apiFetch(path, options = {}) {
+        const res = await fetch(path, {
+          ...options,
+          headers: { ...getAuthHeaders(), ...options.headers },
+        });
+        return res;
+      }
+
+      function showAlert(containerId, type, message) {
+        const el = document.getElementById(containerId);
+        el.className = `alert alert-${type}`;
+        el.textContent = message;
+        el.classList.remove('hide');
+        setTimeout(() => el.classList.add('hide'), 5000);
+      }
+
+      // ---- Login ----
+      const loginScreen = document.getElementById('login-screen');
+      const dashboard = document.getElementById('admin-dashboard');
+      const loginError = document.getElementById('login-error');
+      const loginBtn = document.getElementById('login-btn');
+      const tokenInput = document.getElementById('admin-token');
+
+      loginBtn.addEventListener('click', async () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+          loginError.textContent = 'Please enter your admin API token.';
+          loginError.classList.remove('hide');
+          return;
+        }
+        loginBtn.textContent = 'Signing in...';
+        loginBtn.disabled = true;
+
+        // Verify token by calling a public-ish admin endpoint
+        try {
+          const res = await apiFetch('/api/v1/admin/queue');
+          if (res.ok) {
+            adminToken = token;
+            localStorage.setItem('admin_token', token);
+            loginScreen.classList.add('hide');
+            dashboard.classList.remove('hide');
+            initDashboard();
+          } else if (res.status === 401) {
+            loginError.textContent = 'Invalid admin token. Please check your ADMIN_API_TOKEN.';
+            loginError.classList.remove('hide');
+            loginBtn.textContent = 'Sign In';
+            loginBtn.disabled = false;
+          } else {
+            loginError.textContent = `Server error (${res.status}). Please try again.`;
+            loginError.classList.remove('hide');
+            loginBtn.textContent = 'Sign In';
+            loginBtn.disabled = false;
+          }
+        } catch (err) {
+          loginError.textContent = 'Unable to connect to server. Please check your connection.';
+          loginError.classList.remove('hide');
+          loginBtn.textContent = 'Sign In';
+          loginBtn.disabled = false;
+        }
+      });
+
+      // Check for stored token
+      const storedToken = localStorage.getItem('admin_token');
+      if (storedToken) {
+        tokenInput.value = storedToken;
+        adminToken = storedToken;
+        loginBtn.click();
+      }
+
+      // ---- Logout ----
+      document.getElementById('logout-btn').addEventListener('click', () => {
+        adminToken = null;
+        localStorage.removeItem('admin_token');
+        dashboard.classList.add('hide');
+        loginScreen.classList.remove('hide');
+        tokenInput.value = '';
+      });
+
+      // ---- Navigation ----
+      const navItems = document.querySelectorAll('.sidebar-item');
+      const tabContents = {
+        merchants: document.getElementById('tab-merchants'),
+        orders: document.getElementById('tab-orders'),
+        payouts: document.getElementById('tab-payouts'),
+        disputes: document.getElementById('tab-disputes'),
+        providers: document.getElementById('tab-providers'),
+      };
+
+      function setActiveTab(tabName) {
+        navItems.forEach(item => {
+          if (item.dataset.tab === tabName) {
+            item.classList.add('active');
+            item.classList.replace('text-slate-400', 'text-emerald-400');
+          } else {
+            item.classList.remove('active');
+            item.classList.replace('text-emerald-400', 'text-slate-400');
+          }
+        });
+        Object.values(tabContents).forEach(el => el.classList.add('hide'));
+        tabContents[tabName].classList.remove('hide');
+
+        const titles = {
+          merchants: ['Merchants', 'View and manage merchant profiles'],
+          orders: ['Orders', 'View payment sessions'],
+          payouts: ['Payouts', 'Payout management'],
+          disputes: ['Disputes / Tickets', 'Customer support tickets'],
+          providers: ['Provider Status', 'Observer & provider health'],
+        };
+        const [title, subtitle] = titles[tabName];
+        document.getElementById('page-title').textContent = title;
+        document.getElementById('page-subtitle').textContent = subtitle;
+      }
+
+      navItems.forEach(item => {
+        item.addEventListener('click', () => setActiveTab(item.dataset.tab));
+      });
+
+      // ---- API Data Loading ----
+      async function loadMerchants() {
+        const body = document.getElementById('merchants-table-body');
+        try {
+          const res = await apiFetch('/api/v1/admin/all-settings');
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          body.innerHTML = '';
+          if (!data || Object.keys(data).length === 0) {
+            body.innerHTML = '<tr><td colspan="5" class="empty-state">No merchants found.</td></tr>';
+            return;
+          }
+
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="font-mono text-white">${data.businessName || 'Unknown'}</td>
+            <td class="font-mono text-slate-300">${data.upiId || '—'}</td>
+            <td class="font-mono text-slate-300">${data.payeeName || '—'}</td>
+            <td><span class="status-badge status-success">ACTIVE</span></td>
+            <td><button class="copy-btn px-2 py-1 bg-white/10 border border-white/10 rounded text-xs" onclick="navigator.clipboard.writeText('${data.upiId || ''}')">Copy VPA</button></td>
+          `;
+          body.appendChild(row);
+        } catch (err) {
+          console.error(err);
+          body.innerHTML = `<tr><td colspan="5" class="empty-state text-slate-500">Unable to load merchants.</td></tr>`;
+        }
+      }
+
+      async function loadOrders() {
+        const body = document.getElementById('orders-table-body');
+        try {
+          const res = await apiFetch('/api/v1/admin/payments');
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const payments = data.payments || [];
+
+          body.innerHTML = '';
+          if (payments.length === 0) {
+            body.innerHTML = '<tr><td colspan="5" class="empty-state">No orders found.</td></tr>';
+            return;
+          }
+
+          payments.forEach(p => {
+            const statusClass = p.status === 'SUCCESS' ? 'status-success' :
+                              p.status === 'FAILED' || p.status === 'CANCELLED' ? 'status-failed' :
+                              p.status === 'PENDING' || p.status === 'QUEUED' ? 'status-pending' : 'status-active';
+            row = document.createElement('tr');
+            row.innerHTML = `
+              <td class="font-mono text-slate-300">#${p.orderId || '—'}</td>
+              <td class="amount text-white">${p.amountPaise ? (Number(p.amountPaise)/100).toLocaleString('en-IN', {style:'currency',currency:'INR'}) : '₹0.00'}</td>
+              <td class="font-mono text-slate-300">${p.method || '—'}</td>
+              <td><span class="status-badge ${statusClass}">${p.status || '—'}</span></td>
+              <td class="text-slate-400 text-xs">${p.createdAt ? new Date(p.createdAt).toLocaleString() : '—'}</td>
+            `;
+            body.appendChild(row);
+          });
+        } catch (err) {
+          console.error(err);
+          body.innerHTML = '<tr><td colspan="5" class="empty-state text-slate-500">Unable to load orders.</td></tr>';
+        }
+      }
+
+      async function loadDisputes() {
+        const body = document.getElementById('disputes-table-body');
+        try {
+          const res = await apiFetch('/api/v1/admin/tickets');
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const tickets = data.tickets || [];
+
+          body.innerHTML = '';
+          if (tickets.length === 0) {
+            body.innerHTML = '<tr><td colspan="5" class="empty-state">No disputes found.</td></tr>';
+            return;
+          }
+
+          tickets.forEach(t => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td class="font-mono text-slate-300">#${t.id || '—'}</td>
+              <td class="text-slate-300">${t.merchantId || '—'}</td>
+              <td><span class="status-badge status-pending">${t.status || 'OPEN'}</span></td>
+              <td class="text-slate-400 text-xs">${t.createdAt ? new Date(t.createdAt).toLocaleString() : '—'}</td>
+              <td><button class="btn btn-outline btn-sm" onclick="alert('Ticket details not available in current API version.')">View</button></td>
+            `;
+            body.appendChild(row);
+          });
+        } catch (err) {
+          console.error(err);
+          body.innerHTML = '<tr><td colspan="5" class="empty-state text-slate-500">Unable to load disputes.</td></tr>';
+        }
+      }
+
+      async function loadProviders() {
+        try {
+          const res = await apiFetch('/api/v1/admin/observers');
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          // Gmail
+          const gmail = data.gmail || {};
+          const gmailBadge = document.getElementById('observer-gmail-badge');
+          const gmailStatus = document.getElementById('observer-gmail-status');
+          gmailStatus.textContent = gmail.status || 'STANDBY';
+          gmailBadge.className = 'status-badge ' + (gmail.isLoggedIn ? 'status-connected' : 'status-standby');
+          gmailBadge.textContent = gmail.isLoggedIn ? 'CONNECTED' : 'STANDBY';
+
+          // SMS
+          const sms = data.sms || {};
+          const smsBadge = document.getElementById('observer-sms-badge');
+          const smsStatus = document.getElementById('observer-sms-status');
+          smsStatus.textContent = sms.status || 'STANDBY';
+          smsBadge.className = 'status-badge ' + (sms.isPaired ? 'status-connected' : 'status-disconnected');
+          smsBadge.textContent = sms.isPaired ? 'CONNECTED' : 'DISCONNECTED';
+
+          // Android
+          const android = data.android || {};
+          const androidBadge = document.getElementById('observer-android-badge');
+          const androidStatus = document.getElementById('observer-android-status');
+          const connectedCount = android.devices?.filter(d => d.status === 'CONNECTED').length || 0;
+          androidStatus.textContent = `${connectedCount}/${android.totalDevices || 0} devices`;
+          androidBadge.className = 'status-badge ' + (connectedCount > 0 ? 'status-connected' : 'status-disconnected');
+          androidBadge.textContent = connectedCount > 0 ? 'CONNECTED' : 'DISCONNECTED';
+
+          // UPI Settings
+          const upiContent = document.getElementById('upi-settings-content');
+          upiContent.innerHTML = `
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">Active VPA</span>
+              <span class="font-mono text-sm text-white">${data.account ? data.account.upiId : '—'}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">Payee Name</span>
+              <span class="text-sm text-slate-300">${data.account ? data.account.payeeName : '—'}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">Merchant Enabled</span>
+              <span class="status-badge ${data.account && data.account.isMerchantEnabled ? 'status-success' : 'status-failed'}">${data.account && data.account.isMerchantEnabled ? 'YES' : 'NO'}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">Total Accounts</span>
+              <span class="text-sm text-slate-300">${data.accounts ? data.accounts.length : 0}</span>
+            </div>
+          `;
+
+          // Queue
+          const queueRes = await apiFetch('/api/v1/admin/queue');
+          const queueData = await queueRes.json();
+          const queueContent = document.getElementById('queue-content');
+          queueContent.innerHTML = `
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">Current Slot</span>
+              <span class="font-mono text-sm text-white">${queueData.currentSlot ? '#' + queueData.currentSlot.orderId : '—'}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">Queued</span>
+              <span class="font-mono text-sm text-white">${queueData.queue ? queueData.queue.length : 0}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">Slot Busy</span>
+              <span class="status-badge ${queueData.receivingAccount && queueData.receivingAccount.isSlotBusy ? 'status-active' : 'status-success'}">${queueData.receivingAccount && queueData.receivingAccount.isSlotBusy ? 'BUSY' : 'FREE'}</span>
+            </div>
+          `;
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      function initDashboard() {
+        loadMerchants();
+        loadOrders();
+        loadDisputes();
+        loadProviders();
+        setInterval(() => {
+          if (document.getElementById('tab-merchants').classList.contains('hide') === false) loadMerchants();
+          if (document.getElementById('tab-orders').classList.contains('hide') === false) loadOrders();
+          if (document.getElementById('tab-disputes').classList.contains('hide') === false) loadDisputes();
+          if (document.getElementById('tab-providers').classList.contains('hide') === false) loadProviders();
+        }, 10000);
+      }
+
+      // Quick actions on merchant tab
+      document.getElementById('merchants-table-body').addEventListener('click', (e) => {
+        if (e.target.matches('[data-action="confirm"]')) {
+          // counter confirm
+        }
+      });
+
+    })();
+  </script>
+</body>
+</html>

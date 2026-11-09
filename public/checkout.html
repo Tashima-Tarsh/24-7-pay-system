@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Secure Checkout | 24/7 Pay</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    min-height: 100vh;
+    color: #f8fafc;
+  }
+  .glass {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  }
+  .glass-panel {
+    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 20px 40px 0 rgba(0,0,0,0.4);
+  }
+  .qr-container {
+    background: #ffffff;
+    padding: 4px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .status-loading { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .status-active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-success { background: rgba(16, 185, 129, 0.2); color: #22c55e; border: 1px solid rgba(22, 163, 74, 0.4); }
+  .status-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+  .status-expired { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+  .status-blocked { background: rgba(156, 163, 175, 0.2); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.4); }
+  .pulse-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  }
+  .spinner {
+    width: 24px; height: 24px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: #34d399;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .amount-display {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .copy-btn {
+    transition: all 0.2s;
+  }
+  .copy-btn.copied {
+    background: #22c55e;
+    color: #ffffff;
+  }
+  .server-indicator {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+  }
+  .server-working { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+  .server-busy { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
+  .server-issues { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .hide { display: none !important; }
+  .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .slide-up { animation: slideUp 0.5s ease-out forwards; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  input, select, button {
+    font-family: inherit;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .utr-display {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+  }
+  .trust-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .trust-item {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.8rem;
+    color: #cbd5e1;
+  }
+</style>
+</head>
+<body class="antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- Loading State -->
+  <div id="state-loading" class="glass-panel min-h-screen flex flex-col items-center justify-center p-6 fade-in">
+    <div class="spinner mb-6"></div>
+    <h1 class="text-xl font-semibold text-slate-200 mb-2">Loading Checkout</h1>
+    <p class="text-sm text-slate-400">Connecting to secure payment session&hellip;</p>
+  </div>
+
+  <!-- Active Payment State -->
+  <div id="state-active" class="hide max-w-xl mx-auto p-4 slide-up">
+    <header class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+          <span class="text-emerald-400 font-bold text-lg">24</span>
+        </div>
+        <div>
+          <h2 id="page-title" class="text-lg font-bold text-white tracking-tight">Secure Checkout</h2>
+          <p id="merchant-name" class="text-sm text-emerald-400 font-medium">Merchant Store</p>
+        </div>
+      </div>
+      <div id="server-indicator" class="server-indicator server-working hide">
+        <span id="server-label">Server Working</span>
+      </div>
+    </header>
+
+    <div class="glass-panel rounded-2xl p-6 mb-6">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Amount to Pay</p>
+          <div class="flex items-baseline gap-2">
+            <span class="amount-display text-4xl font-bold text-white" id="amount-display">₹0.00</span>
+            <span class="text-sm text-slate-400" id="currency-display">INR</span>
+          </div>
+          <p id="order-label" class="text-xs text-slate-500 mt-1">Order <span id="order-id" class="font-mono text-slate-300">#0000</span></p>
+        </div>
+        <div class="text-right">
+          <div id="status-badge" class="status-badge status-loading">
+            <span class="pulse-dot"></span>
+            <span id="status-text">Loading</span>
+          </div>
+          <p id="time-remaining" class="text-xs text-slate-500 mt-1 hide"></p>
+        </div>
+      </div>
+
+      <!-- UPI QR Code Section -->
+      <div class="bg-white/5 rounded-xl p-4 border border-white/10 mb-6">
+        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Pay with UPI</h3>
+        <div class="flex flex-col items-center gap-4">
+          <div class="qr-container w-full max-w-md">
+            <img id="qr-image" src="" alt="UPI QR Code" class="w-full max-w-[260px] h-auto block mx-auto" style="min-width: 200px;">
+          </div>
+          <p class="text-sm text-slate-300">Scan with any UPI app (GPay, PhonePe, Paytm, BHIM)</p>
+        </div>
+      </div>
+
+      <!-- Payee VPA Section -->
+      <div class="bg-white/5 rounded-xl p-4 border border-white/10 mb-6">
+        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Pay to VPA</h3>
+        <div class="flex items-center gap-3 mb-2">
+          <span class="font-mono text-sm text-emerald-300 bg-white/10 px-2 py-1 rounded border border-white/10" id="payee-vpa">merchant@upi</span>
+          <button id="copy-vpa-btn" class="copy-btn px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded text-sm text-white transition-colors" title="Copy VPA">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+          </button>
+        </div>
+        <p id="payee-name" class="text-sm text-slate-300">Merchant Store</p>
+      </div>
+
+      <!-- Payment Action Buttons -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+        <button id="payment-done-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+          <span>I've Paid</span>
+        </button>
+        <button id="retry-btn" class="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all border border-white/10 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          <span>Retry</span>
+        </button>
+      </div>
+
+      <!-- UTR Verification Form (shown after payment done click) -->
+      <form id="utr-form" class="hide bg-white/5 rounded-xl p-5 border border-white/10 mt-6 slide-up">
+        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Verify Payment</h3>
+        <div class="space-y-3">
+          <label class="block text-xs text-slate-400 mb-1">UPI Transaction Reference (UTR)</label>
+          <input type="text" id="utr-input" placeholder="Enter 12-digit UTR" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400" maxlength="12">
+          <p class="text-xs text-slate-500">12-digit UPI reference from your banking app</p>
+        </div>
+        <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm transition-all">
+          Submit Verification
+        </button>
+      </form>
+
+      <!-- Trust Section -->
+      <div class="trust-grid mt-8">
+        <div class="trust-item">
+          <div class="text-xs text-emerald-400 font-bold mb-1">256-Bit Encryption</div>
+          <div class="text-xs text-slate-400">Bank-grade SSL security</div>
+        </div>
+        <div class="trust-item">
+          <div class="text-xs text-emerald-400 font-bold mb-1">Instant Settlement</div>
+          <div class="text-xs text-slate-400">Real-time confirmation</div>
+        </div>
+        <div class="trust-item">
+          <div class="text-xs text-emerald-400 font-bold mb-1">24/7 Support</div>
+          <div class="text-xs text-slate-400" id="support-text">Help available</div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="text-center mt-6">
+      <p class="text-xs text-slate-500">Secure Checkout &copy; <span id="year"></span> 24/7 Pay</p>
+    </footer>
+  </div>
+
+  <!-- Success State -->
+  <div id="state-success" class="hide max-w-xl mx-auto p-6 slide-up">
+    <div class="glass-panel rounded-2xl p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-6">
+        <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+      </div>
+      <h2 class="text-2xl font-bold text-white mb-2">Payment Verified</h2>
+      <p class="text-slate-300 mb-6">Your payment has been successfully verified.</p>
+      
+      <div class="bg-white/5 rounded-xl p-4 border border-white/10 mb-6 text-left">
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-2">Transaction Details</div>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-slate-400">Order ID</span>
+            <span class="font-mono text-white" id="success-order-id">#0000</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Amount</span>
+            <span class="font-mono text-white" id="success-amount">₹0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">UTR</span>
+            <span class="font-mono text-emerald-400" id="success-utr">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Status</span>
+            <span class="text-emerald-400 font-medium">Success</span>
+          </div>
+        </div>
+      </div>
+
+      <button id="back-home-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-emerald-500/25">
+        Return to Home
+      </button>
+    </div>
+  </div>
+
+  <!-- Failed State -->
+  <div id="state-failed" class="hide max-w-xl mx-auto p-6 slide-up">
+    <div class="glass-panel rounded-2xl p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center mx-auto mb-6">
+        <svg class="w-8 h-8 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </div>
+      <h2 class="text-2xl font-bold text-white mb-2">Payment Failed</h2>
+      <p id="failure-reason" class="text-slate-300 mb-6">The payment could not be completed.</p>
+      
+      <div class="bg-white/5 rounded-xl p-4 border border-white/10 mb-6 text-left">
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-2">Session Details</div>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-slate-400">Order ID</span>
+            <span class="font-mono text-white" id="failed-order-id">#0000</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Amount</span>
+            <span class="font-mono text-white" id="failed-amount">₹0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <button id="retry-payment-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-emerald-500/25">
+        Try Again
+      </button>
+    </div>
+  </div>
+
+  <!-- Expired State -->
+  <div id="state-expired" class="hide max-w-xl mx-auto p-6 slide-up">
+    <div class="glass-panel rounded-2xl p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-6">
+        <svg class="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      </div>
+      <h2 class="text-2xl font-bold text-white mb-2">Session Expired</h2>
+      <p class="text-slate-300 mb-6">Your checkout session has expired. Please start a new payment.</p>
+      <button id="new-payment-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-emerald-500/25">
+        Create New Payment
+      </button>
+    </div>
+  </div>
+
+  <!-- Error State -->
+  <div id="state-error" class="hide max-w-xl mx-auto p-6 slide-up">
+    <div class="glass-panel rounded-2xl p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center mx-auto mb-6">
+        <svg class="w-8 h-8 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      </div>
+      <h2 class="text-2xl font-bold text-white mb-2">Checkout Error</h2>
+      <p id="error-message" class="text-slate-300 mb-6">Unable to load checkout session.</p>
+      <button id="reload-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-emerald-500/25">
+        Reload Page
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const elements = {
+        loading: document.getElementById('state-loading'),
+        active: document.getElementById('state-active'),
+        success: document.getElementById('state-success'),
+        failed: document.getElementById('state-failed'),
+        expired: document.getElementById('state-expired'),
+        error: document.getElementById('state-error'),
+      };
+
+      function showState(id) {
+        Object.values(elements).forEach(el => el.classList.add('hide'));
+        document.getElementById(id).classList.remove('hide');
+      }
+
+      function getOrderId() {
+        const path = window.location.pathname;
+        const match = path.match(/\/checkout\/([^\/]+)/);
+        if (match) return match[1];
+        const params = new URLSearchParams(window.location.search);
+        return params.get('id') || null;
+      }
+
+      const orderId = getOrderId();
+      if (!orderId) {
+        showState('error');
+        document.getElementById('error-message').textContent = 'No order ID provided. Please use a valid checkout link.';
+        return;
+      }
+
+      let pollInterval = null;
+      let isTerminal = false;
+
+      const $ = (id) => document.getElementById(id);
+
+      async function fetchState() {
+        try {
+          const res = await fetch(`/api/v1/checkout/${encodeURIComponent(orderId)}/state`, {
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-cache',
+          });
+          if (!res.ok) {
+            if (res.status === 404) {
+              showState('error');
+              document.getElementById('error-message').textContent = 'Checkout session not found.';
+              stopPolling();
+              return;
+            }
+            throw new Error(`HTTP ${res.status}`);
+          }
+          return await res.json();
+        } catch (err) {
+          console.error('Fetch error:', err);
+          showState('error');
+          document.getElementById('error-message').textContent = 'Unable to reach checkout server. Please check your connection.';
+          stopPolling();
+        }
+      }
+
+      function renderState(data) {
+        if (!data) return;
+
+        // Update dynamic page info
+        document.title = `${data.orderId} - 24/7 Pay`;
+        if (data.merchantName) {
+          $('merchant-name').textContent = data.merchantName;
+        }
+        if (data.amount) {
+          $('amount-display').textContent = data.amount;
+          $('success-amount').textContent = data.amount;
+          $('failed-amount').textContent = data.amount;
+        }
+        if (data.currency) {
+          $('currency-display').textContent = data.currency;
+        }
+        if (data.orderId) {
+          $('order-id').textContent = `#${data.orderId}`;
+          $('success-order-id').textContent = `#${data.orderId}`;
+          $('failed-order-id').textContent = `#${data.orderId}`;
+        }
+        if (data.payeeVpa) {
+          $('payee-vpa').textContent = data.payeeVpa;
+        }
+        if (data.payeeName) {
+          $('payee-name').textContent = data.payeeName;
+        }
+        if (data.supportEmails && data.supportEmails[0]) {
+          $('support-text').textContent = data.supportEmails[0];
+        }
+
+        // Apply branding colors
+        if (data.branding && data.branding.primaryColor) {
+          const pc = data.branding.primaryColor;
+          document.documentElement.style.setProperty('--brand-color', pc);
+          document.querySelectorAll('.bg-emerald-500').forEach(el => {
+            el.style.backgroundColor = pc;
+          });
+          document.querySelectorAll('.hover:bg-emerald-600').forEach(el => {
+            el.style.transition = 'all 0.2s';
+            el.onmouseenter = () => { el.style.backgroundColor = pc; };
+            el.onmouseleave = () => { el.style.backgroundColor = ''; };
+          });
+          document.querySelectorAll('.text-emerald-400, .text-emerald-300, .bg-emerald-500/20').forEach(el => {
+            el.style.color = pc;
+          });
+        }
+
+        // Update status badge
+        const statusBadge = $('status-badge');
+        const statusText = $('status-text');
+        statusBadge.className = 'status-badge';
+        const pulse = statusBadge.querySelector('.pulse-dot');
+        
+        isTerminal = data.isTerminal === true;
+
+        switch (data.status) {
+          case 'ACTIVE':
+          case 'INTENT_ISSUED':
+            statusBadge.classList.add('status-active');
+            statusText.textContent = 'Awaiting Payment';
+            pulse.classList.add('pulse-dot');
+            if (data.timeRemainingSeconds > 0) {
+              $('time-remaining').classList.remove('hide');
+              $('time-remaining').textContent = `Expires in ${Math.ceil(data.timeRemainingSeconds / 60)}m ${data.timeRemainingSeconds % 60}s`;
+            }
+            break;
+          case 'PROCESSING':
+          case 'VERIFICATION_PENDING':
+            statusBadge.classList.add('status-active');
+            statusText.textContent = 'Verifying Payment';
+            break;
+          case 'SUCCESS':
+            statusBadge.classList.add('status-success');
+            statusText.textContent = 'Verified';
+            showState('success');
+            if (data.utr) {
+              $('success-utr').textContent = data.utr;
+            }
+            stopPolling();
+            return;
+          case 'FAILED':
+            statusBadge.classList.add('status-failed');
+            statusText.textContent = 'Failed';
+            showState('failed');
+            if (data.cancelledReason) {
+              document.getElementById('failure-reason').textContent = data.cancelledReason;
+            }
+            stopPolling();
+            return;
+          case 'EXPIRED':
+            statusBadge.classList.add('status-expired');
+            statusText.textContent = 'Expired';
+            showState('expired');
+            stopPolling();
+            return;
+          case 'CANCELLED':
+            statusBadge.classList.add('status-failed');
+            statusText.textContent = 'Cancelled';
+            showState('failed');
+            stopPolling();
+            return;
+          case 'BLOCKED':
+            statusBadge.classList.add('status-blocked');
+            statusText.textContent = 'Blocked';
+            showState('failed');
+            document.getElementById('failure-reason').textContent = 'This session has been blocked due to suspicious activity.';
+            stopPolling();
+            return;
+          default:
+            statusBadge.classList.add('status-loading');
+            statusText.textContent = data.status;
+        }
+
+        // Show active state once we have data
+        if (!isTerminal) {
+          showState('active');
+        }
+
+        // Update QR code
+        if (data.upiQr) {
+          $('qr-image').src = data.upiQr;
+        } else if (data.upiUri) {
+          $('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(data.upiUri)}&size=256x256`;
+        }
+
+        // Show/hide payment done button
+        const paymentDoneBtn = $('payment-done-btn');
+        const utrForm = $('utr-form');
+        if (data.canClickPaymentDone && !isTerminal) {
+          paymentDoneBtn.classList.remove('hide');
+          utrForm.classList.add('hide');
+        } else {
+          paymentDoneBtn.classList.add('hide');
+          utrForm.classList.add('hide');
+        }
+
+        // Update copy button state
+        const copyBtn = $('copy-vpa-btn');
+        copyBtn.classList.remove('copied');
+        copyBtn.title = 'Copy VPA';
+
+        // Server indicator
+        const serverIndicator = $('server-indicator');
+        const serverLabel = $('server-label');
+        if (data.upiServerIndicator) {
+          serverIndicator.classList.remove('hide');
+          serverIndicator.className = 'server-indicator';
+          serverLabel.textContent = data.upiServerIndicator.label || data.upiServerIndicator.status;
+          if (data.upiServerIndicator.status === 'WORKING') {
+            serverIndicator.classList.add('server-working');
+          } else if (data.upiServerIndicator.status === 'BUSY') {
+            serverIndicator.classList.add('server-busy');
+          } else {
+            serverIndicator.classList.add('server-issues');
+          }
+        }
+      }
+
+      function stopPolling() {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+      }
+
+      async function poll() {
+        const data = await fetchState();
+        if (data) {
+          renderState(data);
+          if (data.isTerminal === true) {
+            stopPolling();
+          }
+        }
+      }
+
+      // Initialize
+      showState('loading');
+      poll();
+      pollInterval = setInterval(poll, 3000);
+
+      // Copy VPA
+      $('copy-vpa-btn').addEventListener('click', async () => {
+        const vpa = $('payee-vpa').textContent;
+        try {
+          await navigator.clipboard.writeText(vpa);
+          const btn = $('copy-vpa-btn');
+          btn.classList.add('copied');
+          btn.title = 'Copied!';
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.title = 'Copy VPA';
+          }, 2000);
+        } catch (err) {
+          console.error('Copy failed:', err);
+        }
+      });
+
+      // Payment Done - submit UTR
+      $('payment-done-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        $('payment-done-btn').classList.add('hide');
+        $('utr-form').classList.remove('hide');
+      });
+
+      $('utr-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const utr = $('utr-input').value.trim().replace(/[\s-]/g, '');
+        if (!utr || !/^\d{12}$/.test(utr)) {
+          alert('Please enter a valid 12-digit UTR.');
+          return;
+        }
+
+        const btn = $('utr-form').querySelector('button[type="submit"]');
+        const originalText = btn.textContent;
+        btn.textContent = 'Verifying&hellip;';
+        btn.disabled = true;
+
+        try {
+          const res = await fetch(`/api/v1/checkout/${encodeURIComponent(orderId)}/payment-done`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ utr, payerName: '', payerVpa: '' }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            // Re-fetch state to show success
+            await poll();
+          } else {
+            const err = await res.json().catch(() => ({}));
+            alert(err.error || 'Verification failed. Please try again.');
+            btn.textContent = originalText;
+            btn.disabled = false;
+          }
+        } catch (err) {
+          console.error('Verification error:', err);
+          alert('Network error. Please try again.');
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }
+      });
+
+      // Retry button
+      $('retry-btn').addEventListener('click', () => {
+        $('retry-btn').textContent = 'Retrying&hellip;';
+        $('retry-btn').disabled = true;
+        fetch(`/api/v1/checkout/${encodeURIComponent(orderId)}/retry-new-payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }).then(async (res) => {
+          if (res.ok) {
+            await poll();
+          } else {
+            alert('Unable to retry. Please create a new payment.');
+            $('retry-btn').textContent = 'Retry';
+            $('retry-btn').disabled = false;
+          }
+        }).catch(() => {
+          alert('Network error.');
+          $('retry-btn').textContent = 'Retry';
+          $('retry-btn').disabled = false;
+        });
+      });
+
+      // Reload / new payment buttons
+      $('reload-btn').addEventListener('click', () => location.reload());
+      $('new-payment-btn').addEventListener('click', () => location.reload());
+      $('back-home-btn').addEventListener('click', () => location.reload());
+
+      document.getElementById('year').textContent = new Date().getFullYear();
+    })();
+  </script>
+</body>
+</html>
