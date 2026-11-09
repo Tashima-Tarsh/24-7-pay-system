@@ -109,3 +109,24 @@ jobs:
           NODE_ENV: test
           DYNAMO_POSTGRES_TEST_URL: postgres://ci_pay_user@127.0.0.1:5432/ci_pay
         run: node --test scripts/postgres-acceptance.test.js
+
+  browser-acceptance:
+    name: Browser and workspace acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --install-links
+      - name: Install Chromium for isolated browser test
+        run: npx playwright install --with-deps chromium
+      - name: Test new website and cookie-free workspace
+        run: node --test scripts/browser-workspace-e2e.test.js
+        env:
+          NODE_ENV: test
+          CI: true
