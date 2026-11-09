@@ -144,7 +144,7 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.locator('button[data-view="callbacks"]').click();
     await page.getByRole('heading',{name:'Callback deliveries'}).waitFor({timeout:12000});
     await page.locator('button[data-view="settings"]').click();
-    await page.getByRole('heading',{name:'Business settings'}).waitFor({timeout:12000});
+    await page.getByRole('heading',{name:'Business profile and callback configuration'}).waitFor({timeout:12000});
     await page.locator('button[data-view="overview"]').click();
 
     await page.getByRole('heading',{name:'Production readiness'}).waitFor({timeout:12000});
