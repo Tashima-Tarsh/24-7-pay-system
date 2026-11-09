@@ -341,7 +341,7 @@ export function registerPaymentRoutes(server, ctx) {
         customer = ctx.customerRepo.create({
           id: customerId,
           name: customerName || 'Customer',
-          email: customerEmail || `cust_${uniqueSuffix}@customer.sanbookpay.com`,
+          email: customerEmail || `cust_${uniqueSuffix}@customer.247pay.invalid`,
           mobileNumber: customerPhone || `98${Math.floor(10000000 + Math.random() * 90000000)}`,
           status: 'ACTIVE'
         });
