@@ -114,7 +114,7 @@ describe('UPI Return Hardening — Regression Tests', () => {
     return sessionId;
   }
 
-  test('verify-callback accepts valid successful return', async () => {
+  test('verify-callback holds client return pending until external evidence', async () => {
     // Create order
     const orderRes = await httpPost(baseUrl + '/api/v1/orders', JSON.stringify({
       merchant_id: merchant.id,
@@ -139,20 +139,20 @@ describe('UPI Return Hardening — Regression Tests', () => {
       appOpenedAt: now - 10000
     }));
     assert.equal(callbackRes.statusCode, 200, 'valid callback should succeed: ' + JSON.stringify(callbackRes.body));
-    assert.equal(callbackRes.body.verdict, 'SUCCESS');
+    assert.equal(callbackRes.body.verdict, 'VERIFICATION_PENDING');
     assert.equal(callbackRes.body.order_id, order_id);
     assert.equal(callbackRes.body.payment_id, sessionId);
 
-    // Session should be SUCCESS
+    // Client-reported UTR never generates a bank credit.
     const session = testDb.queryOne(`SELECT status FROM payment_sessions WHERE id = ?`, [sessionId]);
-    assert.equal(session.status, 'SUCCESS');
+    assert.equal(session.status, 'VERIFICATION_PENDING');
 
-    // Nonce consumed, UTR registered
+    // Nonce consumed, no authoritative UTR registered
     const tokenPayload = verifySignedOrderToken(token).payload;
     const nonceRow = testDb.queryOne(`SELECT used FROM payment_nonces WHERE nonce = ?`, [tokenPayload.nonce]);
     assert.equal(nonceRow.used, 1);
     const utrRow = testDb.queryOne(`SELECT id FROM utr_registry WHERE utr = ?`, ['SBI1234567890']);
-    assert.ok(utrRow, 'UTR must be registered');
+    assert.equal(utrRow, undefined, 'unverified UTR must not enter authoritative registry');
   });
 
   test('verify-callback rejects failed responseCode (not bank-confirmed)', async () => {
@@ -182,7 +182,8 @@ describe('UPI Return Hardening — Regression Tests', () => {
 
     // Session must NOT be SUCCESS
     const session = testDb.queryOne(`SELECT status FROM payment_sessions WHERE id = ?`, [sessionId]);
-    assert.equal(session.status, 'FAILED');
+    assert.notEqual(session.status, 'FAILED');
+    assert.notEqual(session.status, 'SUCCESS');
   });
 
   test('verify-callback rejects cross-order substitution', async () => {

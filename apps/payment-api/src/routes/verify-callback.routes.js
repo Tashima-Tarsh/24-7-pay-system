@@ -68,7 +68,7 @@ export function registerVerifyCallbackRoutes(server, ctx) {
         });
       }
 
-      if (nonceRow.used === 1) {
+      if (Number(nonceRow.used) === 1) {
         return HttpServer.json(res, 409, {
           verdict: 'REJECTED',
           reason: 'NONCE_ALREADY_USED',
@@ -120,6 +120,10 @@ export function registerVerifyCallbackRoutes(server, ctx) {
       // ---- CHECK 5: Verify time delta (8-300 seconds) ----
       const timeInAppMs = returnedAt - appOpenedAt;
       const timeInAppSec = timeInAppMs / 1000;
+      if (!Number.isFinite(Number(returnedAt)) || !Number.isFinite(Number(appOpenedAt)) ||
+          Number(returnedAt) > now + 60_000 || Number(appOpenedAt) > Number(returnedAt)) {
+        return HttpServer.json(res, 409, { verdict: 'REJECTED', reason: 'INVALID_RETURN_TIMESTAMPS', code: 'INVALID_RETURN_TIMESTAMPS' });
+      }
 
       if (timeInAppSec < 8) {
         return HttpServer.json(res, 409, {
@@ -138,7 +142,7 @@ export function registerVerifyCallbackRoutes(server, ctx) {
 
       // ---- CHECK 6: Verify UTR format ----
       // UTR must be 10-22 alphanumeric characters with bank prefix
-      const utrPattern = /^(SBI|HDFC|ICICI|TXN|KKBK|AXIS|UTRB|UT)[A-Z0-9]{6,18}$/i;
+      const utrPattern = /^(?:[0-9]{12}|(?:SBI|HDFC|ICICI|TXN|KKBK|AXIS|UTRB|UT)[A-Z0-9]{6,18})$/i;
       if (!utr || !utrPattern.test(utr)) {
         return HttpServer.json(res, 400, {
           verdict: 'REJECTED',
@@ -161,123 +165,105 @@ export function registerVerifyCallbackRoutes(server, ctx) {
         });
       }
 
-      // ---- ALL CHECKS PASSED ----
-
-      // ---- CHECK 8: Validate responseCode - only a successful UPI response
-      // leads to a confirmed payment. Any other response code is a failed
-      // payment attempt and must not be treated as bank-confirmed success.
+      // Signed checkout tokens and client-return codes prove only that the
+      // attempt originated from this checkout. They do NOT prove bank credit.
       const isPaymentSuccess = String(responseCode).trim() === '00';
-
-      // ---- Cross-order binding: the session identified by the URL param must
-      // belong to the order embedded in the signed token. Prevents an attacker
-      // from presenting a valid token for order A against a session for order B.
       const session = sessionRepo.findById(paymentId);
       if (!session) {
         return HttpServer.json(res, 404, {
-          verdict: 'REJECTED',
-          reason: 'SESSION_NOT_FOUND',
-          code: 'SESSION_NOT_FOUND'
+          verdict: 'REJECTED', reason: 'SESSION_NOT_FOUND', code: 'SESSION_NOT_FOUND'
         });
       }
       if (String(session.orderId) !== String(order_id)) {
         return HttpServer.json(res, 409, {
-          verdict: 'REJECTED',
-          reason: 'ORDER_SESSION_MISMATCH',
-          code: 'ORDER_SESSION_MISMATCH'
+          verdict: 'REJECTED', reason: 'ORDER_SESSION_MISMATCH', code: 'ORDER_SESSION_MISMATCH'
+        });
+      }
+      if ([PaymentStatus.SUCCESS, PaymentStatus.FAILED, PaymentStatus.EXPIRED, PaymentStatus.CANCELLED].includes(session.status)) {
+        return HttpServer.json(res, 409, {
+          verdict: 'REJECTED', reason: 'SESSION_TERMINAL', code: 'SESSION_TERMINAL'
         });
       }
 
       if (!isPaymentSuccess) {
-        // Payment attempt failed (e.g. responseCode != '00'). Consume the nonce
-        // so this one-time attempt cannot be replayed, but record a FAILED
-        // verdict — never SUCCESS — since only customer-return evidence exists.
+        // A failure reported by a payer app does not prove a bank debit did
+        // not occur. Record the failed attempt but leave the order unchanged.
         try {
           db.transaction(() => {
-            db.execute(
-              `UPDATE payment_nonces SET used = 1, used_at = ? WHERE nonce = ?`,
+            const consumed = db.execute(
+              'UPDATE payment_nonces SET used = 1, used_at = ? WHERE nonce = ? AND used = 0',
               [new Date().toISOString(), nonce]
             );
-            db.execute(
-              `UPDATE payment_sessions SET status = 'FAILED', updated_at = ? WHERE id = ?`,
-              [new Date().toISOString(), paymentId]
-            );
+            if (Number(consumed.changes) !== 1) throw new Error('NONCE_ALREADY_USED');
           });
-        } catch {}
+        } catch (err) {
+          return HttpServer.json(res, 409, {
+            verdict: 'REJECTED', reason: 'NONCE_ALREADY_USED', code: 'NONCE_ALREADY_USED'
+          });
+        }
+        ctx.auditRepo?.log({
+          merchantId: session.merchantId, entityType: 'PAYMENT_SESSION', entityId: session.id,
+          action: 'CUSTOMER_APP_RETURN_FAILED', actorType: 'CUSTOMER',
+          details: { responseCode: String(responseCode), bankVerified: false }
+        });
         return HttpServer.json(res, 200, {
-          verdict: 'REJECTED',
-          reason: 'PAYMENT_FAILED',
-          code: 'PAYMENT_FAILED',
-          order_id: order_id,
-          payment_id: paymentId,
-          response_code: responseCode,
-          verified_at: new Date().toISOString()
+          verdict: 'REJECTED', reason: 'PAYMENT_FAILED', code: 'PAYMENT_FAILED',
+          order_id, payment_id: paymentId, status: session.status, bankVerified: false
         });
       }
 
-      // Atomic commit: consume nonce, register UTR, mark session SUCCESS.
-      // All three happen in one transaction so a failure cannot leave the
-      // nonce consumed without state, or state changed without the nonce.
+      const nowIso = new Date().toISOString();
+      const reportedMetadata = {
+        ...(typeof session.metadata === 'object' && session.metadata !== null ? session.metadata : {}),
+        reportedUtr: utr,
+        reportedUtrSource: 'CUSTOMER_APP_RETURN',
+        appReturnCode: '00',
+        bankVerified: false
+      };
+      const verifyExpires = new Date(Date.now() + 30 * 60_000).toISOString();
+
+      // Atomic nonce consumption + pending state. There is deliberately no
+      // utr_registry credit, journal posting or SUCCESS webhook here.
       try {
         db.transaction(() => {
-          db.execute(
-            `UPDATE payment_nonces SET used = 1, used_at = ? WHERE nonce = ?`,
-            [new Date().toISOString(), nonce]
+          const consumed = db.execute(
+            'UPDATE payment_nonces SET used = 1, used_at = ? WHERE nonce = ? AND used = 0',
+            [nowIso, nonce]
           );
-          db.execute(
-            `INSERT INTO utr_registry (utr, payment_order_id, payment_session_id, created_at) VALUES (?, ?, ?, ?)`,
-            [utr, order_id, paymentId, new Date().toISOString()]
+          if (Number(consumed.changes) !== 1) throw new Error('NONCE_ALREADY_USED');
+          const updated = db.execute(
+            `UPDATE payment_sessions SET status = ?, reported_utr = ?, reported_utr_source = ?,
+              verification_expires_at = ?, metadata = ?, updated_at = ?
+              WHERE id = ? AND status NOT IN ('SUCCESS','FAILED','EXPIRED','CANCELLED')`,
+            [PaymentStatus.VERIFICATION_PENDING, utr, 'CUSTOMER_APP_RETURN',
+             verifyExpires, JSON.stringify(reportedMetadata), nowIso, paymentId]
           );
-          db.execute(
-            `UPDATE payment_sessions SET status = 'SUCCESS', updated_at = ? WHERE id = ?`,
-            [new Date().toISOString(), paymentId]
-          );
+          if (Number(updated.changes) !== 1) throw new Error('SESSION_TERMINAL');
         });
       } catch (commitErr) {
-        console.error('[verify-callback] atomic commit failed:', commitErr.message);
-        return HttpServer.json(res, 500, {
-          verdict: 'REJECTED',
-          reason: 'COMMIT_FAILED',
-          code: 'COMMIT_FAILED'
+        console.error('[verify-callback] pending-state commit failed:', commitErr.message);
+        return HttpServer.json(res, 409, {
+          verdict: 'REJECTED', reason: 'COMMIT_FAILED', code: 'COMMIT_FAILED'
         });
       }
-
-      // Record observation for audit trail (best-effort, does not affect verdict)
-      try {
-        if (obsRepo) {
-          obsRepo.create({
-            id: `obs_verify_${crypto.randomUUID()}`,
-            receivingAccountId: session.receivingAccountId || null,
-            source: 'INTENT_RETURN',
-            amount_paise: amount_paise,
-            observedAt: new Date(),
-            bankReferenceNumber: utr,
-            fingerprintHash: crypto.createHash('sha256').update(`${paymentId}:${utr}`).digest('hex'),
-            rawPayload: { utr, responseCode, amount, fingerprint, returnedAt, appOpenedAt, order_id },
-            attributionStatus: 'ATTRIBUTED',
-            attributedPaymentId: paymentId
-          });
-        }
-      } catch (obsErr) {
-        console.error('[verify-callback] observation record warning:', obsErr.message);
-      }
-
-      // Fire webhook to merchant only after the durable state commit.
-      try {
-        if (webhookEngine) {
-          const updated = sessionRepo.findById(paymentId);
-          webhookEngine.dispatch('PAYMENT.SUCCESS', updated).catch(() => {});
-        }
-      } catch (whErr) {
-        console.error('[verify-callback] webhook dispatch warning:', whErr.message);
-      }
+      ctx.auditRepo?.log({
+        merchantId: session.merchantId, entityType: 'PAYMENT_SESSION', entityId: session.id,
+        action: 'CUSTOMER_APP_RETURN_REQUIRES_BANK_EVIDENCE', actorType: 'CUSTOMER',
+        details: { bankVerified: false, source: 'UPI_APP_RETURN' }
+      });
+      server.broadcastSse(paymentId, 'status_change', {
+        status: PaymentStatus.VERIFICATION_PENDING,
+        verificationTag: 'CUSTOMER_RETURN_UNVERIFIED'
+      });
 
       return HttpServer.json(res, 200, {
-        verdict: 'SUCCESS',
-        order_id: order_id,
+        verdict: 'VERIFICATION_PENDING',
+        order_id,
         payment_id: paymentId,
-        utr: utr,
-        status: 'SUCCESS',
-        verified_at: new Date().toISOString()
+        status: PaymentStatus.VERIFICATION_PENDING,
+        bankVerified: false,
+        message: 'Payment reported by UPI app. Awaiting independent bank/provider confirmation.',
+        reported_at: nowIso
       });
     } catch (err) {
       console.error('[verify-callback] error:', err.message);

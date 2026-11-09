@@ -103,8 +103,8 @@ test('end-to-end payment-callback verification against pristine DB', async (t) =
   const appOpenedAt = now - 30000; // 30s in app (within 8-300s window)
   const returnedAt = now;
 
-  // ---- 3A. AUTHENTIC CALLBACK -> SUCCESS ----
-  await t.test('authentic callback marks session SUCCESS (terminal)', async () => {
+  // ---- 3A. AUTHENTIC APP RETURN -> VERIFICATION_PENDING (NOT SUCCESS) ----
+  await t.test('signed app return remains VERIFICATION_PENDING until bank evidence', async () => {
     const res = await request(app, base, 'POST', `/api/v1/payments/${sessionId}/verify-callback`, {
       token,
       utr: 'SBI900000000123',
@@ -115,15 +115,16 @@ test('end-to-end payment-callback verification against pristine DB', async (t) =
       appOpenedAt,
     });
     assert.equal(res.status, 200, 'authentic callback: ' + JSON.stringify(res.body));
-    assert.equal(res.body.verdict, 'SUCCESS', 'verdict should be SUCCESS: ' + JSON.stringify(res.body));
-    assert.equal(res.body.status, 'SUCCESS');
+    assert.equal(res.body.verdict, 'VERIFICATION_PENDING', 'app return must not settle funds: ' + JSON.stringify(res.body));
+    assert.equal(res.body.status, 'VERIFICATION_PENDING');
     assert.equal(res.body.order_id, order_id);
     assert.equal(res.body.payment_id, sessionId);
 
     const session = app.context.sessionRepo.findById(sessionId);
-    assert.equal(session.status, 'SUCCESS', 'session must be terminal SUCCESS');
+    assert.equal(session.status, 'VERIFICATION_PENDING', 'customer return alone must never settle payment');
     const order = app.context.db.queryOne('SELECT status FROM payment_orders WHERE id = ?', [order_id]);
-    console.log('[E2E] authentic callback -> SUCCESS (session=' + session.status + ', order=' + order.status + ')');
+    assert.notEqual(order.status, 'SUCCESS', 'customer return must not settle payment order');
+    console.log('[E2E] authenticated return -> VERIFICATION_PENDING, no provider credit');
   });
 
   // ---- 3B. DUPLICATE CALLBACK (same nonce+UTR) -> REJECTED ----
@@ -142,8 +143,8 @@ test('end-to-end payment-callback verification against pristine DB', async (t) =
     assert.ok(['NONCE_ALREADY_USED', 'UTR_ALREADY_USED'].includes(res.body.code), 'expected nonce/UTR reuse code, got ' + res.body.code);
 
     const session = app.context.sessionRepo.findById(sessionId);
-    assert.equal(session.status, 'SUCCESS', 'session must remain SUCCESS after duplicate');
-    console.log('[E2E] duplicate callback -> REJECTED (' + res.body.code + '), session stays SUCCESS');
+    assert.equal(session.status, 'VERIFICATION_PENDING', 'duplicate must not settle payment');
+    console.log('[E2E] duplicate callback -> REJECTED (' + res.body.code + '), session stays pending');
   });
 
   // ---- 3C. FORGED CALLBACK (bad token signature) -> REJECTED ----
@@ -284,8 +285,9 @@ test('end-to-end payment-callback verification against pristine DB', async (t) =
     assert.equal(res.body.code, 'PAYMENT_FAILED');
 
     const session4 = app.context.sessionRepo.findById(session4Id);
-    assert.equal(session4.status, 'FAILED', 'session must be FAILED, never SUCCESS');
-    console.log('[E2E] failed responseCode -> REJECTED (PAYMENT_FAILED), session=FAILED');
+    assert.notEqual(session4.status, 'SUCCESS', 'a failed app return is not evidence of settlement');
+    assert.notEqual(session4.status, 'FAILED', 'client response must not cancel a potentially completed bank transfer');
+    console.log('[E2E] failed responseCode -> REJECTED, checkout remains nonterminal');
   });
 
   // ---- 3G. MALFORMED UTR -> REJECTED ----
@@ -395,7 +397,7 @@ test('end-to-end payment-callback verification against pristine DB', async (t) =
     assert.equal(replay.status, 409, 'replay: ' + JSON.stringify(replay.body));
     assert.equal(replay.body.verdict, 'REJECTED');
     const session7 = app.context.sessionRepo.findById(session7Id);
-    assert.equal(session7.status, 'SUCCESS', 'session must remain SUCCESS');
+    assert.equal(session7.status, 'VERIFICATION_PENDING', 'app return alone must remain pending');
     console.log('[E2E] replay after SUCCESS -> REJECTED, session stays SUCCESS');
 
     console.log('[E2E] ALL END-TO-END CALLBACK VERIFICATION SCENARIOS PASSED');
