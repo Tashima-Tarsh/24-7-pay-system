@@ -116,7 +116,46 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.getByRole('heading',{name:'Callback delivery queue'}).waitFor({timeout:12000});
     await page.locator('button[data-view="merchants"]').click();
     await page.getByRole('heading',{name:'Add a merchant'}).waitFor({timeout:12000});
+    // Owner-driven onboarding: creation, one-time invitation, password setup,
+    // and merchant-only login must all work in the actual browser.
+    const merchantEmail='merchant-owner-e2e@example.test';
+    const merchantPassword='merchant-e2e-secure-password-2026';
+    await page.fill('#field-merchantBusiness','Invited Browser Merchant');
+    await page.fill('#field-merchantContact','Invited Owner');
+    await page.fill('#field-merchantEmail',merchantEmail);
+    await page.fill('#field-merchantMobile','9000000032');
+    await page.getByRole('button',{name:'Create merchant and invite owner'}).click();
+    await page.waitForSelector('#detail-layer:not([hidden])',{timeout:12000});
+    assert.match(await page.locator('#detail-title').textContent(),/Merchant created/);
+    const invitationPath=await page.locator('#detail-body a[href*="#owner-invitation/"]').getAttribute('href');
+    assert.ok(invitationPath?.startsWith('/platform#owner-invitation/'),'One-time owner activation URL must be generated when mail delivery is absent');
+    await page.locator('#detail-close').click();
     await page.locator('#logout-button').click();
+    await page.waitForSelector('#auth-view:not([hidden])');
+    await page.goto(base+invitationPath,{waitUntil:'domcontentloaded'});
+    await page.waitForSelector('#owner-invitation-panel:not([hidden])',{timeout:12000});
+    assert.equal(await page.locator('#login-form').isVisible(),false,'An invitation must not expose the normal login form');
+    await page.fill('#owner-invite-password',merchantPassword);
+    await page.fill('#owner-invite-confirm',merchantPassword);
+    await page.click('#owner-invite-submit');
+    await page.waitForSelector('#login-form:not([hidden])',{timeout:12000});
+    assert.equal(new URL(page.url()).hash,'','The one-time token must be removed from the URL after use');
+    await page.fill('#email',merchantEmail);
+    await page.fill('#password',merchantPassword);
+    await page.click('#login-submit');
+    await page.waitForSelector('#workspace:not([hidden])',{timeout:12000});
+    await page.getByRole('heading',{name:'Business account'}).waitFor({timeout:12000});
+    assert.equal(await page.locator('button[data-view="merchants"]').isVisible(),false,'Merchant role must not see platform merchant directory');
+    assert.equal(await page.locator('#merchant-scope-panel').isVisible(),false,'Merchant role must not select another tenant');
+    const denied=await page.evaluate(async()=>{
+      const secret=sessionStorage.getItem('247pay-new-workspace-session');
+      const r=await fetch('/api/platform/v1/dashboard/kpis?merchantId=00000000-0000-0000-0000-000000000001',{headers:{Authorization:'Bearer '+secret}});
+      return r.status;
+    });
+    assert.equal(denied,403,'Merchant cannot query a different tenant by changing the URL');
+    assert.equal((await context.cookies()).some(c=>c.name==='dp_platform_session'),false,'New merchant portal must stay cookie-free');
+    await page.locator('#logout-button').click();
+    await page.waitForSelector('#auth-view:not([hidden])');
     await page.waitForSelector('#auth-view:not([hidden])');
     await page.setViewportSize({width:390,height:800});
     await page.goto(base+'/',{waitUntil:'domcontentloaded'});
