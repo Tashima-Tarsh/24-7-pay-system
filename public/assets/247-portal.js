@@ -40,19 +40,12 @@ function status(s){const x=String(s||'UNKNOWN'),v=el('span','status-tag '+x.toLo
 function metric(label,v,hint=''){const m=el('div','metric');add(m,el('span','metric-label',label),el('strong','metric-value',v),el('span','metric-foot',hint));return m;}
 function stats(items){const g=el('div','metric-grid');items.forEach(a=>add(g,metric(...a)));return g;}
 // Progressive, accessible workspace enhancements. No payment-state mutation.
-const premiumGlyphs={
- chart:'M3 17v4m6-9v9m6-15v15m6-11v11',
- code:'M8 9l-4 3 4 3m8-6l4 3-4 3m-3-11-2 16',
- route:'M5 5h6v6H5zM13 13h6v6h-6zM11 8h4a3 3 0 0 1 3 3v2',
- shield:'M12 2 4 6v5c0 5 3 8 8 11 5-3 8-6 8-11V6zM9 12l2 2 4-4'
-};
+// Self-hosted official Phosphor regular SVGs, no external runtime or icon-font dependency.
 function premiumIcon(name){
- const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
- svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');
- svg.setAttribute('stroke-width','1.7');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
- svg.setAttribute('width','20');svg.setAttribute('height','20');svg.setAttribute('aria-hidden','true');
- const path=document.createElementNS('http://www.w3.org/2000/svg','path');
- path.setAttribute('d',premiumGlyphs[name]||premiumGlyphs.shield);svg.appendChild(path);return svg;
+ const img=el('img','studio-phosphor-icon');
+ img.src='/assets/icons/phosphor-'+(new Set(['chart','route','shield','code']).has(name)?name:'shield')+'.svg';
+ img.width=22;img.height=22;img.alt='';img.setAttribute('aria-hidden','true');
+ return img;
 }
 function premiumChart(summary){
  const rows=[['Confirmed',Math.max(0,Number(summary.confirmed)||0),'#196B4B'],['Pending',Math.max(0,Number(summary.pending)||0),'#D9AC63'],['Failed',Math.max(0,Number(summary.failed)||0),'#B84D2F']];
