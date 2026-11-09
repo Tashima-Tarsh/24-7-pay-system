@@ -147,7 +147,7 @@ const server = http.createServer(async (req, res) => {
   if (route === 'landing') {
     try {
       const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'landing.html'));
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
     } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -159,7 +159,7 @@ const server = http.createServer(async (req, res) => {
   if (route === 'checkout') {
     try {
       const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'checkout.html'));
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
     } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -171,7 +171,7 @@ const server = http.createServer(async (req, res) => {
   if (route === 'admin' || route === 'merchant') {
     try {
       const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'admin.html'));
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
     } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -181,8 +181,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Static files from public/
-  const safePath = path.normalize(path.join(PUBLIC_DIR, pathname));
-  if (!safePath.startsWith(PUBLIC_DIR)) {
+  let decodedPath;
+  try { decodedPath = decodeURIComponent(pathname); }
+  catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Invalid file path');
+    return;
+  }
+  const safePath = path.resolve(PUBLIC_DIR, decodedPath.replace(/^\/+/, ''));
+  if (safePath !== PUBLIC_DIR && !safePath.startsWith(PUBLIC_DIR + path.sep)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     res.end('Forbidden');
     return;

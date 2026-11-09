@@ -375,10 +375,8 @@ export function registerCheckoutRoutes(server, ctx) {
     // Terminal session handling: if session is terminal, return terminal state directly (CASE 4)
     if ([PaymentStatus.SUCCESS, PaymentStatus.FAILED, PaymentStatus.EXPIRED, PaymentStatus.CANCELLED].includes(session.status)) {
       const merchant = ctx.merchantRepo.findById(session.merchantId);
-      if(session.metadata?.externalCollection)upiUri=session.status==='ACTIVE'&&session.metadata.externalCollection.stage==='PAYABLE'?session.metadata.externalCollection.upiUri:null;
-
     const branding = {
-        appName: 'YOUPI PG',
+        appName: '24/7 Pay',
         primaryColor: '#2563eb',
         ...publicCheckoutBranding(merchant?.branding)
       };
@@ -519,7 +517,7 @@ export function registerCheckoutRoutes(server, ctx) {
     }
 
     const branding = {
-      appName: 'YOUPI PG',
+      appName: '24/7 Pay',
       primaryColor: '#2563eb',
       headerTheme: 'gradient',
       logoUrl: null,
