@@ -12,7 +12,7 @@ function makeDb(status,{verified=true,ownerActive=true,profile={businessName:'Tr
  db.execute('INSERT INTO pp_users (id,merchant_id,email,password_hash,role,email_verified,active,created_at) VALUES (?,?,?,?,?,?,?,?)',['test-owner',mid,'verified@example.test','unused','OWNER',verified?1:0,ownerActive?1:0,stamp]);
  return db;
 }
-test('legacy onboarding becomes ACTIVE after verified owner and valid profile without another admin action',()=>{
+test('legacy onboarding becomes ACTIVE after active owner and valid profile without another admin action',()=>{
  for(const status of ['EMAIL_PENDING','PROFILE_INCOMPLETE','APPROVED']){
   const db=makeDb(status);try{
    let calls=0;
@@ -23,9 +23,16 @@ test('legacy onboarding becomes ACTIVE after verified owner and valid profile wi
   }finally{db.close();}
  }
 });
-test('unverified owner or missing profile never silently activates merchant payment collection',()=>{
+test('an activated owner can complete onboarding without a second email-verification gate',()=>{
+ const db=makeDb('EMAIL_PENDING',{verified:false});
+ try{
+  const outcome=activateEligibleMerchant(db,'test-merchant');
+  assert.equal(outcome.active,true);
+  assert.equal(db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',['test-merchant']).status,'ACTIVE');
+ }finally{db.close();}
+});
+test('inactive owner or missing business profile never silently activates merchant payment collection',()=>{
  const cases=[
-  {verified:false},
   {ownerActive:false},
   {profile:{businessName:'Shop',contactName:'',mobile:'919876543210'}},
   {profile:{businessName:'Shop',contactName:'Owner',mobile:'invalid'}}
