@@ -340,3 +340,35 @@ body[data-pay-surface="workspace"] .premium-route-tile .info-list{margin:0}
 body[data-pay-surface="workspace"] .premium-route-tile .info-item{font-size:12px}
 body[data-pay-surface="workspace"] .premium-callback-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
 @media(max-width:600px){body[data-pay-surface="workspace"] .premium-route-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Croftweaver-informed premium workspace: shadcn-style primitives, motion, finance visualizations. */
+body[data-pay-surface="workspace"]{
+ --studio-radius:16px;--studio-accent:#183D30;--studio-focus:#B84D2F;--studio-border:#D8D8CA;
+ --studio-ease:cubic-bezier(.2,.8,.2,1);
+}
+body[data-pay-surface="workspace"] .studio-quick-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px}
+body[data-pay-surface="workspace"] .studio-quick-action{min-width:0;display:flex;align-items:center;gap:14px;text-align:left;padding:17px 16px;
+ background:linear-gradient(145deg,#FFFEFA,#F5F3EA);border:1px solid var(--studio-border);border-radius:var(--studio-radius);
+ color:var(--pay-forest);box-shadow:0 2px 3px rgba(30,60,37,.025),0 13px 30px rgba(30,60,37,.03);
+ transition:transform .24s var(--studio-ease),box-shadow .24s var(--studio-ease),border-color .24s var(--studio-ease)}
+body[data-pay-surface="workspace"] .studio-quick-action:hover{transform:translateY(-3px);border-color:#95B8A0;box-shadow:0 14px 32px rgba(30,60,37,.09)}
+body[data-pay-surface="workspace"] .studio-quick-action:focus-visible{outline:var(--pay-focus);outline-offset:3px}
+body[data-pay-surface="workspace"] .studio-phosphor-icon{display:block;width:23px;height:23px;flex:0 0 23px;object-fit:contain}
+body[data-pay-surface="workspace"] .studio-quick-action-text{display:grid;gap:3px;min-width:0}
+body[data-pay-surface="workspace"] .studio-quick-action-text strong{font-size:13px;font-weight:750;line-height:1.3}
+body[data-pay-surface="workspace"] .studio-quick-action-text small{font-size:11px;color:var(--pay-muted);line-height:1.45}
+body[data-pay-surface="workspace"] .studio-chart-layout{display:grid;grid-template-columns:minmax(180px,225px) minmax(0,1fr);align-items:center;justify-content:center;gap:25px;margin-top:16px}
+body[data-pay-surface="workspace"] .studio-chart-layout svg{width:100%;height:auto;max-width:220px;margin-inline:auto}
+body[data-pay-surface="workspace"] .studio-chart-legend{display:grid;gap:7px}
+body[data-pay-surface="workspace"] .studio-chart-item{display:grid;grid-template-columns:12px minmax(90px,1fr) minmax(45px,auto) 55px;align-items:center;gap:12px;
+ border-bottom:1px solid var(--pay-line);padding:9px 2px;font-size:13px;color:var(--pay-ink)}
+body[data-pay-surface="workspace"] .studio-chart-item strong{text-align:right;font-variant-numeric:tabular-nums}
+body[data-pay-surface="workspace"] .studio-chart-item small{text-align:right;font-variant-numeric:tabular-nums;color:var(--pay-muted);font-size:11px}
+body[data-pay-surface="workspace"] .studio-chart-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+body[data-pay-surface="workspace"] .panel-card{border-radius:var(--studio-radius);overflow:hidden}
+body[data-pay-surface="workspace"] .primary-button{transition:background .22s var(--studio-ease),box-shadow .22s var(--studio-ease),transform .22s var(--studio-ease)}
+body[data-pay-surface="workspace"] .primary-button:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 9px 25px rgba(24,61,48,.16)}
+@media(max-width:1120px){body[data-pay-surface="workspace"] .studio-quick-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){body[data-pay-surface="workspace"] .studio-chart-layout{grid-template-columns:minmax(0,1fr)}body[data-pay-surface="workspace"] .studio-chart-legend{width:100%}}
+@media(max-width:440px){body[data-pay-surface="workspace"] .studio-quick-actions{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){body[data-pay-surface="workspace"] .studio-quick-action,body[data-pay-surface="workspace"] .primary-button{transition:none!important}body[data-pay-surface="workspace"] .studio-quick-action:hover,body[data-pay-surface="workspace"] .primary-button:hover{transform:none!important}}
