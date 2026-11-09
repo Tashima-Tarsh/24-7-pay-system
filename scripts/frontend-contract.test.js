@@ -6,9 +6,9 @@ import vm from 'node:vm';
 test('hosted HTML has syntactically valid JavaScript',()=>{
   for(const path of ['public/checkout.html','public/admin.html','public/landing.html']){
     const html=fs.readFileSync(path,'utf8');
-    for(const match of html.matchAll(/<script(\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)){
-      // Only JavaScript script types are parsed by the JS VM; JSON-LD is data.
-      const type=match[1]?.match(/\\btype\\s*=\\s*["']([^"']+)["']/i)?.[1]?.toLowerCase();
+    for(const match of html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)){
+      // JSON-LD and other non-executable script types must not be parsed as JavaScript.
+      const type=match[1]?.match(/\btype\s*=\s*["']([^"']+)["']/i)?.[1]?.toLowerCase();
       if(type&&type!=='text/javascript'&&type!=='application/javascript'&&type!=='module')continue;
       if(match[2].trim()) assert.doesNotThrow(()=>new vm.Script(match[2],{filename:path}));
     }
