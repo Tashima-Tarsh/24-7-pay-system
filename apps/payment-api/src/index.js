@@ -2,6 +2,7 @@ import {registerPaymentControls} from './payment-controls.js';
 import {registerPlatformIdentity} from './platform/identity.js';
 import {registerPlatformPayments} from './platform/payments.js';
 import {registerPlatformOperations} from './platform/operations.js';
+import {registerWebhookTestRoutes} from './routes/webhooks.routes.js';
 import fs from 'node:fs';
 import { registerMerchantConsoleRoutes } from './routes/merchant-console.routes.js';
 import { EventEmitter } from 'node:events';
@@ -579,6 +580,7 @@ export function createPaymentApp(customDb = null, options = {}) {
   server.use(platformPayments.guard);
   server.use(platformIdentity.guard);
   registerPlatformOperations(server,context,platformIdentity);
+  registerWebhookTestRoutes(server,context,platformIdentity);
   server.use((req,res,pathname)=>{
     if(req.method==='POST'&&pathname==='/api/v1/payments'&&!isAdminRequest(req)){
       const mid=req.headers['x-merchant-id'];
