@@ -33,3 +33,20 @@ test('public landing page contains no fake settlement figures',()=>{
   assert.match(html,/24\/7 Pay/);
   assert.doesNotMatch(html,/YOUPI PG|99\.99%|₹2\.4Cr|UPI-2026-0842/);
 });
+
+test('mobile premium workspace uses full-width content and horizontal navigation',()=>{
+ const source=fs.readFileSync('premium-studio/src/styles.css','utf8');
+ const html=fs.readFileSync('public/premium-studio/index.html','utf8');
+ const asset=html.match(/href="(\/premium-studio\/assets\/[^\"]+\.css)"/)?.[1];
+ assert.ok(asset,'premium studio stylesheet must be linked');
+ const deployed=fs.readFileSync('public'+asset,'utf8');
+ for(const css of [source,deployed]){
+  const mobile=css.slice(css.lastIndexOf('/* Mobile workspace: final cascade override'));
+  assert.match(mobile,/@media\s*\(max-width:\s*800px\)/);
+  assert.match(mobile,/\.studio-shell\s*\{[^}]*display:\s*block/);
+  assert.match(mobile,/\.studio-sidebar\s*\{[^}]*width:\s*100%/);
+  assert.match(mobile,/\.studio-sidebar\s+\.sidebar-tabs\s*\{[^}]*display:\s*flex/);
+  assert.match(mobile,/\.studio-sidebar\s+\.sidebar-tab\s*\{[^}]*flex:\s*0 0 auto/);
+  assert.match(mobile,/\.studio-content\s*\{[^}]*width:\s*100%/);
+ }
+});
