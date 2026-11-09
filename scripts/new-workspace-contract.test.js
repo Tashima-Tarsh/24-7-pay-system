@@ -60,3 +60,12 @@ test('all new user surfaces share the premium vector brand without cookie or pay
  for(const c of ['#F6F1E6','#183D30','#B84D2F','#D9AC63'])assert.ok(css.includes(c),'Missing premium design token '+c);
  assert.doesNotMatch(css,/#[0-9a-fA-F]{3,8}\s*\{\s*password/);
 });
+
+test('platform scope uses an explicitly selected merchant and never impersonates the merchant',()=>{
+ const html=fs.readFileSync('public/platform.html','utf8');
+ const js=fs.readFileSync('public/assets/247-portal.js','utf8');
+ assert.match(html,/id="merchant-scope"/);
+ assert.match(js,/url\.searchParams\.set\('merchantId',selectedMerchantId\)/);
+ assert.match(js,/Create merchant and invite owner/);
+ assert.doesNotMatch(js,/impersonateToken|assumeMerchantSession/);
+});

@@ -135,6 +135,20 @@ export function registerPlatformOperations(server, ctx, identity) {
     for(const row of rows){const value=money(row.amount_paise,'recorded amount');amount+=value;if(row.status==='SUCCESS'){successful++;if(row.method!=='COD')successAmount+=value;}else if(['FAILED','EXPIRED','CANCELLED'].includes(row.status))failed++;else pending++;}
     return {transactions:rows.length,successful,failed,pending,amountPaise:amount.toString(),successfulAmountPaise:successAmount.toString()};
   });
+  route('GET','/production-readiness','operations.read',(req,p,q)=>{
+    const merchantId=req.platform.platform?(q.get('merchantId')||null):req.platform.merchantId;
+    if(merchantId&&!db.queryOne('SELECT id FROM merchants WHERE id=?',[merchantId]))FAIL(404,'Merchant not found');
+    const storageReady=process.env.NODE_ENV!=='production'||db.dialect==='postgres';
+    const connectionReady=merchantId?Boolean(ctx.canActivateMerchant?.(merchantId)):null;
+    return {
+      status:!storageReady?'STORAGE_BLOCKED':merchantId&&!connectionReady?'MERCHANT_CONFIGURATION_REQUIRED':'STORAGE_READY',
+      storage:{ready:storageReady,engine:db.dialect,productionRequired:'postgres'},
+      merchant:{id:merchantId,connectionReady},
+      financialWritesStorageBlocked:!storageReady,
+      note:merchantId?'Merchant configuration does not establish receipt of funds.':'Select a merchant to check provider and receiving-account configuration.',
+      checkedAt:now()
+    };
+  });
   route('GET','/operations/health','operations.read',(req,p,q)=>{
     const id=scope(req,q.get('merchantId')),where=id?' WHERE merchant_id=?':'',args=id?[id]:[];
     const providers=db.query(`SELECT id,merchant_id,provider_name,status,is_active,last_tested_at,test_result,updated_at FROM provider_connections${where}`,args);
