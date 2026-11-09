@@ -107,3 +107,41 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 @media(max-width:800px){.studio-glass-header{position:static}.studio-sidebar{background:#142f23}.studio-brand{padding-bottom:15px}.studio-header h1{font-size:27px}.studio-content{padding:18px}.cinematic-hero{min-height:0}.hero-copy{padding:40px 26px}.cinematic-hero h2{font-size:47px}}
 @media(max-width:600px){.header-actions{gap:9px}.header-actions .apple-top-cta{min-height:41px;font-size:11px;padding:10px 14px}.studio-header{padding:20px 18px}.form-fields{grid-template-columns:1fr}.link-studio-bottom{gap:7px}.link-studio-bottom>div{grid-template-columns:1fr}.link-process-number{grid-row:auto}.payment-link-studio{padding:24px!important}.link-studio-heading h2{font-size:30px}.payment-explorer-header{align-items:start;flex-direction:column}.auth-editorial h1{font-size:43px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.halo,.ambient-ring,.hero-glass-card,.spin{animation:none!important}.apple-top-cta,.apple-action-button,.hero-primary-action,.checkout-open-button{transition:none!important}}
+
+/* Merchant receiving VPA controls and distinct platform operations UI */
+.merchant-upi-page{display:grid;gap:22px}
+.merchant-upi-form-card{padding:clamp(24px,3vw,42px)!important}
+.upi-section-heading{display:flex;justify-content:space-between;gap:18px;align-items:start}
+.upi-section-heading h2{font-size:clamp(28px,3vw,43px);letter-spacing:-.075em;line-height:1.15;font-weight:750;margin:8px 0 12px}
+.upi-section-heading p{font-size:13px;line-height:1.75;color:#69806e;max-width:620px}
+.upi-create-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:15px;margin-top:28px}
+.upi-create-form button{white-space:nowrap;margin-bottom:24px}
+.upi-success{display:flex;align-items:center;gap:10px;margin-top:17px;padding:13px 16px;background:#e9f8e8;color:#25683a;border:1px solid #bee8c0;border-radius:12px;font-size:12px}
+.upi-account-list{display:grid;gap:12px}
+.upi-account-row{display:flex;align-items:center;gap:15px;padding:20px;border:1px solid #e6ebe3;border-radius:17px;background:#fcfdf9}
+.upi-account-avatar{display:grid;place-items:center;border-radius:13px;background:#eaf4e7;color:#37734d;width:47px;height:47px;flex:0 0 47px}
+.upi-account-details{display:grid;gap:4px;min-width:0;flex:1}
+.upi-account-details strong{font-size:14px;overflow-wrap:anywhere}
+.upi-account-details span{font-size:12px;color:#65816b}
+.upi-account-details small{font-size:11px;color:#879889}
+.upi-account-control{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.upi-empty-info{margin-top:14px;display:flex;gap:9px;align-items:start;color:#6f836e;font-size:13px;line-height:1.7}
+.upi-diagnostic-note{display:flex;gap:12px;margin-top:24px;padding:19px;border-radius:15px;border:1px solid #dce9d6;background:#f3f9f0}
+.upi-diagnostic-note>svg{flex-shrink:0;color:#39704b}
+.upi-diagnostic-note strong{font-size:13px}
+.upi-diagnostic-note p{font-size:12px;line-height:1.8;color:#66796a;margin-top:5px}
+.upi-safety-card{display:flex;align-items:start;gap:16px;background:#eef5ea!important}
+.upi-safety-card>svg{flex-shrink:0;color:#2a7243}
+.upi-safety-card p{font-size:12px;color:#66816a;line-height:1.75;margin-top:10px}
+.platform-admin-cards{display:grid;grid-template-columns:1fr 1fr;gap:19px}
+.platform-admin-cards p{margin-top:17px;font-size:13px;line-height:1.75;color:#6a7e6c}
+.admin-portal-actions{margin-top:28px}
+.admin-portal-features{display:grid;gap:14px;margin-top:24px}
+.admin-portal-features span{display:flex;gap:12px;align-items:center;font-size:12px;color:#385740}
+.admin-portal-features svg{color:#398359}
+.merchant-role-notice{font-size:12px;color:#ddeddb;line-height:1.7;margin-top:20px}
+.merchant-role-notice code{color:#d9ffd1}
+@media(max-width:1150px){.upi-create-form{grid-template-columns:1fr 1fr}.upi-create-form button{grid-column:1/-1;width:max-content;margin-bottom:0}}
+@media(max-width:850px){.platform-admin-cards{grid-template-columns:1fr}.upi-account-row{flex-wrap:wrap}.upi-account-control{width:100%;justify-content:space-between}}
+@media(max-width:600px){.upi-create-form{grid-template-columns:1fr}.upi-create-form button{grid-column:1;width:100%}.upi-section-heading h2{font-size:30px}.upi-account-row{padding:15px}}
+@media(prefers-reduced-motion:reduce){.upi-account-row,.upi-success{transition:none!important}}
