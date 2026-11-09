@@ -35,6 +35,35 @@ export async function signIn(email:string,password:string):Promise<void>{
  if(!payload||typeof payload!=='object'||!('sessionToken'in payload)||typeof payload.sessionToken!=='string'||!('user'in payload))throw new Error('Could not establish an authenticated workspace session.');
  sessionStorage.setItem(SESSION_KEY,payload.sessionToken);
 }
+export type ReceivingAccount={
+ id:string;merchantId:string;upiId:string;payeeName:string;isActive:boolean;
+ isMerchantEnabled:boolean;isSlotBusy?:boolean;currentActiveSessionId?:string|null;
+ dailyTxnCount?:number;dailyVolumePaise?:number;
+ bankDetails?:{bankName:string;accountHolderName:string;accountNumberMasked:string;ifsc:string}|null
+};
+async function writeMerchantAccount<T>(path:string,input:unknown):Promise<T>{
+ const token=sessionStorage.getItem(SESSION_KEY);
+ if(!token)throw new AuthRequired('Sign in to manage receiving accounts.');
+ const response=await fetch('/api/platform/v1'+path,{
+   method:'POST',credentials:'omit',cache:'no-store',
+   headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+   body:JSON.stringify(input)
+ });
+ const payload:unknown=await response.json().catch(()=>null);
+ if(response.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Session expired. Sign in again.');}
+ if(!response.ok)throw new Error(
+  payload&&typeof payload==='object'&&'error'in payload?String(payload.error):
+  'Receiving account request failed ('+response.status+').'
+ );
+ return payload as T;
+}
+export function addReceivingUpi(upiId:string,payeeName:string):Promise<{account:ReceivingAccount}>{
+ return writeMerchantAccount('/receiving-accounts',{upiId,payeeName});
+}
+export function setReceivingUpiActive(id:string,active:boolean):Promise<{account:ReceivingAccount}>{
+ if(!/^[A-Za-z0-9-]{1,128}$/.test(id))throw new Error('Invalid account identifier');
+ return writeMerchantAccount('/receiving-accounts/'+encodeURIComponent(id)+'/state',{active});
+}
 export function money(paise:string|number|undefined){const n=Number(paise||0)/100;return Number.isFinite(n)?new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(n):'—';}
 export function number(n:number|undefined){return new Intl.NumberFormat('en-IN').format(n||0);}
 export function date(raw?:string){if(!raw)return'—';const d=new Date(raw);return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});}
