@@ -1,0 +1,78 @@
+import {useState,type FormEvent} from 'react';
+import {motion,useReducedMotion} from 'motion/react';
+import {ArrowSquareOut,Check,Copy,LinkSimple,LockKey,Plus,ShieldCheck,SpinnerGap,WarningCircle} from '@phosphor-icons/react';
+import {Button} from './components/ui/button';
+import {Card} from './components/ui/card';
+import {AuthRequired,createPaymentLink,type PaymentLinkResponse} from './api';
+
+type Props={canCreate:boolean;isPlatform:boolean;onCreated:()=>void;compact?:boolean};
+function checkoutHref(value:unknown):string|null{
+ if(typeof value!=='string'||!value.trim())return null;
+ try{
+  const url=new URL(value,window.location.origin);
+  if(url.origin!==window.location.origin||!['http:','https:'].includes(url.protocol))return null;
+  return url.pathname+url.search+url.hash;
+ }catch{return null;}
+}
+const inputClass='payment-link-input';
+
+export function PaymentLinkStudio({canCreate,isPlatform,onCreated,compact=false}:Props){
+ const [orderId,setOrderId]=useState('ORDER-'+Date.now());
+ const [amount,setAmount]=useState('');
+ const [loading,setLoading]=useState(false);
+ const [result,setResult]=useState<PaymentLinkResponse|null>(null);
+ const [failure,setFailure]=useState('');
+ const [copied,setCopied]=useState(false);
+ const [attemptKey,setAttemptKey]=useState<string|null>(null);
+ const reduce=useReducedMotion();
+ const canSubmit=canCreate&&!isPlatform&&!loading;
+ const href=checkoutHref(result?.checkoutUrl);
+ const total=Number(amount);
+ const validAmount=/^\d{1,8}(?:\.\d{1,2})?$/.test(amount)&&Number.isFinite(total)&&total>0;
+ const validOrder=/^[-A-Za-z0-9_]{1,120}$/.test(orderId);
+ async function submit(event:FormEvent<HTMLFormElement>){
+  event.preventDefault();
+  if(!canSubmit)return;
+  if(!validOrder||!validAmount){setFailure('Enter a valid order reference and an amount greater than ₹0, with up to two decimal places.');return;}
+  setLoading(true);setFailure('');setResult(null);setCopied(false);
+  // Maintain one idempotency key across explicit retry attempts for an unchanged request.
+  const key=attemptKey||crypto.randomUUID();
+  if(!attemptKey)setAttemptKey(key);
+  try{
+   const created=await createPaymentLink({orderId,amount,currency:'INR'},key);
+   setResult(created);setAttemptKey(null);
+   onCreated();
+  }catch(error){
+   setFailure(error instanceof AuthRequired?'Your session expired. Sign in again in the merchant workspace.':error instanceof Error?error.message:'Payment request could not be created.');
+  }finally{setLoading(false);}
+ }
+ function updateOrder(value:string){setOrderId(value);setAttemptKey(null);setResult(null);setFailure('');}
+ function updateAmount(value:string){setAmount(value);setAttemptKey(null);setResult(null);setFailure('');}
+ async function copy(){
+  if(!href)return;
+  try{await navigator.clipboard.writeText(new URL(href,window.location.origin).href);setCopied(true);}
+  catch{setFailure('Clipboard access is unavailable. Open the checkout link and copy it from the address bar.');}
+ }
+ const blocked=isPlatform?'Payment creation is available to merchant accounts. Platform operators can inspect merchants but cannot create an order on their behalf.':'Your account requires the payments.create permission to generate checkout links.';
+ return <Card className={'payment-link-studio'+(compact?' compact':'')}>
+  <div className="link-studio-heading"><div><span className="micro">LIVE CHECKOUT INFRASTRUCTURE</span><h2>Create a payment link<span className="heading-period">.</span></h2>
+   <p>Build a real UPI checkout in seconds. The payment engine, receiving account and confirmation flow remain exactly as configured.</p></div>
+   <span className="link-studio-emblem"><LinkSimple size={23} weight="duotone" aria-hidden="true"/></span>
+  </div>
+  {!canCreate||isPlatform?<div role="status" className="payment-permission-note"><LockKey size={20} aria-hidden="true"/><span>{blocked} <a href="/platform">Use the existing workspace</a>.</span></div>:
+  <form onSubmit={submit} className="payment-link-form">
+   <div className="form-fields">
+    <label className="payment-field"><span>Order reference</span><input className={inputClass} name="orderId" value={orderId} onChange={e=>updateOrder(e.target.value)} autoComplete="off" maxLength={120} required pattern="[-A-Za-z0-9_]{1,120}" aria-invalid={!validOrder&&orderId.length>0}/><small>Unique reference for your order</small></label>
+    <label className="payment-field"><span>Amount (INR)</span><div className="amount-input-wrap"><span className="currency-mark">₹</span><input className={inputClass} name="amount" inputMode="decimal" placeholder="500.00" value={amount} onChange={e=>updateAmount(e.target.value)} autoComplete="off" required aria-invalid={Boolean(amount&&!validAmount)}/></div><small>Exact payable amount, with up to 2 decimals</small></label>
+   </div>
+   <div className="link-creation-row"><Button className="apple-action-button" type="submit" disabled={!canSubmit||!validAmount||!validOrder}>{loading?<SpinnerGap size={18} className="spin" aria-hidden="true"/>:<Plus size={18} weight="bold" aria-hidden="true"/>}{loading?'Creating checkout…':'Create payment link'}</Button><span className="link-creation-note"><ShieldCheck size={16} weight="fill" aria-hidden="true"/>No manual success override</span></div>
+   {failure&&<div className="payment-form-error" role="alert"><WarningCircle size={18} aria-hidden="true"/>{failure}</div>}
+   {result&&<motion.div initial={reduce?false:{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:.3}} className="created-link-result" aria-live="polite">
+    <div className="result-top"><div className="result-check"><Check size={20} weight="bold" aria-hidden="true"/></div><div><strong>Payment request created</strong><p>Order: {result.orderId||orderId} · Status: {result.status||'Pending confirmation'}</p></div></div>
+    {href?<><div className="payment-link-display"><span>{new URL(href,window.location.origin).href}</span><button type="button" onClick={copy} className="copy-link-button" aria-label="Copy checkout link">{copied?<Check size={18}/>:<Copy size={18}/>}</button></div><div className="link-result-actions"><a className="checkout-open-button" href={href} target="_blank" rel="noopener noreferrer">Open real UPI checkout <ArrowSquareOut size={18}/></a><button className="soft-copy-button" type="button" onClick={copy}>{copied?'Copied ✓':'Copy payment link'}</button></div><p className="payment-link-help">The customer checkout opens supported UPI app intents and a payment QR when the backend has issued an active UPI session. App return is not credit confirmation.</p></>:
+    <p className="payment-form-error">The backend recorded your payment request but returned no checkout URL. Check the order in Transactions rather than generating a duplicate payment.</p>}
+   </motion.div>}
+  </form>}
+  <div className="link-studio-bottom"><div><span className="link-process-number">01</span><strong>Create</strong><small>Order + amount</small></div><div><span className="link-process-number">02</span><strong>Share</strong><small>QR or UPI intent</small></div><div><span className="link-process-number">03</span><strong>Confirm</strong><small>Authorized provider event</small></div></div>
+ </Card>;
+}
