@@ -45,6 +45,21 @@ export async function switchWorkspaceAccount():Promise<void>{
   });
  }finally{sessionStorage.removeItem(SESSION_KEY);}
 }
+export type PlatformMerchant={merchant_id:string;status:string;profile?:{businessName?:string;contactName?:string;mobile?:string}};
+export type StaffUser={id:string;email:string;role:string;active:boolean};
+export async function adminCreateMerchant(data:{businessName:string;contactName:string;mobile:string;email:string}):Promise<{businessName:string;merchantId:string;invitationSent?:boolean}>{
+ const token=sessionStorage.getItem(SESSION_KEY);if(!token)throw new AuthRequired('Please sign in.');
+ const response=await fetch('/api/platform/v1/merchants',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  body:JSON.stringify(data)
+ });
+ const payload:unknown=await response.json().catch(()=>null);
+ if(response.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Session expired.');}
+ if(!response.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Could not create merchant ('+response.status+')');
+ if(!payload||typeof payload!=='object')throw new Error('Merchant response was invalid');
+ return payload as {businessName:string;merchantId:string;invitationSent?:boolean};
+}
 export type ReceivingAccount={
  id:string;merchantId:string;upiId:string;payeeName:string;isActive:boolean;
  isMerchantEnabled:boolean;isSlotBusy?:boolean;currentActiveSessionId?:string|null;
