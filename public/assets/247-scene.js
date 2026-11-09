@@ -27,13 +27,13 @@ if(canvas&&!reduce.matches){
         const point=v[i];
         if(i%4===0)for(let j=i+1;j<Math.min(i+18,v.length);j++){
           const other=v[j],distance=Math.hypot(point.x-other.x,point.y-other.y);
-          if(distance<125){context.strokeStyle='rgba(104,191,242,'+(.15*(1-distance/125)*Math.min(point.opacity,other.opacity))+')';context.beginPath();context.moveTo(point.x,point.y);context.lineTo(other.x,other.y);context.stroke();}
+          if(distance<125){context.strokeStyle='rgba(170,116,71,'+(.15*(1-distance/125)*Math.min(point.opacity,other.opacity))+')';context.beginPath();context.moveTo(point.x,point.y);context.lineTo(other.x,other.y);context.stroke();}
         }
         const radius=point.z>0?2:1.1;
-        context.fillStyle=i%6===0?'rgba(146,145,255,'+point.opacity+')':'rgba(86,213,246,'+point.opacity+')';
+        context.fillStyle=i%6===0?'rgba(217,164,100,'+point.opacity+')':'rgba(111,147,99,'+point.opacity+')';
         context.beginPath();context.arc(point.x,point.y,radius,0,Math.PI*2);context.fill();
       }
-      context.save();context.translate(w/2,h/2);context.strokeStyle='rgba(93,179,243,.12)';context.lineWidth=1;
+      context.save();context.translate(w/2,h/2);context.strokeStyle='rgba(183,137,77,.14)';context.lineWidth=1;
       for(const k of [.42,.55,.68]){context.beginPath();context.ellipse(0,0,Math.min(w,h)*k,Math.min(w,h)*k*.48,Math.sin(t*.00008)*.36,0,Math.PI*2);context.stroke();}
       context.restore();requestAnimationFrame(draw);
     }

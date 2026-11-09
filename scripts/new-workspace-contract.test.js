@@ -40,3 +40,23 @@ test('new checkout is an independent payment-status client without manual comple
  assert.doesNotMatch(js,/document\.cookie|credentials:\s*['"]include['"]/);
  assert.doesNotMatch(html,/I've Paid|Submit UTR|Mark as paid/);
 });
+
+test('all new user surfaces share the premium vector brand without cookie or payment changes',()=>{
+ const logo=fs.readFileSync('public/assets/pay247-mark.svg','utf8');
+ const css=fs.readFileSync('public/assets/247-brand.css','utf8');
+ assert.match(logo,/<svg[^>]+viewBox="0 0 128 128"/);
+ assert.match(logo,/#264C39/);
+ for(const [file,surface] of [
+   ['public/landing.html','marketing'],
+   ['public/platform.html','workspace'],
+   ['public/checkout-next.html','checkout'],
+   ['public/admin.html','legacy-admin']
+ ]){
+   const html=fs.readFileSync(file,'utf8');
+   assert.match(html, new RegExp('data-pay-surface="'+surface+'"'));
+   assert.match(html,/\/assets\/247-brand\.css/);
+   assert.match(html,/\/assets\/pay247-mark\.svg/);
+ }
+ for(const c of ['#F6F1E6','#183D30','#B84D2F','#D9AC63'])assert.ok(css.includes(c),'Missing premium design token '+c);
+ assert.doesNotMatch(css,/#[0-9a-fA-F]{3,8}\s*\{\s*password/);
+});

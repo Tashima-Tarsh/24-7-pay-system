@@ -39,6 +39,10 @@ test('unified server.mjs serves public pages and proxies /api/* to the in-proces
    assert.match(await modernCheckout.text(),/247-checkout\.js/,'checkout should use the new standalone experience');
    assert.equal((await fetch(base+'/assets/247-checkout.js')).status,200);
    assert.equal((await fetch(base+'/assets/247-checkout.css')).status,200);
+   assert.equal((await fetch(base+'/assets/247-brand.css')).status,200,'shared brand stylesheet must be served');
+   const logo = await fetch(base+'/assets/pay247-mark.svg');
+   assert.equal(logo.status,200,'HD vector logo should be served');
+   assert.match(await logo.text(),/<svg/);
    const apiRes=await fetch(base+'/api/v1/checkout/nonexistent/state');
    assert.equal(apiRes.status,404,'/api/* must be proxied to the payment API (404 from API for unknown session)');
   }finally{child.kill();await closed;}

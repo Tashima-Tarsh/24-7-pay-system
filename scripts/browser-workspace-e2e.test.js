@@ -57,10 +57,15 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     const page=await context.newPage();
     await page.goto(base+'/',{waitUntil:'domcontentloaded'});
     assert.equal(await page.locator('#hero-title').isVisible(),true,'Marketing hero must render');
+    assert.equal(await page.locator('body').getAttribute('data-pay-surface'),'marketing');
+    assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(246, 241, 230)','New ivory brand should be visible');
+    assert.equal(await page.locator('.brand-emblem').first().isVisible(),true,'Crisp vector brand mark should render');
     await page.locator('button[data-step="1"]').click();
     assert.match(await page.locator('#journey-title').textContent(),/Let customers pay/);
     await page.goto(base+'/merchant',{waitUntil:'domcontentloaded'});
     assert.equal(await page.locator('#login-form').isVisible(),true,'Merchant sign-in form must render');
+    assert.equal(await page.locator('body').getAttribute('data-pay-surface'),'workspace');
+    assert.equal(await page.locator('.auth-logo .brand-emblem').isVisible(),true);
     const email='merchant-browser-acceptance@example.test',password='test-browser-secure-password-2026';
     const register=await fetch(base+'/api/platform/v1/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,businessName:'Browser Test Merchant',contactName:'Test Merchant',mobile:'9000000000'})});
     assert.equal(register.status,201,'Merchant test fixture registration failed: '+await register.text());
@@ -129,7 +134,9 @@ test('new customer checkout never shows a stale QR or accepts a browser-reported
     const assets={
       '/checkout/e2e-order':['public/checkout-next.html','text/html; charset=utf-8'],
       '/assets/247-checkout.js':['public/assets/247-checkout.js','text/javascript; charset=utf-8'],
-      '/assets/247-checkout.css':['public/assets/247-checkout.css','text/css; charset=utf-8']
+      '/assets/247-checkout.css':['public/assets/247-checkout.css','text/css; charset=utf-8'],
+      '/assets/247-brand.css':['public/assets/247-brand.css','text/css; charset=utf-8'],
+      '/assets/pay247-mark.svg':['public/assets/pay247-mark.svg','image/svg+xml']
     };
     if(assets[pathname]){
       const [file,mime]=assets[pathname];
@@ -145,6 +152,8 @@ test('new customer checkout never shows a stale QR or accepts a browser-reported
     const page=await browser.newPage();
     const visit=async()=>{await page.goto(base+'/checkout/e2e-order',{waitUntil:'domcontentloaded'});await page.waitForSelector('#checkout-content:not([hidden])');};
     await visit();
+    assert.equal(await page.locator('body').getAttribute('data-pay-surface'),'checkout');
+    assert.equal(await page.locator('.brand-emblem').isVisible(),true);
     assert.match(await page.locator('#status-title').textContent(),/being prepared/);
     assert.equal(await page.locator('#payment-instructions').isVisible(),false,'Queued session must not expose payment instructions');
     state='ACTIVE';await visit();
