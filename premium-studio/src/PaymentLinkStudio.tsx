@@ -1,11 +1,11 @@
-import {useState,type FormEvent} from 'react';
+import {useEffect,useState,type FormEvent} from 'react';
 import {motion,useReducedMotion} from 'motion/react';
 import {ArrowSquareOut,Check,Copy,LinkSimple,LockKey,Plus,ShieldCheck,SpinnerGap,WarningCircle} from '@phosphor-icons/react';
 import {Button} from './components/ui/button';
 import {Card} from './components/ui/card';
-import {AuthRequired,createPaymentLink,type PaymentLinkResponse} from './api';
+import {AuthRequired,createPaymentLink,getPaymentReadiness,type PaymentReadiness,type PaymentLinkResponse} from './api';
 
-type Props={canCreate:boolean;isPlatform:boolean;onCreated:()=>void;compact?:boolean};
+type Props={canCreate:boolean;isPlatform:boolean;onCreated:()=>void;onConfigureUpi:()=>void;compact?:boolean};
 function checkoutHref(value:unknown):string|null{
  if(typeof value!=='string'||!value.trim())return null;
  try{
@@ -16,7 +16,7 @@ function checkoutHref(value:unknown):string|null{
 }
 const inputClass='payment-link-input';
 
-export function PaymentLinkStudio({canCreate,isPlatform,onCreated,compact=false}:Props){
+export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi,compact=false}:Props){
  const [orderId,setOrderId]=useState('ORDER-'+Date.now());
  const [amount,setAmount]=useState('');
  const [loading,setLoading]=useState(false);
@@ -24,7 +24,23 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,compact=false}
  const [failure,setFailure]=useState('');
  const [copied,setCopied]=useState(false);
  const [attemptKey,setAttemptKey]=useState<string|null>(null);
+ const [readiness,setReadiness]=useState<PaymentReadiness|null>(null);
+ const [readinessError,setReadinessError]=useState('');
+ const [readinessBusy,setReadinessBusy]=useState(false);
+ const [readinessVersion,setReadinessVersion]=useState(0);
+ useEffect(()=>{
+  if(!canCreate||isPlatform)return;
+  const controller=new AbortController();
+  setReadinessBusy(true);
+  getPaymentReadiness(controller.signal).then(value=>{
+   if(!controller.signal.aborted){setReadiness(value);setReadinessError('');}
+  }).catch(error=>{
+   if(!controller.signal.aborted)setReadinessError(error instanceof Error?error.message:'Payment setup status unavailable');
+  }).finally(()=>{if(!controller.signal.aborted)setReadinessBusy(false)});
+  return()=>controller.abort();
+ },[canCreate,isPlatform,readinessVersion]);
  const reduce=useReducedMotion();
+ // Readiness is advisory: a failed diagnostic must never disable a valid payment API request.
  const canSubmit=canCreate&&!isPlatform&&!loading;
  const href=checkoutHref(result?.checkoutUrl);
  const total=Number(amount);
@@ -61,6 +77,12 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,compact=false}
   </div>
   {!canCreate||isPlatform?<div role="status" className="payment-permission-note"><LockKey size={20} aria-hidden="true"/><span>{blocked} Sign in with a merchant owner or authorized team account.</span></div>:
   <form onSubmit={submit} className="payment-link-form">
+   <div className="payment-readiness" aria-live="polite">
+    <div className="payment-readiness-header"><strong>Payment-link readiness</strong><button type="button" onClick={()=>setReadinessVersion(v=>v+1)} disabled={readinessBusy}> {readinessBusy?'Checking…':'Check again'} </button></div>
+    {readinessError&&<p role="alert">Could not check payment setup: {readinessError}. You can retry without creating a new order.</p>}
+    {readiness?.ready&&<p className="payment-readiness-ready">Ready to create · Receiving UPI: <strong>{readiness.account?.upiId||'Configured'}</strong></p>}
+    {readiness&&!readiness.ready&&<div className="payment-readiness-issues">{readiness.issues.map(issue=><div className="payment-readiness-issue" key={issue.code}><WarningCircle size={17} aria-hidden="true"/><span>{issue.message}</span>{issue.action==='ADD_RECEIVING_UPI'&&<button type="button" onClick={onConfigureUpi}>Add receiving UPI ID</button>}</div>)}</div>}
+   </div>
    <div className="form-fields">
     <label className="payment-field"><span>Order reference</span><input className={inputClass} name="orderId" value={orderId} onChange={e=>updateOrder(e.target.value)} autoComplete="off" maxLength={120} required pattern="[-A-Za-z0-9_]{1,120}" aria-invalid={!validOrder&&orderId.length>0}/><small>Unique reference for your order</small></label>
     <label className="payment-field"><span>Amount (INR)</span><div className="amount-input-wrap"><span className="currency-mark">₹</span><input className={inputClass} name="amount" inputMode="decimal" placeholder="500.00" value={amount} onChange={e=>updateAmount(e.target.value)} autoComplete="off" required aria-invalid={Boolean(amount&&!validAmount)}/></div><small>Exact payable amount, with up to 2 decimals</small></label>

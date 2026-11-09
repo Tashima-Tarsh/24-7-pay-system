@@ -29,11 +29,22 @@ test('scoped keys enforce tenant, revocation, suspension, idempotency and persis
  // A verified first receiving account is active in one step, without a separate
  // platform-admin activation. Subsequent receiver changes remain explicit.
  db.execute('INSERT INTO pp_merchants VALUES(?,?,?,?,?)',[b.id,'ACTIVE','{}',new Date().toISOString(),new Date().toISOString()]);
- const firstReceiver=await call('/api/platform/v1/receiving-accounts',{upiId:'first@okbank',payeeName:'Merchant B',confirmVpaOwnership:true},{'x-test-new-owner':'yes'});
+ const unconfigured=await call('/api/platform/v1/payment-readiness',undefined,{'x-test-new-owner':'yes'});
+ assert.equal(unconfigured.status,200);
+ assert.equal(unconfigured.body.ready,false);
+ assert.ok(unconfigured.body.issues.some(issue=>issue.code==='NO_RECEIVING_ACCOUNT'));
+  const firstReceiver=await call('/api/platform/v1/receiving-accounts',{upiId:'first@okbank',payeeName:'Merchant B',confirmVpaOwnership:true},{'x-test-new-owner':'yes'});
  assert.equal(firstReceiver.status,201);assert.equal(firstReceiver.body.account.isActive,true);
  const nextReceiver=await call('/api/platform/v1/receiving-accounts',{upiId:'second@okbank',payeeName:'Merchant B',confirmVpaOwnership:true},{'x-test-new-owner':'yes'});
  assert.equal(nextReceiver.status,201);assert.equal(nextReceiver.body.account.isActive,false);
  assert.equal(accountRepo.findActiveForMerchant(b.id).upiId,'first@okbank','a second VPA cannot silently redirect existing payment collection');
+ const configured=await call('/api/platform/v1/payment-readiness',undefined,{'x-test-new-owner':'yes'});
+ assert.equal(configured.status,200);
+ assert.equal(configured.body.ready,true);
+ assert.equal(configured.body.account.upiId,'first@okbank');
+ const deniedReadiness=identity.authorize;identity.authorize=()=>false;
+ assert.equal((await call('/api/platform/v1/payment-readiness',undefined,{'x-test-new-owner':'yes'})).status,403);
+ identity.authorize=deniedReadiness;
  const channel=await call('/api/platform/v1/settings',{channel:{enabled:true,minAmountPaise:0,maxAmountPaise:2000000,allowedVpas:[]}},{'x-test-owner':'yes'});
  assert.equal(channel.status,200,'zero minimum is a valid channel setting');
  const connection=await call('/api/platform/v1/connections',{provider:'CASHFREE',environment:'SANDBOX',clientId:'test-client',clientSecret:'test-secret'},{'x-test-owner':'yes'});
