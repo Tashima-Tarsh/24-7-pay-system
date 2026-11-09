@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
     "@tanstack/react-router": "^1.170.46",
+    "@vitejs/plugin-react": "^4.3.0",
     "@youpi/common": "*",
     "@youpi/core": "*",
     "@youpi/ui": "*",
@@ -27,7 +28,6 @@
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.3.0"
+    "@types/react-dom": "^18.2.0"
   }
 }
