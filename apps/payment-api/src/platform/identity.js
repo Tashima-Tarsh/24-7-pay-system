@@ -39,8 +39,54 @@ function postDelivery(url,message){return new Promise((resolve,reject)=>{const r
 function base32(bytes){let bits=0,value=0,out='';for(const b of bytes){value=(value<<8)|b;bits+=8;while(bits>=5){out+='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'[(value>>>(bits-5))&31];bits-=5;}}if(bits)out+='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'[(value<<(5-bits))&31];return out;}
 export function totp(secret,time=Date.now()){let bits=0,value=0,bytes=[];for(const c of secret){value=(value<<5)|'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(c);bits+=5;if(bits>=8){bytes.push((value>>>(bits-8))&255);bits-=8;}}const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(time/30000)));const mac=crypto.createHmac('sha1',Buffer.from(bytes)).update(counter).digest();const i=mac[19]&15;return String((mac.readUInt32BE(i)&0x7fffffff)%1000000).padStart(6,'0');}
 
+/**
+ * One-time, auditable platform owner provisioning. The account email and
+ * scrypt password hash live in the deployment's private environment, never in
+ * Git or HTML. A version marker prevents later restarts from undoing a
+ * password reset. To rotate explicitly, set a new provision version.
+ */
+export function provisionPlatformOwner(db,{
+  ownerEmail=process.env.ADMIN_LOGIN_EMAIL,
+  ownerHash=process.env.ADMIN_LOGIN_PASSWORD_HASH,
+  version=process.env.ADMIN_OWNER_BOOTSTRAP_VERSION
+}={}){
+  if(!ownerEmail||!ownerHash||!version)return {status:'not-configured'};
+  const address=String(ownerEmail).trim().toLowerCase();
+  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(address)||address.length>254)
+    throw new Error('Invalid platform owner bootstrap email');
+  if(!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/i.test(String(ownerHash)))
+    throw new Error('Platform owner bootstrap requires a scrypt password hash');
+  if(!/^[A-Za-z0-9_-]{1,64}$/.test(String(version)))
+    throw new Error('Invalid platform owner bootstrap version');
+  const marker='owner-provision:'+version;
+  if(db.queryOne('SELECT account_id FROM pp_platform_accounts WHERE account_id=?',[marker]))
+    return {status:'already-applied'};
+  let outcome='created';
+  db.transaction(()=>{
+    // Recheck the marker under transaction to support concurrent startups.
+    if(db.queryOne('SELECT account_id FROM pp_platform_accounts WHERE account_id=?',[marker])){
+      outcome='already-applied';return;
+    }
+    const previous=db.queryOne('SELECT id,merchant_id,role FROM pp_users WHERE email=?',[address]);
+    if(previous&&(previous.merchant_id||previous.role!=='SUPER_ADMIN'))
+      throw new Error('Configured owner email already belongs to another account');
+    if(previous){
+      db.execute('UPDATE pp_users SET password_hash=?,active=1 WHERE id=?',[ownerHash,previous.id]);
+      db.execute('DELETE FROM pp_sessions WHERE user_id=?',[previous.id]);
+      outcome='updated';
+    }else{
+      const id=crypto.randomUUID();
+      db.execute('INSERT INTO pp_users (id,merchant_id,email,password_hash,role,active,email_verified,created_at) VALUES (?,?,?,?,?,?,?,?)',
+        [id,null,address,ownerHash,'SUPER_ADMIN',1,0,now()]);
+    }
+    db.execute('INSERT INTO pp_platform_accounts(account_id,purpose) VALUES(?,?)',[marker,'OWNER_CREDENTIAL_PROVISIONED']);
+  });
+  return {status:outcome};
+}
 export function registerPlatformIdentity(server,ctx){
   const {db,merchantRepo}=ctx;initializePlatform(db);
+  const ownerProvision=provisionPlatformOwner(db);
+  if(ownerProvision.status!=='not-configured')console.log('[Platform] Owner credential provisioning:',ownerProvision.status);
   const permissions=user=>{const base=rolePermissions(user),custom=db.queryOne('SELECT permissions FROM pp_user_permissions WHERE user_id = ?',[user.id]);if(!custom)return base;const selected=JSON.parse(custom.permissions);return base.filter(p=>selected.includes(p));};
   const authorize=(req,permission)=>!!req.platform&&(req.platform.permissions.includes('*')||req.platform.permissions.includes(permission));
   const requirePermission=(req,permission)=>{if(!authorize(req,permission))fail(403,'Permission denied');};

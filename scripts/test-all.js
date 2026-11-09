@@ -82,6 +82,7 @@ const testFiles = [
   'scripts/durable-financial-storage.test.js',
   'scripts/legacy-confirmation-boundary.test.js',
   'scripts/platform-bearer-session.test.js',
+  'scripts/platform-owner-provisioning.test.js',
   'scripts/new-workspace-contract.test.js',
   'scripts/clean-transaction-history.test.js',
   'scripts/production-audit-probes.test.js',
