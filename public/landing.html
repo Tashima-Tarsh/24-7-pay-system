@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sanction | UPI Payment Gateway</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0A0E27;
+    --accent: #00D4FF;
+    --secondary: #7C3AED;
+    --neutral-900: #0A0E27;
+    --neutral-800: #131A2B;
+    --neutral-700: #1C243A;
+    --neutral-600: #2A324C;
+    --neutral-400: #6B7280;
+    --neutral-200: #E5E7EB;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--primary);
+    color: #F8FAFC;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, .heading {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.02em;
+    color: #F8FAFC;
+  }
+
+  h1 {
+    font-size: 64px;
+    line-height: 1.05;
+    font-weight: 800;
+  }
+
+  h2 {
+    font-size: 48px;
+    line-height: 1.1;
+    font-weight: 700;
+  }
+
+  h3 {
+    font-size: 32px;
+    line-height: 1.2;
+    font-weight: 600;
+  }
+
+  p {
+    font-size: 17px;
+    color: #CBD5E1;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  /* Background grid */
+  .bg-grid {
+    background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 8px),
+                      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 8px);
+    background-size: 8px 8px;
+  }
+
+  /* Animated mesh gradient */
+  .mesh-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    background: conic-gradient(
+      at 0% 0%,
+      #0A0E27 0%,
+      #1C243A 25%,
+      #7C3AED 50%,
+      #00D4FF 75%,
+      #0A0E27 100%
+    );
+    background-size: 400% 400%;
+    animation: mesh-move 12s ease infinite;
+  }
+
+  @keyframes mesh-move {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Glassmorphism card */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 32px;
+  }
+
+  /* Button */
+  .btn {
+    height: 48px;
+    padding: 0 24px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background-color: #00D4FF;
+    color: #0A0E27;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.3);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-secondary {
+    background-color: transparent;
+    color: #F8FAFC;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .btn-secondary:hover {
+    transform: translateY(-2px);
+    border-color: #00D4FF;
+    box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.3);
+  }
+
+  /* Live indicator */
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #00D4FF;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.1); }
+  }
+
+  /* Staggered fade-in */
+  .fade-in {
+    opacity: 0;
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .fade-in-1 { animation-delay: 0.1s; }
+  .fade-in-2 { animation-delay: 0.2s; }
+  .fade-in-3 { animation-delay: 0.3s; }
+  .fade-in-4 { animation-delay: 0.4s; }
+  .fade-in-5 { animation-delay: 0.5s; }
+
+  /* Stats bar separator */
+  .stats-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.2);
+    display: inline-block;
+    margin: 0 16px;
+    vertical-align: middle;
+  }
+
+  /* Abstract geometric shape (CSS only) */
+  .abstract-shape {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(0, 212, 255, 0.1) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+
+  .abstract-shape::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 30%, rgba(0, 212, 255, 0.2) 0%, transparent 40%),
+                radial-gradient(circle at 70% 70%, rgba(124, 58, 237, 0.15) 0%, transparent 40%);
+    animation: rotate-shape 8s linear infinite;
+  }
+
+  @keyframes rotate-shape {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Custom SVG icon */
+  .icon {
+    width: 24px;
+    height: 24px;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+  }
+
+  /* Dashboard sidebar */
+  .sidebar {
+    width: 240px;
+    background-color: #0A0E27;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    padding: 32px 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    color: #94A3B8;
+    text-decoration: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+  }
+
+  .nav-item:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+    color: #F8FAFC;
+  }
+
+  .nav-item.active {
+    border-left: 3px solid #00D4FF;
+    color: #00D4FF;
+    background-color: rgba(0, 212, 255, 0.05);
+  }
+
+  .nav-item .icon {
+    stroke: currentColor;
+  }
+
+  /* Dashboard cards */
+  .stat-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 32px;
+    height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .stat-card:hover {
+    border-color: rgba(0, 212, 255, 0.3);
+    box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.3);
+  }
+
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: #F8FAFC;
+  }
+
+  .stat-label {
+    font-size: 13px;
+    color: #94A3B8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Table */
+  .transactions-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .transactions-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748B;
+    padding: 16px 20px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .transactions-table td {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 15px;
+    color: #F8FAFC;
+  }
+
+  .transactions-table tr {
+    height: 64px;
+    transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transactions-table tr:hover {
+    background-color: rgba(0, 212, 255, 0.05);
+  }
+
+  .transactions-table tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .status-success {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #34D399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .status-pending {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #FBBF24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .status-failed {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #F87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  /* Hamburger */
+  .hamburger {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+  }
+
+  .hamburger span {
+    width: 24px;
+    height: 2px;
+    background-color: #F8FAFC;
+    border-radius: 2px;
+    transition: all 0.3s;
+  }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    h1 { font-size: 48px; }
+    h2 { font-size: 36px; }
+    h3 { font-size: 28px; }
+    p { font-size: 16px; }
+
+    .sidebar {
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sidebar.open {
+      transform: translateX(0);
+    }
+
+    .hamburger {
+      display: flex;
+    }
+
+    .hero-section {
+      flex-direction: column;
+      padding: 96px 24px 120px 24px;
+    }
+
+    .hero-text {
+      order: 2;
+      text-align: center;
+    }
+
+    .hero-visual {
+      order: 1;
+      margin-bottom: 64px;
+    }
+
+    .dashboard-wrap {
+      margin-left: 0;
+      padding: 24px;
+    }
+
+    .stat-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .stats-bar {
+      flex-direction: column;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .stats-separator {
+      display: none;
+    }
+
+    .transactions-table {
+      font-size: 13px;
+    }
+
+    .transactions-table th,
+    .transactions-table td {
+      padding: 12px 16px;
+    }
+
+    .transactions-table tr {
+      height: 56px;
+    }
+  }
+
+  /* Layout */
+  .hero-section {
+    padding: 120px 24px 120px 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 10;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 60% 40%;
+    gap: 64px;
+    align-items: center;
+  }
+
+  .stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    padding: 48px 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .dashboard-wrap {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 96px 24px 120px 24px;
+    margin-left: 240px;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+
+  .transactions-section {
+    margin-bottom: 96px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 14, 39, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 90;
+    display: none;
+  }
+
+  .overlay.open {
+    display: block;
+  }
+</style>
+</head>
+<body class="bg-grid">
+
+  <div class="mesh-bg"></div>
+
+  <!-- Navbar -->
+  <nav class="fixed top-0 left-0 right-0 z-50 px-6 py-4">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-#00D4FF to-#7C3AED flex items-center justify-center">
+          <svg class="w-5 h-5 text-#0A0E27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2C7.58 2 4 5.58 4 10c0 3.39 3.26 6.14 7.11 6.97.18.02.36.03.55.03.19 0 .37-.02.55-.03 3.85-.17 7.11-2.92 7.11-6.97C20 5.58 16.42 2 12 2z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </div>
+        <span class="font-heading text-xl font-bold tracking-tight">Sanction</span>
+      </div>
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2 text-sm font-medium text-slate-300">
+          <span class="live-dot"></span>
+          <span>System Status: Operational</span>
+        </div>
+        <a href="#" class="btn btn-secondary hidden md:block">Contact Sales</a>
+        <button class="btn btn-primary hidden md:block" onclick="window.location.href='#dashboard'">Get Started</a>
+        <button class="hamburger md:hidden" id="mobile-menu-btn">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <div class="hero-grid">
+      <div class="hero-text flex flex-col gap-8">
+        <div class="fade-in fade-in-1">
+          <span class="text-#00D4FF font-heading font-semibold text-sm tracking-wider uppercase">Payments infrastructure for India</span>
+        </div>
+        <h1 class="fade-in fade-in-2">Accept UPI payments<br>directly into your VPA.</h1>
+        <p class="fade-in fade-in-3 max-w-lg text-lg leading-relaxed">
+          No aggregator. No fund holding. Settle directly to your bank account with real-time UPI verification
+          and sub-12ms latency. Built for merchants who own their money movement.
+        </p>
+        <div class="fade-in fade-in-4 flex flex-col sm:flex-row gap-4">
+          <button class="btn btn-primary w-full sm:w-auto">Start Accepting Payments</button>
+          <button class="btn btn-secondary w-full sm:w-auto">Read API Documentation</button>
+        </div>
+      </div>
+
+      <div class="hero-visual fade-in fade-in-5">
+        <div class="abstract-shape">
+          <div class="absolute inset-0 flex items-center justify-center p-8">
+            <div class="w-full h-full bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 flex items-center justify-center">
+              <div class="grid grid-cols-2 gap-4">
+                <div class="flex flex-col gap-2">
+                  <div class="h-4 bg-white/20 rounded w-3/4 animate-pulse"></div>
+                  <div class="h-4 bg-white/20 rounded w-1/2 animate-pulse" style="animation-delay: 0.2s"></div>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <div class="h-4 bg-white/20 rounded w-full animate-pulse" style="animation-delay: 0.4s"></div>
+                  <div class="h-4 bg-white/20 rounded w-2/3 animate-pulse" style="animation-delay: 0.6s"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="mono text-2xl font-bold text-white">99.99%</div>
+    <span class="stats-separator"></span>
+    <div class="mono text-2xl font-bold text-white">₹2.4Cr</div>
+    <span class="stats-separator"></span>
+    <div class="mono text-2xl font-bold text-white">12ms</div>
+    <span class="stats-separator"></span>
+    <div class="mono text-2xl font-bold text-white">0% hold</div>
+  </div>
+
+  <!-- Features -->
+  <section class="py-24 bg-neutral-800/30">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="text-center mb-16 fade-in fade-in-1">
+        <h2 class="fade-in fade-in-2">Built for money movement, not just collection</h2>
+        <p class="fade-in fade-in-3 mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
+          Every layer is designed for merchants who need certainty, not hope. Direct VPA settlement,
+          real-time bank verification, and programmable payouts — no intermediaries holding your float.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-32">
+        <div class="glass-card fade-in fade-in-4">
+          <div class="w-12 h-12 bg-#00D4FF/10 rounded-lg flex items-center justify-center mb-6 text-#00D4FF">
+            <svg class="icon text-#00D4FF" viewBox="0 0 24 24">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+            </svg>
+          </div>
+          <h3 class="text-2xl font-bold text-white mb-4">Direct VPA Settlement</h3>
+          <p class="text-slate-400 leading-relaxed">
+            Funds land directly in your VPA — no aggregator pool, no 3-day holds, no reconciliation delays.
+          </p>
+        </div>
+
+        <div class="glass-card fade-in fade-in-5">
+          <div class="w-12 h-12 bg-#7C3AED/10 rounded-lg flex items-center justify-center mb-6 text-#7C3AED">
+            <svg class="icon text-#7C3AED" viewBox="0 0 24 24">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+            </svg>
+          </div>
+          <h3 class="text-2xl font-bold text-white mb-4">Real-Time Verification</h3>
+          <p class="text-slate-400 leading-relaxed">
+            Bank-observer verification on every UPI transaction. Know the moment money moves, not after batch settlement.
+          </p>
+        </div>
+
+        <div class="glass-card fade-in fade-in-6">
+          <div class="w-12 h-12 bg-#00D4FF/10 rounded-lg flex items-center justify-center mb-6 text-#00D4FF">
+            <svg class="icon text-#00D4FF" viewBox="0 0 24 24">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+            </svg>
+          </div>
+          <h3 class="text-2xl font-bold text-white mb-4">Sub-12ms Latency</h3>
+          <p class="text-slate-400 leading-relaxed">
+            Purpose-built routing layer with circuit-breaker failover across eligible backup connections.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dashboard Section -->
+  <section id="dashboard" class="py-24">
+    <div class="dashboard-wrap">
+      <div class="section-header fade-in fade-in-1">
+        <div>
+          <h2 class="text-3xl font-bold text-white">Dashboard</h2>
+          <p class="text-sm text-slate-400 mt-2">Real-time view of your payment operations</p>
+        </div>
+        <div class="flex items-center gap-2 text-sm font-medium text-slate-300">
+          <span class="live-dot"></span>
+          <span>Live data</span>
+        </div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stat-grid fade-in fade-in-2">
+        <div class="stat-card">
+          <div>
+            <span class="stat-label">Total Volume</span>
+            <div class="stat-value">₹2,45,00,000</div>
+          </div>
+          <div class="text-sm text-#34D399 font-semibold">+12.4% vs yesterday</div>
+        </div>
+        <div class="stat-card">
+          <div>
+            <span class="stat-label">Active Sessions</span>
+            <div class="stat-value">1,247</div>
+          </div>
+          <div class="text-sm text-#60A5FA font-semibold">+230 this hour</div>
+        </div>
+        <div class="stat-card">
+          <div>
+            <span class="stat-label">Success Rate</span>
+            <div class="stat-value">99.4%</div>
+          </div>
+          <div class="text-sm text-#34D399 font-semibold">+0.2% vs last week</div>
+        </div>
+        <div class="stat-card">
+          <div>
+            <span class="stat-label">Pending Payouts</span>
+            <div class="stat-value">₹48,000</div>
+          </div>
+          <div class="text-sm text-#FBBF24 font-semibold">3 settlements due</div>
+        </div>
+      </div>
+
+      <!-- Transactions Table -->
+      <div class="transactions-section fade-in fade-in-3">
+        <div class="section-header">
+          <div>
+            <h3 class="text-xl font-bold text-white">Recent Transactions</h3>
+            <p class="text-sm text-slate-400 mt-1">Last 24 hours</p>
+          </div>
+          <button class="btn btn-secondary btn-sm">Export CSV</button>
+        </div>
+        <div class="glass rounded-xl overflow-hidden border border-white/5">
+          <table class="transactions-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Status</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-mono text-sm text-slate-300">ORD-2024-0891</td>
+                <td class="text-sm">Rahul Sharma</td>
+                <td class="font-mono text-sm text-white">₹4,500.00</td>
+                <td class="text-sm text-slate-400">UPI</td>
+                <td><span class="status-badge status-success">SUCCESS</span></td>
+                <td class="text-sm text-slate-500 font-mono">14:32:01</td>
+              </tr>
+              <tr>
+                <td class="font-mono text-sm text-slate-300">ORD-2024-0890</td>
+                <td class="text-sm">Priya Menon</td>
+                <td class="font-mono text-sm text-white">₹1,200.00</td>
+                <td class="text-sm text-slate-400">UPI</td>
+                <td><span class="status-badge status-success">SUCCESS</span></td>
+                <td class="text-sm text-slate-500 font-mono">14:28:44</td>
+              </tr>
+              <tr>
+                <td class="font-mono text-sm text-slate-300">ORD-2024-0889</td>
+                <td class="text-sm">Arjun Patel</td>
+                <td class="font-mono text-sm text-white">₹8,900.00</td>
+                <td class="text-sm text-slate-400">UPI</td>
+                <td><span class="status-badge status-pending">PENDING</span></td>
+                <td class="text-sm text-slate-500 font-mono">14:15:22</td>
+              </tr>
+              <tr>
+                <td class="font-mono text-sm text-slate-300">ORD-2024-0888</td>
+                <td class="text-sm">Sneha Reddy</td>
+                <td class="font-mono text-sm text-white">₹3,200.00</td>
+                <td class="text-sm text-slate-400">Card</td>
+                <td><span class="status-badge status-failed">FAILED</span></td>
+                <td class="text-sm text-slate-500 font-mono">14:02:10</td>
+              </tr>
+              <tr>
+                <td class="font-mono text-sm text-slate-300">ORD-2024-0887</td>
+                <td class="text-sm">Vikram Singh</td>
+                <td class="font-mono text-sm text-white">₹1,500.00</td>
+                <td class="text-sm text-slate-400">UPI</td>
+                <td><span class="status-badge status-success">SUCCESS</span></td>
+                <td class="text-sm text-slate-500 font-mono">13:55:00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="px-6 mb-40">
+      <div class="flex items-center gap-2 mb-8">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-#00D4FF to-#7C3AED flex items-center justify-center">
+          <svg class="w-5 h-5 text-#0A0E27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2C7.58 2 4 5.58 4 10c0 3.39 3.26 6.14 7.11 6.97.18.02.36.03.55.03.19 0 .37-.02.55-.03 3.85-.17 7.11-2.92 7.11-6.97C20 5.58 16.42 2 12 2z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </div>
+        <span class="font-heading text-sm font-bold tracking-tight">Sanction</span>
+      </div>
+      <nav class="space-y-2">
+        <a href="#" class="nav-item active" onclick="setActiveNav(this)">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+          Dashboard
+        </a>
+        <a href="#" class="nav-item" onclick="setActiveNav(this)">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M17 21v-2a4 4 0 014-4h3a4 4 0 004 4v2M9 9h6v6H9V9z"></path></svg>
+          Transactions
+        </a>
+        <a href="#" class="nav-item" onclick="setActiveNav(this)">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M17 21v-2a4 4 0 014-4h3a4 4 0 004 4v2M9 9h6v6H9V9z"></path></svg>
+          Merchants
+        </a>
+        <a href="#" class="nav-item" onclick="setActiveNav(this)">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 4 8 8 8 8z"></path></svg>
+          Settings
+        </a>
+      </nav>
+    </div>
+    <div class="mt-auto p-6 border-t border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold">AD</td>
+        <div>
+          <div class="text-xs font-bold text-white">Admin Console</div>
+          <div class="text-xs text-slate-500">sanction@youpi.in</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Overlay for mobile -->
+  <div class="overlay" id="overlay" onclick="closeMobileMenu()"></div>
+
+  <script>
+    function setActiveNav(el) {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    mobileMenuBtn.addEventListener('click', () => {
+      const isOpen = sidebar.classList.contains('open');
+      if (isOpen) {
+        closeMobileMenu();
+      } else {
+        sidebar.classList.add('open');
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+      }
+    });
+
+    function closeMobileMenu() {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // Close mobile menu when clicking a nav item
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', closeMobileMenu);
+    });
+
+    // Close on escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeMobileMenu();
+    });
+  </script>
+</body>
+</html>
