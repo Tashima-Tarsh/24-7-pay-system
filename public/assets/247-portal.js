@@ -645,7 +645,7 @@ async function developers(){
  const setup=panel('Merchant API integration','Use these server-to-server tools to create payment sessions and receive signed status callbacks.');
  const baseUrl=location.origin;
  add(setup,info([['API origin',baseUrl],['Payment creation','POST /api/v1/payments'],['Payment status','GET /api/v1/payments/:id'],
- ['Callback authentication','Verify raw-body HMAC and deduplicate event IDs'],['Public documentation','docs/developers/WEBHOOK_INTEGRATION.md']]));
+ ['Callback authentication','Verify raw-body HMAC and deduplicate event IDs'],['API documentation',location.origin+'/api-reference.html']]));
  const docs=el('a','card-link','Webhook integration reference');
  const reference=el('a','card-link','Explore interactive API reference');reference.href='/api-reference.html';reference.target='_blank';reference.rel='noopener noreferrer';add(setup,reference);
  docs.href='/api-reference.html';
