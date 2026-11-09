@@ -71,10 +71,12 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     assert.equal((await context.cookies()).some(c=>c.name==='dp_platform_session'),false,'New workspace must not rely on legacy login cookies');
     await page.locator('button[data-view="payments"]').click();
     await page.waitForFunction(()=>document.querySelector('#page-title')?.textContent?.includes('Every order'));
-    assert.equal(await page.locator('#view-content .panel-card').count()>0,true);
+    await page.waitForSelector('#view-content .panel-card',{timeout:12000});
+    await page.getByRole('heading',{name:'Payment history'}).waitFor({timeout:12000});
     await page.locator('button[data-view="receiving"]').click();
     await page.waitForFunction(()=>document.querySelector('#page-title')?.textContent?.includes('where payments'));
-    assert.equal(await page.locator('#view-content form').count()>0,true,'Receiving account form must be present');
+    await page.waitForSelector('#view-content form',{timeout:12000});
+    await page.getByRole('heading',{name:'Add a receiving account'}).waitFor({timeout:12000});
     await page.locator('button[data-view="settings"]').click();
     await page.waitForFunction(()=>document.querySelector('#page-title')?.textContent?.includes('essentials'));
     const input=page.locator('#field-businessName');await input.fill('Browser Merchant Updated');
