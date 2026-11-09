@@ -679,12 +679,24 @@ function webhookTester(savedUrl){
 async function callbacks(){
  if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
  const result=await api('/webhook-deliveries');
- const entries=result.deliveries||[],c=panel('Callback deliveries','Real delivery attempts, including both payment and provider events.');
+ const entries=Array.isArray(result.deliveries)?result.deliveries:[],c=panel('Callback delivery center','Backend-recorded HTTP delivery results. Filter attempts, inspect transport details and retry only existing events.');
+ const toolbar=el('div','premium-payment-toolbar');
+ const search=el('input');search.type='search';search.placeholder='Search event or source';search.setAttribute('aria-label','Search callback deliveries');
+ const state=el('select');state.setAttribute('aria-label','Filter callback deliveries');
+ for(const [label,v] of [['All deliveries',''],['Acknowledged','delivered'],['Retry queued','queued'],['Needs attention','attention']])state.add(new Option(label,v));
+ const counter=el('span','premium-result-count');counter.setAttribute('aria-live','polite');
+ const area=el('div');
+ const deliveryState=row=>row.is_successful?'delivered':row.next_retry_at?'queued':'attention';
  const renderAction=row=>{
-  const delivered=Boolean(row.is_successful),area=el('div','toolbar');
-  if(delivered)return status('DELIVERED');
-  add(area,status(row.next_retry_at?'QUEUED':'NEEDS_ATTENTION'));
-  if(allowed('webhooks.manage'))add(area,button('Retry callback',async()=>{
+  const delivered=Boolean(row.is_successful),wrap=el('div','premium-callback-actions');
+  const inspect=button('Inspect',()=>detail('Callback delivery',info([
+   ['Event',row.event_type],['Source',row.source],['Delivery ID',row.id],
+   ['Transport status',delivered?'HTTP acknowledged':row.next_retry_at?'Retry queued':'Needs attention'],
+   ['Attempt count',count(row.attempt_count)],['Last HTTP response',row.response_status||'No recorded HTTP response'],
+   ['Next retry',date(row.next_retry_at)]
+  ])));
+  add(wrap,inspect);
+  if(!delivered&&allowed('webhooks.manage'))add(wrap,button('Retry',async()=>{
    if(!confirm('Retry delivering this existing event? This does NOT confirm receipt of money.'))return;
    try{
     await api('/webhook-deliveries/'+encodeURIComponent(row.id)+'/retry','POST',{source:row.source});
@@ -692,18 +704,29 @@ async function callbacks(){
     void render('callbacks');
    }catch(err){detail('Retry unavailable',notice(err.message,true));}
   }));
-  return area;
+  return wrap;
+ };
+ const paint=()=>{
+  const q=search.value.trim().toLowerCase();
+  const visible=entries.filter(row=>{
+   if(state.value&&deliveryState(row)!==state.value)return false;
+   return [row.event_type,row.source,row.id,row.response_status].map(v=>String(v??'')).join(' ').toLowerCase().includes(q);
+  });
+  counter.textContent=count(visible.length)+' of '+count(entries.length)+' recorded deliveries';
+  area.replaceChildren(table(['Event','Source','Attempts','HTTP','Next retry','Status','Actions'],visible,
+   x=>[x.event_type,x.source||'—',count(x.attempt_count),x.response_status||'—',date(x.next_retry_at),status(deliveryState(x).toUpperCase()),renderAction(x)]));
  };
  add(c,stats([
   ['Delivered',count(entries.filter(x=>x.is_successful).length),'HTTP-acknowledged events'],
   ['Retry pending',count(entries.filter(x=>!x.is_successful&&x.next_retry_at).length),'Delivery queue'],
   ['Needs attention',count(entries.filter(x=>!x.is_successful&&!x.next_retry_at).length),'Inspect and retry carefully']
  ]));
- add(c,table(['Event','Source','Attempts','HTTP','Next retry','Status / action'],entries,
-  x=>[x.event_type,x.source||'—',count(x.attempt_count),x.response_status||'—',date(x.next_retry_at),renderAction(x)]));
- add(c,notice('Callbacks do not prove bank settlement. Merchants should validate webhook HMAC signatures and deduplicate event IDs.'));
+ search.addEventListener('input',paint);state.addEventListener('change',paint);
+ add(toolbar,search,state,counter);paint();
+ add(c,toolbar,area,notice('Callback acknowledgement is not proof of funds. Confirm payment only through your authoritative provider evidence; deduplicate event IDs and validate webhook signatures.'));
  return[c,webhookTester(null)];
 }
+
 async function billing(){
  const selected=user.platform&&selectedMerchantId?'&merchantId='+encodeURIComponent(selectedMerchantId):'';const [invoices,subscriptions]=await Promise.allSettled([api('/billing/invoices?limit=30'+selected),api('/billing/subscriptions?limit=30'+selected)]);
  const a=panel('Your invoices','Billing records saved for this account.');
