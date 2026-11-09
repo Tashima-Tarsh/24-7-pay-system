@@ -102,7 +102,7 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     const input=page.locator('#field-businessName');await input.fill('Browser Merchant Updated');
     await page.getByRole('button',{name:'Save business settings'}).click();
     await page.waitForSelector('#detail-layer:not([hidden])',{timeout:10000});
-    assert.match(await page.locator('#detail-title').textContent(),/Settings updated/);
+    assert.match(await page.locator('#detail-title').textContent(),/Business settings saved/);
     await page.locator('#detail-close').click();
     await page.locator('#logout-button').click();
     await page.waitForSelector('#auth-view:not([hidden])');
