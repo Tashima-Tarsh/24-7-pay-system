@@ -38,3 +38,37 @@ test('Payment, callback and case filters use text nodes rather than HTML injecti
  assert.match(script,/state\.addEventListener\('change',paint\)/);
  assert.match(css,/premium-route-grid/);
 });
+
+test('Premium workspace quick actions and payment chart are sourced from authenticated KPIs',()=>{
+ assert.match(script,/function premiumChart\(summary\)/);
+ assert.match(script,/result\.push\(premiumChart\(s\)\)/);
+ assert.match(script,/function premiumEntryPoints\(\)/);
+ assert.match(script,/result\.unshift\(premiumEntryPoints\(\)\)/);
+ assert.match(script,/premiumAnimate\(content\)/);
+ assert.match(script,/prefers-reduced-motion: reduce/);
+});
+
+test('Phosphor icons are self-hosted and include original MIT attribution',()=>{
+ for(const name of ['chart','route','shield','code']){
+  const icon=readFileSync(new URL('../public/assets/icons/phosphor-'+name+'.svg',import.meta.url),'utf8');
+  assert.match(icon,/<svg/);assert.match(icon,/viewBox="0 0 256 256"/);
+ }
+ const license=readFileSync(new URL('../public/assets/icons/PHOSPHOR-LICENSE.txt',import.meta.url),'utf8');
+ assert.match(license,/MIT License/);
+ assert.match(script,/function premiumIcon\(name\)/);
+});
+
+test('Scalar API reference is sandboxed away from merchant session storage',()=>{
+ const page=readFileSync(new URL('../public/api-reference.html',import.meta.url),'utf8');
+ const frame=readFileSync(new URL('../public/scalar-frame.html',import.meta.url),'utf8');
+ const schema=JSON.parse(readFileSync(new URL('../public/api-reference.json',import.meta.url),'utf8'));
+ assert.match(page,/sandbox="allow-scripts"/);
+ assert.doesNotMatch(page,/allow-same-origin/);
+ assert.match(frame,/cdn\.jsdelivr\.net\/npm\/@scalar\/api-reference/);
+ assert.match(frame,/createApiReference/);
+ assert.match(frame,/agent:\{disabled:true\}/);
+ assert.equal(schema.openapi,'3.0.3');
+ assert.ok(schema.paths['/api/platform/v1/transactions']);
+ const portal=readFileSync(new URL('../public/platform.html',import.meta.url),'utf8');
+ assert.match(portal,/Content-Security-Policy|247-portal\.js/);
+});
