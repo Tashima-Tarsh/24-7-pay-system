@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { AuthLayout } from '../../components/layout';
-import { Card } from '../../components';
-import { Button, Input } from '../../components';
-import { storeAuth, clearAuth } from '../../lib/api';
+import { useRouter } from 'next/router';
+import { AuthLayout } from '../components/layout';
+import { Card } from '../components';
+import { Button, Input } from '../components';
+import { storeAuth, clearAuth } from '../lib/api';
 
 export default function LoginPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [merchantId, setMerchantId] = useState('');
   const [merchantKey, setMerchantKey] = useState('');
   const [error, setError] = useState('');
@@ -16,6 +16,7 @@ export default function LoginPage() {
     setError('');
 
     try {
+      // Validate credentials against backend
       const res = await fetch('http://127.0.0.1:6100/api/v1/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Merchant-Id': merchantId, 'X-Merchant-Key': merchantKey },
@@ -23,11 +24,12 @@ export default function LoginPage() {
 
       if (res.ok) {
         storeAuth(merchantId, merchantKey);
-        navigate({ to: '/' });
+        router.push('/');
       } else {
         setError('Invalid merchant ID or API key');
       }
     } catch (err) {
+      // No fallback: backend authentication is required
       setError('Authentication service unavailable. Please try again.');
       return;
     }

@@ -38,37 +38,31 @@ export async function startCheckoutServer(port = null, options = {}) {
   const finalPort = port || Number(process.env.CHECKOUT_PORTAL_PORT || 6002);
   const bindHost = process.env.YOUPI_BIND_HOST || '127.0.0.1';
   const checkoutAppDir = path.join(root, 'apps', 'checkout-portal');
-  const checkoutDistDir = path.join(checkoutAppDir, 'dist');
+  const checkoutDistDir = path.join(checkoutAppDir, '.next');
 
-  if (!fs.existsSync(path.join(checkoutDistDir, 'index.html'))) {
-    console.log('[Checkout Portal] dist not found, running build...');
+  if (!fs.existsSync(checkoutDistDir) || !fs.existsSync(path.join(checkoutDistDir, 'BUILD_ID'))) {
+    console.log('[Checkout Portal] .next not found, running build...');
     execSync(`npm run build --workspace=checkout-portal`, { cwd: root, stdio: 'inherit' });
   }
 
-  const assetTypes = {
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-    '.json': 'application/json',
-    '.ico': 'image/x-icon',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.svg': 'image/svg+xml',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.ttf': 'font/ttf',
-    '.eot': 'application/vnd.ms-fontobject',
-  };
-
+  const createNextServer = (await import('next')).default;
+  const app = createNextServer({
+    dev: false,
+    dir: checkoutAppDir,
+    conf: { distDir: '.next' },
+    quiet: false,
+    customServer: false,
+  });
+  await app.prepare();
+  const handler = app.getRequestHandler();
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const pathname = url.pathname;
-
-    if (pathname.startsWith('/assets/') || pathname.startsWith('/_next/')) {
-      const filePath = path.join(checkoutDistDir, pathname);
+    if (pathname.startsWith('/_next/static/')) {
+      const filePath = path.join(checkoutDistDir, pathname.slice('/_next'.length));
       fs.promises.access(filePath).then(() => {
         const ext = path.extname(filePath).toLowerCase();
-        const type = assetTypes[ext] || 'application/octet-stream';
+        const type = { '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2' }[ext] || 'application/octet-stream';
         res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable' });
         fs.createReadStream(filePath).pipe(res);
       }).catch(() => {
@@ -76,19 +70,14 @@ export async function startCheckoutServer(port = null, options = {}) {
       });
       return;
     }
-
-    const indexPath = path.join(checkoutDistDir, 'index.html');
-    fs.promises.access(indexPath).then(() => {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      fs.createReadStream(indexPath).pipe(res);
-    }).catch(() => {
-      res.writeHead(404); res.end('Checkout portal not built. Run: npm run build --workspace=checkout-portal');
+    handler(req, res).catch(err => {
+      if (!res.headersSent) { res.writeHead(500); res.end('Server Error'); }
+      console.error('[Checkout Portal] handler error:', err.message);
     });
   });
-
   return new Promise((resolve) => {
     server.listen(finalPort, bindHost, () => {
-      console.log('[Checkout Portal] Vite static server listening on port ' + finalPort);
+      console.log('[Checkout Portal] Next.js server listening on port ' + finalPort);
       resolve({ port: finalPort, close: () => new Promise((cb) => server.close(cb)) });
     });
   });
