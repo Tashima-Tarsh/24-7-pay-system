@@ -158,6 +158,7 @@ async function merchants(){const r=await api('/merchants?limit=50'),c=panel('Mer
     if(typeof data.invitationPath==='string'&&data.invitationPath.startsWith('/platform#owner-invitation/')){
      const invitation=el('a','card-link','Open merchant-owner activation link');
      invitation.href=data.invitationPath;
+     invitation.target='_blank';invitation.rel='noopener noreferrer';
      const copy=button('Copy private invitation URL',async()=>{
        try{await navigator.clipboard.writeText(location.origin+data.invitationPath);copy.textContent='Copied to clipboard';}
        catch{detail('Copy failed',notice('Use the activation link displayed above; do not share it publicly.',true));}
@@ -544,6 +545,7 @@ $('owner-invitation-form').addEventListener('submit',async e=>{
  finally{submit.disabled=false;}
 });
 initOwnerInvitation();
+window.addEventListener('hashchange',initOwnerInvitation);
 $('login-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('login-submit');b.disabled=true;$('auth-error').hidden=true;try{await signin($('email').value.trim(),$('password').value);}catch(err){$('auth-error').hidden=false;$('auth-error').textContent=err.message;}finally{b.disabled=false;$('password').value='';}});
 $('logout-button').addEventListener('click',signout);
 $('refresh-button').addEventListener('click',()=>{void health();void render(current);});
