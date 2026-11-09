@@ -28,3 +28,23 @@
 .webhook-test-result{margin-top:18px;overflow-wrap:anywhere}
 .webhook-test-result .info-list{width:100%}
 @media(max-width:550px){.payment-timeline-heading{display:grid}.payment-timeline-meta{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}}
+
+/* Narrow workspaces: preserve usable controls without page-wide horizontal scrolling. */
+html,body{max-width:100%;overflow-x:clip}
+.workspace,.content-panel,.content-panel main,.panel-card,.grid-two>*{min-width:0}
+.data-table{width:100%}
+@media(max-width:760px){
+ .content-panel{width:100%;min-width:0}
+ .panel-header{height:auto;min-height:66px;gap:10px;flex-wrap:wrap;padding:12px 16px}
+ .header-left,.header-right{min-width:0;max-width:100%}
+ .header-right{flex-wrap:wrap;justify-content:flex-end}
+ .content-panel main{padding:20px 14px 55px}
+ .panel-card{min-width:0;padding:16px}
+ .table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+ .form-grid input,.form-grid select,.form-grid textarea,.toolbar input{font-size:16px}
+ .toolbar>*{min-width:0;max-width:100%}
+ .sidebar{z-index:80;overflow-y:auto;overscroll-behavior:contain}
+ .form-actions>*{max-width:100%}
+ .payment-timeline-meta{grid-template-columns:1fr}
+}
+@media(max-width:380px){.connection-status{max-width:100px}.header-right .small-outline{font-size:12px}.page-heading h1{font-size:26px}}
