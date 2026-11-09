@@ -8,6 +8,7 @@ import {ProviderRegistry} from '@youpi/core';
 import {enforcePaymentControls} from '../payment-controls.js';
 import {upiChannelSettings,validateUpiChannel} from '../upi-channel.js';
 import {registerBankingIntegrations} from './banking-integrations.js';
+import {activateEligibleMerchant} from './merchant-activation.js';
 import {registerReceivingMirror} from './receiving-mirror.js';
 import {merchantIntegrationReadiness,merchantIntegrationDetails} from './merchant-integration.js';
 
@@ -101,7 +102,15 @@ export function registerPlatformPayments(server,ctx,identity){
  post('/rules/:id/state','policy.manage',async(req,res,p)=>{const r=db.queryOne('SELECT * FROM pp_rules WHERE id=?',[p.id]);if(!r||(!req.platform.platform&&r.merchant_id!==tenant(req)))throw error(404,'Rule not found.');const b=await HttpServer.parseBody(req);if(typeof b.active!=='boolean'||typeof b.reason!=='string'||b.reason.trim().length<5)throw error(400,'Supply state and reason.');db.transaction(()=>{db.execute('UPDATE pp_rules SET active=?,reason=?,updated_at=? WHERE id=?',[b.active?1:0,b.reason.trim().slice(0,1000),now(),p.id]);revision(req,db.queryOne('SELECT * FROM pp_rules WHERE id=?',[p.id]));});HttpServer.json(res,200,ruleView(db.queryOne('SELECT * FROM pp_rules WHERE id=?',[p.id])));});
  get('/rules/:id/history','policy.manage',(req,res,p)=>{const r=db.queryOne('SELECT * FROM pp_rules WHERE id=?',[p.id]);if(!r||(!req.platform.platform&&r.merchant_id!==tenant(req)))throw error(404,'Rule not found.');HttpServer.json(res,200,{revisions:db.query('SELECT * FROM pp_rule_revisions WHERE rule_id=? ORDER BY created_at',[p.id])});});
 
- function requireActive(mid){const state=db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',[mid]);if(state&&state.status!=='ACTIVE')throw error(403,'This merchant is not active for new payments.','MERCHANT_NOT_ACTIVE');}
+ function requireActive(mid,req){
+   // Reconcile only legacy onboarding states once the existing merchant OWNER
+   // is active and email-verified; disciplinary states remain blocked.
+   const state=activateEligibleMerchant(db,mid,{audit:details=>identity.audit(req,'MERCHANT_ONBOARDING_AUTO_COMPLETED',mid,details)});
+   if(state.active)return;
+   if(state.reason==='OWNER_EMAIL_UNVERIFIED')throw error(403,'Verify the merchant owner email address to start receiving payments.','MERCHANT_EMAIL_VERIFICATION_REQUIRED');
+   if(state.reason==='PROFILE_INCOMPLETE'||state.reason==='INVALID_PROFILE')throw error(403,'Complete your merchant business profile before creating new payments.','MERCHANT_PROFILE_INCOMPLETE');
+   throw error(403,'This merchant is not active for new payments. Contact support if the merchant is under review or suspended.','MERCHANT_NOT_ACTIVE');
+ }
  function credential(req){const value=/^Bearer\s+(dp_(?:live|test)_[A-Za-z0-9_-]+)$/i.exec(req.headers.authorization||'')?.[1];if(!value)return null;const r=db.queryOne('SELECT * FROM pp_api_keys WHERE secret_hash=?',[hash(value)]);if(!r||r.revoked_at||(r.expires_at&&Date.parse(r.expires_at)<=Date.now()))return null;return r;}
  function guard(req,res,path){
   const financial=/^\/v1\/(payments|transactions|refunds|balance|webhooks)(?:\/|$)/.test(path)||(path.startsWith('/api/v1/payment-links/')&&!path.startsWith('/api/v1/payment-links/generate'));
@@ -132,7 +141,7 @@ export function registerPlatformPayments(server,ctx,identity){
   const existing=sessionRepo.findByOrderId(mid,b.orderId),old=orders.findByMerchantAndOrderId(mid,b.orderId);
   if(existing){if(BigInt(existing.metadata?.externalCollection?.requestedAmountPaise??existing.amountPaise)!==paise||mode!=='UPI')throw error(409,'Order ID already exists with another request.');return HttpServer.json(res,200,response(existing));}
   if(old){if(BigInt(old.amount_paise)!==paise||mode!=='PROVIDER')throw error(409,'Order ID already exists with another request.');return HttpServer.json(res,200,providerResponse(old));}
-  requireActive(mid);
+  requireActive(mid,req);
   const merchant=merchantRepo.findById(mid);
   if(mode==='UPI'){
    if(req.platform.environment==='SANDBOX')throw error(503,'Direct bank UPI is not a sandbox. Connect an approved sandbox provider.','SANDBOX_PROVIDER_REQUIRED');
