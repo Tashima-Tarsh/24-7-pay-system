@@ -643,9 +643,14 @@ registerHyperswitchRoutes(server, context);
   registerAcceptanceRulesRoutes(server, context);
 
   // Initialize PaymentGateway with WebSocket listener for UPI signals (port 6101)
-const paymentGateway = new PaymentGateway(context);
-context.paymentGateway = paymentGateway;
-paymentGateway.initWebSocketListener(Number(process.env.UPI_WS_PORT || 6101));
+  try {
+    const paymentGateway = new PaymentGateway(context);
+    context.paymentGateway = paymentGateway;
+    paymentGateway.initWebSocketListener(Number(process.env.UPI_WS_PORT || 6101));
+  } catch (err) {
+    console.warn('[PaymentGateway] WebSocket listener unavailable:', err.message);
+    console.warn('[PaymentGateway] Continuing without real-time UPI listener; SSE still available via API.');
+  }
 
 function destroy() {
     notificationDeliveryService.stop();

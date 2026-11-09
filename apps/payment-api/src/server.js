@@ -376,31 +376,36 @@ export class PaymentGateway {
    * Initialize WebSocket server for UPI listener on port 6101.
    */
   initWebSocketListener(port = 6101) {
-    this.wss = new WebSocketServer({ port });
+    try {
+      this.wss = new WebSocketServer({ port });
 
-    this.wss.on('connection', (ws) => {
-      console.log('[WS] UPI listener connected');
+      this.wss.on('connection', (ws) => {
+        console.log('[WS] UPI listener connected');
 
-      ws.on('message', async (data) => {
-        try {
-          const signal = JSON.parse(data.toString());
-          console.log('[WS] Received payment signal:', signal);
-          await this.handlePaymentSignal(signal);
-        } catch (err) {
-          console.error('[WS] Invalid message:', err);
-        }
+        ws.on('message', async (data) => {
+          try {
+            const signal = JSON.parse(data.toString());
+            console.log('[WS] Received payment signal:', signal);
+            await this.handlePaymentSignal(signal);
+          } catch (err) {
+            console.error('[WS] Invalid message:', err);
+          }
+        });
+
+        ws.on('close', () => {
+          console.log('[WS] UPI listener disconnected');
+        });
       });
 
-      ws.on('close', () => {
-        console.log('[WS] UPI listener disconnected');
+      this.wss.on('error', (err) => {
+        console.error('[WS] WebSocket server error:', err.message);
       });
-    });
 
-    this.wss.on('error', (err) => {
-      console.error('[WS] WebSocket server error:', err.message);
-    });
-
-    console.log(`[WS] WebSocket listener on port ${port}`);
+      console.log(`[WS] WebSocket listener on port ${port}`);
+    } catch (err) {
+      console.warn('[WS] Could not start WebSocket listener on port', port, ':', err.message);
+      this.wss = null;
+    }
   }
 
   /**
