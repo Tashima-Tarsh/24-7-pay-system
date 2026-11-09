@@ -58,6 +58,10 @@ export function registerPlatformOperations(server, ctx, identity) {
     CREATE TABLE IF NOT EXISTS pp_credit_notes (id TEXT PRIMARY KEY, invoice_id TEXT NOT NULL REFERENCES pp_invoices(id), amount_paise TEXT NOT NULL, reason TEXT NOT NULL, idempotency_key TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(invoice_id,idempotency_key));
     CREATE TABLE IF NOT EXISTS pp_finance_audit (id TEXT PRIMARY KEY, merchant_id TEXT NOT NULL REFERENCES merchants(id), invoice_id TEXT REFERENCES pp_invoices(id), action TEXT NOT NULL, actor_id TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL);
   `);
+  // Shared operational telemetry schema. Definitions match platform/payments.
+  db.exec('CREATE TABLE IF NOT EXISTS pp_api_requests(id TEXT PRIMARY KEY,key_id TEXT,merchant_id TEXT,method TEXT NOT NULL,path TEXT NOT NULL,status INTEGER NOT NULL,duration_ms INTEGER NOT NULL,client_ip TEXT,created_at TEXT NOT NULL)');
+  db.exec('CREATE INDEX IF NOT EXISTS pp_api_requests_merchant_status_time ON pp_api_requests(merchant_id,status,created_at)');
+  db.exec('CREATE TABLE IF NOT EXISTS pp_connection_policy(connection_id TEXT PRIMARY KEY REFERENCES provider_connections(id),approved INTEGER NOT NULL DEFAULT 0,enabled INTEGER NOT NULL DEFAULT 0,priority INTEGER NOT NULL DEFAULT 100,min_paise INTEGER NOT NULL DEFAULT 0,max_paise INTEGER NOT NULL DEFAULT 2000000,failures INTEGER NOT NULL DEFAULT 0,open_until TEXT,updated_at TEXT NOT NULL)');
   const audit = (merchantId,invoiceId,action,req,details) => db.execute('INSERT INTO pp_finance_audit (id,merchant_id,invoice_id,action,actor_id,details,created_at) VALUES (?,?,?,?,?,?,?)',[randomUUID(),merchantId,invoiceId,action,req.platform.userId,JSON.stringify(details),now()]);
   function route(method,path,permission,handler,{platform=false}={}) {
     server.register(method,PREFIX+path,async(req,res,params)=>{
