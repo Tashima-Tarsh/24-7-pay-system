@@ -1,21 +1,32 @@
 import http from 'node:http';
-import { URL } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+
+const __filename = fileURLToPath(import.meta.url);
+const rootDir = path.dirname(__filename);
+const PUBLIC_DIR = path.join(rootDir, 'public');
 
 const PORT = Number(process.env.PORT || 7000);
 const API_PORT = 6100;
 const API_HOST = '127.0.0.1';
-const PUBLIC_DIR = new URL('./public/', import.meta.url).pathname;
+
+// Ensure data directory exists for SQLite
+const dbPath = process.env.SQLITE_DB_PATH || path.join(rootDir, 'data', 'youpi_pg.sqlite');
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 let apiChild = null;
 
 function spawnApi() {
   apiChild = spawn(process.execPath, ['apps/payment-api/src/index.js'], {
+    cwd: rootDir,
     env: {
       ...process.env,
       PAYMENT_API_PORT: String(API_PORT),
       NODE_ENV: process.env.NODE_ENV || 'production',
       YOUPI_BIND_HOST: '127.0.0.1',
+      SQLITE_DB_PATH: dbPath,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -30,7 +41,7 @@ function spawnApi() {
 spawnApi();
 
 function mimeType(filePath) {
-  const ext = filePath.toLowerCase().slice(filePath.lastIndexOf('.'));
+  const ext = path.extname(filePath).toLowerCase();
   const map = {
     '.html': 'text/html; charset=utf-8',
     '.js': 'text/javascript; charset=utf-8',
@@ -53,14 +64,6 @@ function mimeType(filePath) {
     '.txt': 'text/plain',
   };
   return map[ext] || 'application/octet-stream';
-}
-
-function readFilePromise(p) {
-  return new Promise((resolve, reject) => {
-    import('node:fs').then((fs) => {
-      fs.promises.readFile(p).then(resolve).catch(reject);
-    });
-  });
 }
 
 function streamPipe(req, res, targetHost, targetPort, targetPath) {
@@ -90,7 +93,16 @@ function resolveRoute(pathname) {
   if (pathname === '/_ready' || pathname === '/health') {
     return 'health';
   }
-  if (pathname.startsWith('/api/') || pathname.startsWith('/events/')) {
+  if (
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/events/') ||
+    pathname.startsWith('/v1/') ||
+    pathname.startsWith('/v1.0/') ||
+    pathname.startsWith('/oauth/') ||
+    pathname.startsWith('/qr/') ||
+    pathname.startsWith('/sdk/') ||
+    pathname === '/youpi.js'
+  ) {
     return 'api';
   }
   if (pathname === '/') {
@@ -120,26 +132,26 @@ const server = http.createServer(async (req, res) => {
 
   const route = resolveRoute(pathname);
 
-  // Health
+  // Health check
   if (route === 'health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true }));
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ ok: true, status: 'UP' }));
     return;
   }
 
-  // API / events proxy
+  // API / events proxy (preserves query params)
   if (route === 'api') {
-    streamPipe(req, res, API_HOST, API_PORT, pathname);
+    streamPipe(req, res, API_HOST, API_PORT, req.url);
     return;
   }
 
   // Page routes - serve HTML
   if (route === 'landing') {
-    const html = await readFilePromise(new URL('./landing.html', PUBLIC_DIR)).catch(() => null);
-    if (html) {
+    try {
+      const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'landing.html'));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
-    } else {
+    } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('landing.html not found');
     }
@@ -147,35 +159,23 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (route === 'checkout') {
-    const html = await readFilePromise(new URL('./checkout.html', PUBLIC_DIR)).catch(() => null);
-    if (html) {
+    try {
+      const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'checkout.html'));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
-    } else {
+    } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('checkout.html not found');
     }
     return;
   }
 
-  if (route === 'admin') {
-    const html = await readFilePromise(new URL('./admin.html', PUBLIC_DIR)).catch(() => null);
-    if (html) {
+  if (route === 'admin' || route === 'merchant') {
+    try {
+      const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'admin.html'));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
-    } else {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('admin.html not found');
-    }
-    return;
-  }
-
-  if (route === 'merchant') {
-    const html = await readFilePromise(new URL('./admin.html', PUBLIC_DIR)).catch(() => null);
-    if (html) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(html);
-    } else {
+    } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('admin.html not found');
     }
@@ -183,10 +183,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Static files from public/
-  const filePath = new URL('.' + pathname, PUBLIC_DIR);
+  const safePath = path.normalize(path.join(PUBLIC_DIR, pathname));
+  if (!safePath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
   try {
-    const content = await readFilePromise(filePath);
-    res.writeHead(200, { 'Content-Type': mimeType(pathname) });
+    const content = await fs.promises.readFile(safePath);
+    res.writeHead(200, { 'Content-Type': mimeType(safePath) });
     res.end(content);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -196,7 +202,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] Public gateway listening on port ${PORT}`);
-  console.log(`[server] Proxying /api/* to http://${API_HOST}:${API_PORT}`);
+  console.log(`[server] Proxying API routes to http://${API_HOST}:${API_PORT}`);
 });
 
 process.on('SIGTERM', () => {

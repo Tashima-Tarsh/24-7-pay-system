@@ -22,7 +22,7 @@
     "start:prod": "node scripts/start.js",
     "start:local": "node scripts/start-local.js",
     "start:tunnel": "node scripts/start-quick-tunnel.js",
-    "start:hosted": "node scripts/start-hosted.mjs",
+    "start:hosted": "node server.mjs",
     "start:prod:api": "node apps/payment-api/src/index.js",
     "start:super-admin": "node apps/super-admin/src/index.js",
     "dev": "node scripts/dev.js",
