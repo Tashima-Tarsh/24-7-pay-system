@@ -135,7 +135,8 @@ test('Payment link readiness uses original merchant authorization and guides rec
  const api=read('premium-studio/src/api.ts');
  const backend=read('apps/payment-api/src/platform/payments.js');
  assert.match(screen,/getPaymentReadiness\(controller\.signal\)/);
- assert.match(screen,/readiness\?\.ready===true/);
+ assert.match(screen,/readiness\?\.ready/);
+ assert.match(screen,/const canSubmit=canCreate&&!isPlatform&&!loading/);
  assert.match(screen,/onConfigureUpi/);
  assert.match(screen,/Add receiving UPI ID/);
  assert.match(api,/\/payment-readiness/);
