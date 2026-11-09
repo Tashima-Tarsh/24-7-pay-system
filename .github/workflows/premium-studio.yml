@@ -1,0 +1,48 @@
+name: Premium React studio (isolated)
+on:
+  push:
+    branches: [feature/premium-react-studio-safe]
+    paths: ['premium-studio/**','scripts/premium-react-boundary.test.js','.github/workflows/premium-studio.yml']
+  pull_request:
+    branches: [main]
+    paths: ['premium-studio/**','scripts/premium-react-boundary.test.js','.github/workflows/premium-studio.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify backend isolation and no payment mutations
+        run: node --test scripts/premium-react-boundary.test.js
+      - name: Install isolated React dependencies
+        run: |
+          if [ -f premium-studio/package-lock.json ]; then
+            npm ci --prefix premium-studio --no-audit --no-fund
+          else
+            npm install --prefix premium-studio --no-audit --no-fund
+          fi
+      - name: Typecheck and compile premium studio
+        run: npm run build --prefix premium-studio
+      - name: Check generated static entry
+        run: test -s public/premium-studio/index.html
+      - name: Archive compiled preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: premium-studio-preview
+          path: public/premium-studio
+          if-no-files-found: error
+      - name: Commit reproducible lockfile and preview build to feature branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/premium-react-studio-safe'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f premium-studio/package-lock.json public/premium-studio
+          if ! git diff --cached --quiet; then
+            git commit -m "Build isolated premium React preview and lock dependencies"
+            git push origin HEAD:feature/premium-react-studio-safe
+          fi
