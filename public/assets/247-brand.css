@@ -330,3 +330,13 @@ body[data-pay-surface="workspace"] .premium-payment-toolbar input{flex:2 1 250px
 body[data-pay-surface="workspace"] .premium-payment-toolbar select{flex:1 1 165px;min-width:0}
 body[data-pay-surface="workspace"] .premium-result-count{font-size:12px;color:var(--pay-muted);margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media(prefers-reduced-motion:reduce){body[data-pay-surface="workspace"] .premium-segment{transition:none}}
+
+/* Merchant operations: configuration-backed routing cards (no fabricated provider metrics). */
+body[data-pay-surface="workspace"] .premium-route-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:16px 0}
+body[data-pay-surface="workspace"] .premium-route-tile{min-width:0;background:var(--pay-white);border:1px solid var(--pay-line);border-radius:16px;padding:17px;box-shadow:0 4px 20px rgba(24,61,48,.035)}
+body[data-pay-surface="workspace"] .premium-route-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+body[data-pay-surface="workspace"] .premium-route-head strong{color:var(--pay-forest);font-size:15px;overflow-wrap:anywhere}
+body[data-pay-surface="workspace"] .premium-route-tile .info-list{margin:0}
+body[data-pay-surface="workspace"] .premium-route-tile .info-item{font-size:12px}
+body[data-pay-surface="workspace"] .premium-callback-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+@media(max-width:600px){body[data-pay-surface="workspace"] .premium-route-grid{grid-template-columns:minmax(0,1fr)}}
