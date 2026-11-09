@@ -52,7 +52,7 @@ export function provisionPlatformOwner(db,{
 }={}){
   if(!ownerEmail||!ownerHash||!version)return {status:'not-configured'};
   const address=String(ownerEmail).trim().toLowerCase();
-  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(address)||address.length>254)
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)||address.length>254)
     throw new Error('Invalid platform owner bootstrap email');
   if(!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/i.test(String(ownerHash)))
     throw new Error('Platform owner bootstrap requires a scrypt password hash');
