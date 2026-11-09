@@ -8,6 +8,7 @@ import { encryptAtRest, decryptAtRest, verifyPassword, validateOutboundWebhookUr
 import { HttpServer, resolveClientIp } from '../server.js';
 import { isAdminRequest } from '../auth-guard.js';
 import { initializePlatform } from './schema.js';
+import { createPlatformGmailInvitationService } from './gmail-invitations.js';
 
 const prefix='/api/platform/v1';
 const now=()=>new Date().toISOString();
@@ -92,9 +93,10 @@ export function registerPlatformIdentity(server,ctx){
   const requirePermission=(req,permission)=>{if(!authorize(req,permission))fail(403,'Permission denied');};
   const tenant=req=>req.platform?.merchantId||fail(403,'Merchant context required');
   const audit=(req,action,entityId,details={})=>db.execute('INSERT INTO pp_audit (id,merchant_id,user_id,action,entity_id,details,created_at) VALUES (?,?,?,?,?,?,?)',[crypto.randomUUID(),req.platform?.merchantId||null,req.platform?.userId||null,action,entityId||null,JSON.stringify(details),now()]);
-  const publicPaths=new Set(['/register','/login','/login/mfa','/login/recovery','/owner-invitations/accept','/verify','/invitations/accept','/password-reset/request','/password-reset/confirm']);
+  const gmailSender=createPlatformGmailInvitationService(db);
+  const publicPaths=new Set(['/register','/login','/login/mfa','/login/recovery','/owner-invitations/accept','/verify','/invitations/accept','/password-reset/request','/password-reset/confirm','/gmail/callback']);
   function originCheck(req){const expected=process.env.DYNAMO_PUBLIC_URL||process.env.RENDER_EXTERNAL_URL;const origin=req.headers.origin;if(origin){let target;try{target=new URL(expected||`http://${req.headers.host}`).origin;}catch{fail(403,'Invalid origin');}if(origin!==target)fail(403,'Cross-origin request denied');}if(req.headers['sec-fetch-site']==='cross-site')fail(403,'Cross-origin request denied');}
-  async function guard(req,res,pathname){if(!pathname.startsWith(prefix+'/'))return false;try{if(req.method!=='GET')originCheck(req);const route=pathname.slice(prefix.length);if(publicPaths.has(route)&&req.method==='POST')return false;
+  async function guard(req,res,pathname){if(!pathname.startsWith(prefix+'/'))return false;try{if(req.method!=='GET')originCheck(req);const route=pathname.slice(prefix.length);if(publicPaths.has(route)&&(req.method==='POST'||(route==='/gmail/callback'&&req.method==='GET')))return false;
     // New workspace uses an Authorization header rather than legacy cookies.
     // Retain cookie compatibility only for existing integrations.
     const bearer=/^Bearer ([A-Za-z0-9_-]{32,256})$/.exec(String(req.headers.authorization||''));
@@ -128,7 +130,12 @@ export function registerPlatformIdentity(server,ctx){
   function token(kind,user,payload={},ttl=15*60000){const raw=random();db.execute('INSERT INTO pp_tokens (id,user_id,merchant_id,kind,token_hash,payload,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?)',[crypto.randomUUID(),user.id,user.merchant_id||null,kind,hash(raw),JSON.stringify(payload),later(ttl),now()]);return raw;}
   function consume(raw,kind){const row=db.queryOne('SELECT * FROM pp_tokens WHERE token_hash = ? AND kind = ? AND expires_at > ?',[hash(String(raw||'')),kind,now()]);if(!row||row.attempts>=5)fail(400,'Invalid or expired token');return row;}
   function limit(req,key){const id=hash(resolveClientIp(req)+':'+key),row=db.queryOne('SELECT * FROM pp_login_limits WHERE key = ?',[id]);if(!row||row.reset_at<now()){db.execute('INSERT INTO pp_login_limits (key,attempts,reset_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET attempts=excluded.attempts,reset_at=excluded.reset_at',[id,1,later(60000)]);return;}if(row.attempts>=10)fail(429,'Too many attempts; retry in one minute');db.execute('UPDATE pp_login_limits SET attempts = attempts + 1 WHERE key = ?',[id]);}
-  async function deliver(message){if(ctx.platformDelivery)return ctx.platformDelivery(message);const url=process.env.PLATFORM_VERIFICATION_URL;if(!url)fail(503,'Verification delivery is not configured; account remains pending');const validation=validateOutboundWebhookUrl(url);if(!validation.valid||validation.url.protocol!=='https:')fail(503,'Verification delivery URL is invalid');if(/^\[|^\d+\./.test(validation.url.hostname)&&!publicAddress(validation.url.hostname.replace(/[\[\]]/g,'')))fail(503,'Verification delivery URL is invalid');try{await postDelivery(url,message);}catch{fail(503,'Verification delivery failed; account remains pending');}}
+  async function deliver(message){
+    if(message.kind==='merchant_owner_invitation'&&message.channel==='email'&&gmailSender.status().connected){
+      try{await gmailSender.send(message);return;}
+      catch{fail(503,'Gmail invitation sending failed; use a private one-time invitation link');}
+    }
+    if(ctx.platformDelivery)return ctx.platformDelivery(message);const url=process.env.PLATFORM_VERIFICATION_URL;if(!url)fail(503,'Verification delivery is not configured; account remains pending');const validation=validateOutboundWebhookUrl(url);if(!validation.valid||validation.url.protocol!=='https:')fail(503,'Verification delivery URL is invalid');if(/^\[|^\d+\./.test(validation.url.hostname)&&!publicAddress(validation.url.hostname.replace(/[\[\]]/g,'')))fail(503,'Verification delivery URL is invalid');try{await postDelivery(url,message);}catch{fail(503,'Verification delivery failed; account remains pending');}}
   async function sendVerification(user,channel){const raw=token('verify_'+channel,user);await deliver({kind:'verification',channel,to:channel==='email'?user.email:user.mobile,token:raw,expiresIn:900});}
   function profileOf(body){return {businessName:text(body.businessName||body.business),contactName:text(body.contactName||body.contact),website:text(body.website,500),category:text(body.category),timezone:text(body.timezone||'Asia/Kolkata'),address:text(body.address,1000),registrationNumber:text(body.registrationNumber),taxId:text(body.taxId,100),mobile:text(body.mobile,25)};}
   route('POST','/register',async(req,res,body)=>{limit(req,'register');const address=email(body.email),pass=password(body.password),profile=profileOf(body);if(!profile.businessName||!profile.contactName||!/^\+?[0-9]{10,15}$/.test(profile.mobile))fail(400,'Business, contact name and valid mobile required');const existing=db.queryOne('SELECT id,merchant_id,active FROM pp_users WHERE email = ?',[address]);if(existing&&existing.active===1)fail(409,'Account already exists');let user,merchantId;if(existing&&!existing.active){merchantId=existing.merchant_id;db.transaction(()=>{db.execute('UPDATE pp_users SET active = 1,password_hash = ?,role = \'OWNER\' WHERE id = ?',[hashPlatformPassword(pass),existing.id]);db.execute('UPDATE pp_merchants SET status = \'ACTIVE\',updated_at = ? WHERE merchant_id = ?',[now(),merchantId]);});user={id:existing.id,merchant_id:merchantId,email:address,mobile:profile.mobile};}else{db.transaction(()=>{const merchant=merchantRepo.create({businessName:profile.businessName,slug:'m-'+crypto.randomUUID(),contactEmail:address,contactPhone:profile.mobile,branding:{}});db.execute('INSERT INTO pp_merchants (merchant_id,status,profile,created_at,updated_at) VALUES (?,?,?,?,?)',[merchant.id,'ACTIVE',JSON.stringify(profile),now(),now()]);merchantId=merchant.id;user={id:crypto.randomUUID(),merchant_id:merchantId,email:address,mobile:profile.mobile};db.execute('INSERT INTO pp_users (id,merchant_id,email,password_hash,role,mobile,active,created_at) VALUES (?,?,?,?,?,?,1,?)',[user.id,merchantId,address,hashPlatformPassword(pass),'OWNER',profile.mobile,now()]);});}json(res,201,{merchantId:merchantId,status:'ACTIVE',verificationRequired:false});});
@@ -160,6 +167,27 @@ export function registerPlatformIdentity(server,ctx){
   route('GET','/onboarding',async(req,res)=>{const merchant=db.queryOne('SELECT * FROM pp_merchants WHERE merchant_id = ?',[tenant(req)]);json(res,200,{...merchant,profile:JSON.parse(merchant?.profile||'{}'),emailVerified:!!req.platformUser.email_verified,mobileVerified:!!req.platformUser.mobile_verified});});
   route('POST','/onboarding',async(req,res,body)=>{const id=tenant(req),merchant=db.queryOne('SELECT * FROM pp_merchants WHERE merchant_id = ?',[id]);if(!merchant)fail(409,'Merchant not found');const profile={...JSON.parse(merchant.profile),...profileOf({...JSON.parse(merchant.profile),...body})};const state=body.submit&&profile.businessName&&profile.contactName&&profile.category&&profile.address?'ACTIVE':merchant.status;db.execute('UPDATE pp_merchants SET profile = ?,status = ?,updated_at = ? WHERE merchant_id = ?',[JSON.stringify(profile),state,now(),id]);audit(req,body.submit?'ONBOARDING_SUBMITTED':'PROFILE_UPDATED',id);json(res,200,{status:state,profile});});
   route('GET','/merchants',async(req,res)=>{if(!req.platform.platform)fail(403,'Platform staff only');requirePermission(req,'merchants.read');const page=Math.max(1,parseInt(req.query.page)||1),limit=Math.max(1,Math.min(100,parseInt(req.query.limit)||25));const filters=['NOT EXISTS (SELECT 1 FROM pp_platform_accounts platform_account WHERE platform_account.account_id=pp_merchants.merchant_id)'],values=[];if(req.query.status){filters.push('status = ?');values.push(text(req.query.status));}const where=filters.length?' WHERE '+filters.join(' AND '):'';json(res,200,{merchants:db.query('SELECT * FROM pp_merchants'+where+' ORDER BY created_at DESC LIMIT ? OFFSET ?',[...values,limit,(page-1)*limit]).map(m=>({...m,profile:JSON.parse(m.profile)})),total:Number(db.queryOne('SELECT COUNT(*) AS n FROM pp_merchants'+where,values).n),page,limit});});
+  // Platform Gmail OAuth has a separate, send-only consent scope.
+  route('GET','/gmail/sender',(req,res)=>{
+    if(req.platform.role!=='SUPER_ADMIN')fail(403,'Only platform owner may configure invitation sending');
+    res.setHeader('Cache-Control','no-store');
+    json(res,200,gmailSender.status());
+  });
+  route('POST','/gmail/connect',async(req,res)=>{
+    if(req.platform.role!=='SUPER_ADMIN')fail(403,'Only platform owner may connect Gmail');
+    sensitive(req);
+    json(res,200,await gmailSender.connect(req.platform.userId));
+  });
+  route('POST','/gmail/disconnect',async(req,res)=>{
+    if(req.platform.role!=='SUPER_ADMIN')fail(403,'Only platform owner may disconnect Gmail');
+    sensitive(req);
+    const status=gmailSender.disconnect();
+    audit(req,'GMAIL_SENDER_DISCONNECTED',req.platform.userId,{});
+    json(res,200,status);
+  });
+  route('GET','/gmail/callback',async(req,res)=>{
+    await gmailSender.callback(req,res);
+  });
   route('POST','/merchants',async(req,res,body)=>{
     if(!req.platform.platform||req.platform.role!=='SUPER_ADMIN')fail(403,'Only the platform owner can create merchants');
     requirePermission(req,'merchants.write');
