@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
+import { getInternalServiceToken } from '@youpi/common';
 import { restorePostgresFiles } from './postgres-bootstrap.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,20 +23,20 @@ process.env.SQLITE_DB_PATH ||= path.join(root, 'data/youpi_pg.sqlite');
 const dataDir = path.dirname(process.env.SQLITE_DB_PATH);
 if (process.env.DATABASE_URL) await restorePostgresFiles(dataDir, process.env.DATABASE_URL);
 
-const { startServer } = (await import('../apps/payment-api/src/index.js')).startServer || {};
+const { startServer } = await import('../apps/payment-api/src/index.js');
 const servers = [];
 const api = await startServer();
 servers.push(api);
 const checkout = await startCheckoutServer();
 servers.push(checkout);
-const { startAdminServer } = (await import('../apps/merchant-admin/src/index.js')).startAdminServer || {};
+const { startAdminServer } = await import('../apps/merchant-admin/src/index.js');
 const admin = await startAdminServer();
 servers.push(admin);
 
-export function startCheckoutServer(port = null, options = {}) {
+export async function startCheckoutServer(port = null, options = {}) {
   const finalPort = port || Number(process.env.CHECKOUT_PORTAL_PORT || 6002);
   const bindHost = process.env.YOUPI_BIND_HOST || '127.0.0.1';
-  const checkoutDistDir = path.resolve(__dirname, '..', 'apps/checkout-portal/.next');
+  const checkoutDistDir = path.join(root, 'apps', 'checkout-portal', '.next');
 
   try {
     const { NextServer } = await import('next');
