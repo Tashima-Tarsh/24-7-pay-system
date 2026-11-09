@@ -89,6 +89,14 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.waitForFunction(()=>document.querySelector('#page-title')?.textContent?.includes('where payments'));
     await page.waitForSelector('#view-content form',{timeout:12000});
     await page.getByRole('heading',{name:'Add a receiving account'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="developers"]').click();
+    await page.getByRole('heading',{name:'Merchant API credentials'}).waitFor({timeout:12000});
+    await page.getByRole('heading',{name:'API request history'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="callbacks"]').click();
+    await page.getByRole('heading',{name:'Callback deliveries'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="verification"]').click();
+    await page.getByRole('heading',{name:'Money-flow verification'}).waitFor({timeout:12000});
+
     await page.locator('button[data-view="settings"]').click();
     await page.waitForFunction(()=>document.querySelector('#page-title')?.textContent?.includes('essentials'));
     const input=page.locator('#field-businessName');await input.fill('Browser Merchant Updated');
@@ -107,9 +115,29 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.waitForSelector('#workspace:not([hidden])',{timeout:12000});
     await page.getByRole('heading',{name:'Platform performance'}).waitFor({timeout:12000});
     await page.getByRole('heading',{name:'Merchant performance'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="developers"]').click();
+    await page.getByRole('heading',{name:'Select a business first'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="callbacks"]').click();
+    await page.getByRole('heading',{name:'Select a business first'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="settings"]').click();
+    await page.getByRole('heading',{name:'Select a business first'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="invite-email"]').click();
+    await page.getByRole('heading',{name:'Personal Gmail sender'}).waitFor({timeout:12000});
+    await page.getByText('Not connected').first().waitFor({timeout:12000});
+    await page.locator('button[data-view="overview"]').click();
+    await page.getByRole('heading',{name:'Platform performance'}).waitFor({timeout:12000});
+
     const selector=page.locator('#merchant-scope');
     await page.waitForFunction(()=>document.querySelector('#merchant-scope')?.options?.length>1);
     await selector.selectOption({index:1});
+    await page.locator('button[data-view="developers"]').click();
+    await page.getByRole('heading',{name:'Merchant API credentials'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="callbacks"]').click();
+    await page.getByRole('heading',{name:'Callback deliveries'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="settings"]').click();
+    await page.getByRole('heading',{name:'Business settings'}).waitFor({timeout:12000});
+    await page.locator('button[data-view="overview"]').click();
+
     await page.getByRole('heading',{name:'Production readiness'}).waitFor({timeout:12000});
     await page.locator('button[data-view="diagnostics"]').click();
     await page.getByRole('heading',{name:'Recent API failures'}).waitFor({timeout:12000});
