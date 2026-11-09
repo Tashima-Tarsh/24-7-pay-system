@@ -3,10 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
-import { createRequire } from 'node:module';
 import { restorePostgresFiles } from './postgres-bootstrap.js';
 
-const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 process.chdir(root);
 const origin = new URL(process.env.DYNAMO_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:8080').origin;
@@ -23,8 +21,16 @@ process.env.GMAIL_REDIRECT_URI ||= origin + '/oauth/callback';
 process.env.SQLITE_DB_PATH ||= path.join(root, 'data/youpi_pg.sqlite');
 const dataDir = path.dirname(process.env.SQLITE_DB_PATH);
 if (process.env.DATABASE_URL) await restorePostgresFiles(dataDir, process.env.DATABASE_URL);
-const { startServer } = require('../apps/payment-api/src/index.js');
-const { startAdminServer } = require('../apps/merchant-admin/src/index.js');
+
+const { startServer } = (await import('../apps/payment-api/src/index.js')).startServer || {};
+const servers = [];
+const api = await startServer();
+servers.push(api);
+const checkout = await startCheckoutServer();
+servers.push(checkout);
+const { startAdminServer } = (await import('../apps/merchant-admin/src/index.js')).startAdminServer || {};
+const admin = await startAdminServer();
+servers.push(admin);
 
 export function startCheckoutServer(port = null, options = {}) {
   const finalPort = port || Number(process.env.CHECKOUT_PORTAL_PORT || 6002);
@@ -73,16 +79,6 @@ export function startCheckoutServer(port = null, options = {}) {
     });
   }
 }
-
-const [{ startServer }] = [require('../apps/payment-api/src/index.js')];
-const servers = [];
-const api = await startServer();
-servers.push(api);
-const checkout = await startCheckoutServer();
-servers.push(checkout);
-const { startAdminServer } = require('../apps/merchant-admin/src/index.js');
-const admin = await startAdminServer();
-servers.push(admin);
 
 const gateway = http.createServer((req, res) => {
   let pathname;

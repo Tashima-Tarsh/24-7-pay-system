@@ -14,7 +14,7 @@ test('production launcher serves the canonical payment API on its public origin'
  await Promise.all(reservations.map(s=>new Promise(r=>s.close(r))));
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sanbook-hosted-'));
   const env={...process.env,DATABASE_URL:'',PORT:String(port),PAYMENT_API_PORT:String(api),CHECKOUT_PORTAL_PORT:String(checkout),MERCHANT_ADMIN_PORT:String(admin),GMAIL_OBSERVER_PORT:String(gmail),DYNAMO_PUBLIC_URL:`http://127.0.0.1:${port}`,SQLITE_DB_PATH:path.join(dir,'test.sqlite'),INITIAL_ADMIN_EMAIL:'hosted@example.test',INITIAL_ADMIN_PASSWORD:crypto.randomBytes(24).toString('hex'),ENCRYPTION_MASTER_KEY:crypto.randomBytes(32).toString('hex'),JWT_SECRET:crypto.randomBytes(32).toString('hex'),ORDER_SIGNING_SECRET:crypto.randomBytes(32).toString('hex'),GMAIL_CLIENT_ID:'',GMAIL_CLIENT_SECRET:'',GMAIL_REFRESH_TOKEN:'',SMS_GATEWAY_URL:'',REDIS_URL:''};
- const child=spawn(process.execPath,['scripts/start-hosted.js'],{env,stdio:['ignore','pipe','pipe'],windowsHide:true});
+ const child=spawn(process.execPath,['scripts/start-hosted.mjs'],{env,stdio:['ignore','pipe','pipe'],windowsHide:true});
  let output='';child.stdout.on('data',d=>output+=d);child.stderr.on('data',d=>output+=d);
  const closed=once(child,'close');
  try{
