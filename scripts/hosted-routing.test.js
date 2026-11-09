@@ -8,27 +8,25 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-test('production launcher serves the canonical payment API on its public origin',{timeout:45000},async()=>{
- const reservations=await Promise.all(Array.from({length:5},async()=>{const s=net.createServer();s.listen(0,'127.0.0.1');await once(s,'listening');return s;}));
- const [port,api,checkout,admin,gmail]=reservations.map(s=>s.address().port);
- await Promise.all(reservations.map(s=>new Promise(r=>s.close(r))));
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sanbook-hosted-'));
-  const env={...process.env,DATABASE_URL:'',PORT:String(port),PAYMENT_API_PORT:String(api),CHECKOUT_PORTAL_PORT:String(checkout),MERCHANT_ADMIN_PORT:String(admin),GMAIL_OBSERVER_PORT:String(gmail),DYNAMO_PUBLIC_URL:`http://127.0.0.1:${port}`,SQLITE_DB_PATH:path.join(dir,'test.sqlite'),INITIAL_ADMIN_EMAIL:'hosted@example.test',INITIAL_ADMIN_PASSWORD:crypto.randomBytes(24).toString('hex'),ENCRYPTION_MASTER_KEY:crypto.randomBytes(32).toString('hex'),JWT_SECRET:crypto.randomBytes(32).toString('hex'),ORDER_SIGNING_SECRET:crypto.randomBytes(32).toString('hex'),GMAIL_CLIENT_ID:'',GMAIL_CLIENT_SECRET:'',GMAIL_REFRESH_TOKEN:'',SMS_GATEWAY_URL:'',REDIS_URL:''};
- const child=spawn(process.execPath,['scripts/start-hosted.mjs'],{env,stdio:['ignore','pipe','pipe'],windowsHide:true});
- let output='';child.stdout.on('data',d=>output+=d);child.stderr.on('data',d=>output+=d);
- const closed=once(child,'close');
- try{
-  for(let i=0;i<150&&!output.includes('hosted gateway ready');i++){
-   if(child.exitCode!==null)assert.fail('Hosted launcher exited before readiness');
-   await new Promise(r=>setTimeout(r,100));
-  }
-  assert.ok(output.includes('hosted gateway ready'),'Hosted launcher did not become ready');
-  const base=`http://127.0.0.1:${port}`;
-  assert.equal((await fetch(base+'/_ready')).status,200);
-  assert.equal((await fetch(base+'/platform')).status,200);
-  for(const route of ['/v1/payments','/v1/refunds']){
-   const r=await fetch(base+route,{method:'POST',headers:{'content-type':'application/json'},body:'{}',redirect:'manual'});
-   assert.equal(r.status,401,route+' must reach the scoped API authentication guard');
-  }
- }finally{child.kill();await closed;}
-});
+test('unified server.mjs serves public pages and proxies /api/* to the in-process payment API',{timeout:45000},async()=>{
+  // Reserve only the public gateway port; the payment API runs in-process on 6100.
+  const s=net.createServer();s.listen(0,'127.0.0.1');await once(s,'listening');const port=s.address().port;s.close();
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sanbook-hosted-'));
+  const env={...process.env,DATABASE_URL:'',PORT:String(port),DYNAMO_PUBLIC_URL:`http://127.0.0.1:${port}`,SQLITE_DB_PATH:path.join(dir,'test.sqlite'),INITIAL_ADMIN_EMAIL:'hosted@example.test',INITIAL_ADMIN_PASSWORD:crypto.randomBytes(24).toString('hex'),ENCRYPTION_MASTER_KEY:crypto.randomBytes(32).toString('hex'),JWT_SECRET:crypto.randomBytes(32).toString('hex'),ORDER_SIGNING_SECRET:crypto.randomBytes(32).toString('hex'),GMAIL_CLIENT_ID:'',GMAIL_CLIENT_SECRET:'',GMAIL_REFRESH_TOKEN:'',SMS_GATEWAY_URL:'',REDIS_URL:'',NODE_ENV:'test'};
+  const child=spawn(process.execPath,['server.mjs'],{env,stdio:['ignore','pipe','pipe'],windowsHide:true,cwd:process.cwd()});
+  let output='';child.stdout.on('data',d=>output+=d);child.stderr.on('data',d=>output+=d);
+  const closed=once(child,'close');
+  try{
+   for(let i=0;i<150&&!output.includes('Payment API started on port');i++){
+    if(child.exitCode!==null)assert.fail('server.mjs exited before readiness');
+    await new Promise(r=>setTimeout(r,100));
+   }
+   assert.ok(output.includes('Payment API started on port'),'server.mjs did not become ready');
+   const base=`http://127.0.0.1:${port}`;
+   assert.equal((await fetch(base+'/_ready')).status,200,'/_ready health check must return 200');
+   assert.equal((await fetch(base+'/')).status,200,'landing page must return 200');
+   assert.equal((await fetch(base+'/checkout/test-order')).status,200,'checkout page must return 200');
+   const apiRes=await fetch(base+'/api/v1/checkout/nonexistent/state');
+   assert.equal(apiRes.status,404,'/api/* must be proxied to the payment API (404 from API for unknown session)');
+  }finally{child.kill();await closed;}
+ });
