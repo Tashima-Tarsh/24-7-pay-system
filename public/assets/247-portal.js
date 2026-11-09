@@ -20,7 +20,7 @@ async function loadMerchants(){
  if(!merchantDirectory.some(m=>m.merchant_id===selectedMerchantId))selectedMerchantId='';
  select.value=selectedMerchantId;
 }
-const titles={overview:['YOUR WORKSPACE','A clearer view of your day.','Real activity from your account. No sample transactions.'],payments:['PAYMENTS','Every order, easier to find.','Follow orders and understand their status.'],merchants:['PLATFORM','Your merchants, at a glance.','Businesses available to your platform role.'],operations:['OPERATIONS','Know what needs attention.','Provider connections, callbacks and operating health.'],diagnostics:['DIAGNOSTICS','Find the failure, follow the fix.','Real API request failures and callback delivery problems, scoped to your account.'],cases:['SUPPORT','Keep questions in one place.','A clear history when a payment needs attention.'],receiving:['RECEIVING ACCOUNTS','Know where payments are going.','Check and manage your receiving accounts.'],developers:['INTEGRATIONS','Connect your business.','API keys, configuration and callback deliveries.'],security:['ACCOUNT','Your account, your control.','Access, permissions and active sessions.'],
+const titles={overview:['YOUR WORKSPACE','A clearer view of your day.','Real activity from your account. No sample transactions.'],payments:['PAYMENTS','Every order, easier to find.','Follow orders and understand their status.'],merchants:['PLATFORM','Your merchants, at a glance.','Businesses available to your platform role.'],operations:['OPERATIONS','Know what needs attention.','Provider connections, callbacks and operating health.'],verification:['PAYMENT VERIFICATION','Check the money trail.','Review recorded payment status and callback delivery independently; never infer bank credit from a button press.'], 'invite-email':['INVITATION EMAIL','Send business invitations from your Gmail.','Connect a personal Google account for invitation sending only, with permission you can revoke.'],diagnostics:['DIAGNOSTICS','Find the failure, follow the fix.','Real API request failures and callback delivery problems, scoped to your account.'],cases:['SUPPORT','Keep questions in one place.','A clear history when a payment needs attention.'],receiving:['RECEIVING ACCOUNTS','Know where payments are going.','Check and manage your receiving accounts.'],developers:['INTEGRATIONS','Connect your business.','API keys, configuration and callback deliveries.'],security:['ACCOUNT','Your account, your control.','Access, permissions and active sessions.'],
 connections:['CONNECTION HEALTH','Your payment connections.','See the providers connected to your merchant or platform.'],
 policies:['PAYMENT CONTROLS','The rules behind the scenes.','See how your configured payment rules are organized.'],
 callbacks:['CALLBACK DELIVERY','Know when your system was notified.','See the outcome of each callback delivery attempt.'],
@@ -89,7 +89,7 @@ async function restore(){if(!token){leave();return;}try{const data=await api('/m
 async function signout(){try{if(token)await api('/logout','POST',{});}catch{}leave();}
 function select(name){const b=document.querySelector('.nav-item[data-view="'+name+'"]');if(!b||b.hidden)return;current=name;document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('is-active',x===b));$('sidebar').classList.remove('open');$('sidebar-toggle').setAttribute('aria-expanded','false');void render(name);}
 async function render(name,quiet=false){if(!user)return;const version=++renderVersion;const data=titles[name]||titles.overview;$('page-eyebrow').textContent=data[0];$('page-title').textContent=data[1];$('page-intro').textContent=data[2];$('current-view-name').textContent=name[0].toUpperCase()+name.slice(1);const content=$('view-content');if(!quiet)content.replaceChildren(el('div','loading-panel','Loading your account…'));
-try{let parts;if(name==='overview')parts=await overview();else if(name==='payments')parts=await payments();else if(name==='merchants')parts=await merchants();else if(name==='operations')parts=await operations();else if(name==='diagnostics')parts=await diagnostics();else if(name==='cases')parts=await cases();else if(name==='receiving')parts=await receiving();else if(name==='developers')parts=await developers();else if(name==='connections')parts=await connections();else if(name==='policies')parts=await policies();else if(name==='callbacks')parts=await callbacks();else if(name==='billing')parts=await billing();else if(name==='team')parts=await team();else if(name==='settings')parts=await settings();else parts=await security();if(version===renderVersion&&name===current)content.replaceChildren(...parts);}catch(e){if(version===renderVersion&&name===current){const p=panel('This section needs attention','The other workspace sections remain available.');add(p,el('p','notice error',e.message),button('Try again',()=>render(name)));content.replaceChildren(p);}}}
+try{let parts;if(name==='overview')parts=await overview();else if(name==='payments')parts=await payments();else if(name==='merchants')parts=await merchants();else if(name==='operations')parts=await operations();else if(name==='verification')parts=await verification();else if(name==='invite-email')parts=await invitationEmail();else if(name==='diagnostics')parts=await diagnostics();else if(name==='cases')parts=await cases();else if(name==='receiving')parts=await receiving();else if(name==='developers')parts=await developers();else if(name==='connections')parts=await connections();else if(name==='policies')parts=await policies();else if(name==='callbacks')parts=await callbacks();else if(name==='billing')parts=await billing();else if(name==='team')parts=await team();else if(name==='settings')parts=await settings();else parts=await security();if(version===renderVersion&&name===current)content.replaceChildren(...parts);}catch(e){if(version===renderVersion&&name===current){const p=panel('This section needs attention','The other workspace sections remain available.');add(p,el('p','notice error',e.message),button('Try again',()=>render(name)));content.replaceChildren(p);}}}
 async function overview(){
  const result=[];
  const scoped=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
@@ -172,6 +172,31 @@ async function merchants(){const r=await api('/merchants?limit=50'),c=panel('Mer
   add(create,form);result.unshift(create);
  }
  return result;}
+async function verification(){
+ const scope=user.platform&&selectedMerchantId?'&merchantId='+encodeURIComponent(selectedMerchantId):'';
+ const [tx,kpi,healthData]=await Promise.all([
+  api('/transactions?limit=30'+scope),
+  api('/dashboard/kpis'+(scope?'?merchantId='+encodeURIComponent(selectedMerchantId):'')),
+  api('/operations/health'+(scope?'?merchantId='+encodeURIComponent(selectedMerchantId):''))
+ ]);
+ const c=panel('Money-flow verification','These numbers come from the stored backend financial states. They are not a bank statement or cash balance.');
+ const s=kpi.summary||{},d=healthData.callbacks||{};
+ add(c,stats([['Confirmed UPI / online volume',currency(s.confirmedPaise||0),'Gross confirmed payment value excluding COD'],
+ ['Awaiting confirmation',count(s.pending),'Do not release goods for pending orders'],
+ ['Successful callback deliveries',count(d.successful),'The merchant endpoint acknowledged delivery'],
+ ['Pending / failed deliveries',count((d.pending||0)+(d.failed||0)),'Delivery issues need investigation']]));
+ const explain=panel('What counts as proof?','A callback delivery result and a payment confirmation are different records.');
+ add(explain,notice('A SUCCESS status is what the payment engine has recorded after its source verification. Delivery of a webhook only confirms that the destination HTTP endpoint acknowledged a message. Review a payment timeline and reconcile the provider / bank statement before treating it as settled funds.'));
+ const rows=panel('Check an individual payment','Use Check to open the latest stored payment events, observation source and callback attempts.');
+ add(rows,table(['Merchant','Payment / order','Amount','Status','Source','Check'],tx.items||[],x=>[
+  x.merchant_id||user.merchantId,el('span','mono',x.order_id||x.id),currency(x.amount_paise),
+  status(x.status),x.source_type||x.method||'—',button('Check now',()=>transaction(x.id))
+ ]));
+ add(rows,button('Refresh verified states',()=>render('verification'),'small-outline'));
+ const route=panel('Provider and callback monitoring','See connection heartbeat and delivery results in their dedicated sections.');
+ add(route,button('Provider health',()=>select('operations')),button('Inspect callbacks',()=>select('callbacks')),button('API failures',()=>select('diagnostics')));
+ return[c,explain,rows,route];
+}
 async function operations(){const r=await api('/operations/health'+(user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'')),c=r.callbacks||{};const metrics=stats([['Delivered callbacks',count(c.successful),'Delivery records'],['Pending callbacks',count(c.pending),'Awaiting delivery'],['Failed callbacks',count(c.failed),'Need attention'],['Providers',count(r.providers?.length),'Configured records']]);const providers=panel('Provider connections','Live backend configuration status');add(providers,table(['Name','Status','Last check'],r.providers||[],p=>[p.provider_name,status(p.status),date(p.last_tested_at)]));const observers=panel('Additional observations','Notifications are supplementary, not proof of bank credit');add(observers,table(['Device','Active','Last heartbeat'],r.observers||[],o=>[o.device_name||o.id,status(o.is_active?'ACTIVE':'INACTIVE'),date(o.last_heartbeat_at)]));return[metrics,providers,observers];}
 async function diagnostics(){
  const scoped=user.platform&&selectedMerchantId?'?merchantId='+encodeURIComponent(selectedMerchantId):'';
@@ -271,6 +296,13 @@ async function cases(){
   add(formCard,form);result.unshift(formCard);
  }
  return result;
+}
+function merchantSelectionCard(){
+ const p=panel('Select a business first','Choose a merchant in the account selector above to inspect its tools without signing in as that merchant.');
+ const choose=button('Open merchant directory',()=>select('merchants'),'small-outline');
+ const hint=notice('Platform-wide performance is available from Overview. Merchant API keys, callbacks, receiving accounts and business settings require a selected business.');
+ add(p,hint,choose);
+ return p;
 }
 async function receiving(){if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];const d=await api('/receiving-accounts'),c=panel('Receiving accounts','Only accounts belonging to this business are shown.');add(c,table(['Payee','UPI ID','Status','Change'],d.accounts||[],a=>[a.payeeName||a.payee_name,el('span','mono',a.upiId||a.upi_id),status(a.isActive||a.is_active?'ACTIVE':'INACTIVE'),button(a.isActive||a.is_active?'Disable':'Enable',async()=>{if(!confirm('Update this receiving account?'))return;try{await api('/receiving-accounts/'+encodeURIComponent(a.id)+'/state','POST',{active:!(a.isActive||a.is_active)});void render('receiving');}catch(err){detail('Account update failed',notice(err.message,true));}})]));const p=panel('Add a receiving account','New accounts start inactive until you choose to enable them.'),form=el('form','form-grid'),vpa=field('UPI ID','text','upiId',{required:true,maxlength:120,placeholder:'merchant@bank'}),name=field('Payee name','text','payeeName',{required:true,maxlength:150}),submit=el('button','primary-button','Add account');submit.type='submit';add(form,vpa.container,name.container,add(el('div','form-actions'),submit));form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{await api('/receiving-accounts','POST',{upiId:vpa.control.value,payeeName:name.control.value});void render('receiving');}catch(err){detail('Account not added',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);return[c,p];}
 async function developers(){
@@ -467,10 +499,32 @@ async function policies(){
  add(formCard,form);
  return[c,formCard];
 }
-async function callbacks(){if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
- const data=await api('/webhook-deliveries'),c=panel('Callback deliveries','Whether an event was sent successfully, is pending or requires attention.');
- add(c,table(['Event','Delivery','Attempts','Response'],data.deliveries||[],r=>[r.event_type,status(r.is_successful?'DELIVERED':'PENDING'),count(r.attempt_count),r.response_status||'—']));
- add(c,notice('A delivered callback indicates a successful HTTP response, not a separate bank-credit confirmation.'));
+async function callbacks(){
+ if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
+ const result=await api('/webhook-deliveries');
+ const entries=result.deliveries||[],c=panel('Callback deliveries','Real delivery attempts, including both payment and provider events.');
+ const renderAction=row=>{
+  const delivered=Boolean(row.is_successful),area=el('div','toolbar');
+  if(delivered)return status('DELIVERED');
+  add(area,status(row.next_retry_at?'QUEUED':'NEEDS_ATTENTION'));
+  if(allowed('webhooks.manage'))add(area,button('Retry callback',async()=>{
+   if(!confirm('Retry delivering this existing event? This does NOT confirm receipt of money.'))return;
+   try{
+    await api('/webhook-deliveries/'+encodeURIComponent(row.id)+'/retry','POST',{source:row.source});
+    detail('Delivery retry queued',notice('The payment record was not changed. Only callback redelivery was requested.'));
+    void render('callbacks');
+   }catch(err){detail('Retry unavailable',notice(err.message,true));}
+  }));
+  return area;
+ };
+ add(c,stats([
+  ['Delivered',count(entries.filter(x=>x.is_successful).length),'HTTP-acknowledged events'],
+  ['Retry pending',count(entries.filter(x=>!x.is_successful&&x.next_retry_at).length),'Delivery queue'],
+  ['Needs attention',count(entries.filter(x=>!x.is_successful&&!x.next_retry_at).length),'Inspect and retry carefully']
+ ]));
+ add(c,table(['Event','Source','Attempts','HTTP','Next retry','Status / action'],entries,
+  x=>[x.event_type,x.source||'—',count(x.attempt_count),x.response_status||'—',date(x.next_retry_at),renderAction(x)]));
+ add(c,notice('Callbacks do not prove bank settlement. Merchants should validate webhook HMAC signatures and deduplicate event IDs.'));
  return[c];
 }
 async function billing(){
@@ -505,6 +559,25 @@ async function settings(){if(user.platform&&!selectedMerchantId)return[merchantS
  const b=panel('Workspace identity','Your changes are recorded by the platform.');
  add(b,info([['Merchant ID',data.merchantId],['Email',data.contactEmail],['Time zone',data.timeZone]]));
  return[p,b];
+}
+async function invitationEmail(){
+ if(user?.role!=='SUPER_ADMIN')return[panel('Access denied','Only the platform owner can connect an invitation email account.')];
+ const d=await api('/gmail/sender');
+ const p=panel('Personal Gmail sender','Use Google permission to send invitations from your own Gmail address. No inbox-reading permission is requested.');
+ add(p,info([['Sender',d.email||'Not connected'],['Connection',d.connected?'Connected':'Not connected'],['Google authorization',d.oauthReady?'Available':'Google OAuth client must be configured in Render']]));
+ if(d.connected) add(p,button('Disconnect Gmail',async()=>{
+  if(!confirm('Disconnect this Gmail account from invitation sending?'))return;
+  try{await api('/gmail/disconnect','POST',{});void render('invite-email');}catch(e){detail('Disconnect failed',notice(e.message,true));}
+ }));
+ else if(d.oauthReady)add(p,button('Connect my Gmail',async()=>{
+  try{const r=await api('/gmail/connect','POST',{});const url=new URL(r.authorizationUrl);if(url.hostname!=='accounts.google.com')throw Error('Unexpected Google authorization URL');location.assign(url.href);}
+  catch(e){detail('Gmail connection unavailable',notice(e.message,true));}
+ },'primary-button'));
+ else add(p,notice('Set GMAIL_SEND_CLIENT_ID and GMAIL_SEND_CLIENT_SECRET in Render and allow the callback URL shown below in Google Cloud OAuth settings.'));
+ add(p,info([['Google OAuth redirect URL',d.redirectUri||'Not configured'],['Scope','gmail.send only']]));
+ const about=panel('Invitation workflow','Once connected, Create Merchant and Invite Owner will send emails from this Gmail account.');
+ add(about,notice('If Gmail is not configured, the application provides a one-time private activation link instead. No invitation is marked sent unless Google accepts it.'));
+ return[p,about];
 }
 async function security(){const r=await Promise.all([api('/me'),api('/sessions')]),u=r[0].user||user,p=panel('Your profile','Account access is governed by your backend permissions.');add(p,info([['Email',u.email],['Role',u.role],['Merchant ID',u.merchantId||'Platform team'],['MFA',u.mfaEnabled?'Enabled':'Not enabled'],['Email verified',u.emailVerified?'Yes':'Not yet']]));const perms=panel('Permissions','These permissions also apply on the server.');const tags=el('div','toolbar');(u.permissions||[]).forEach(x=>add(tags,el('span','status-tag',x)));add(perms,tags);const active=panel('Active sessions','Sign out when you finish.');add(active,table(['Created','Expiry'],r[1].sessions||[],x=>[date(x.created_at),date(x.expires_at)]));return[p,perms,active];}
 $('merchant-scope').addEventListener('change',e=>{selectedMerchantId=e.target.value;$('merchant-scope-note').textContent=selectedMerchantId?'Reviewing merchant configuration as a platform operator.':'Platform-wide overview.';void render(current);});

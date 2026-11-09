@@ -80,3 +80,17 @@ test('merchant owner invitation is accepted using the public backend route, neve
  assert.match(script,/location\.hash\.startsWith\(prefix\)/);
  assert.doesNotMatch(script,/Anita@906099|24@gmai\.com/);
 });
+
+test('merchant scope helper and payment health UI are reachable from every required view',()=>{
+ const html=fs.readFileSync('public/platform.html','utf8');
+ const js=fs.readFileSync('public/assets/247-portal.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(js,{filename:'247-portal.js'}));
+ assert.match(js,/function merchantSelectionCard\(\)/);
+ for(const view of ['receiving','developers','callbacks','settings','verification','invite-email'])
+   assert.match(js,new RegExp("async function "+(view==='invite-email'?'invitationEmail':view)+"\\("));
+ for(const view of ['developers','callbacks','settings','verification','invite-email'])
+   assert.ok(html.includes('data-view="'+view+'"'),'Menu item missing: '+view);
+ assert.match(js,/\/webhook-deliveries\/.*\/retry/);
+ assert.match(js,/\/dashboard\/kpis/);
+ assert.match(js,/\/transactions\//);
+});

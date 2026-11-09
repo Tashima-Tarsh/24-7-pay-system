@@ -37,3 +37,21 @@ When a primary provider connection fails during payment creation, the system aut
 ## Amount-Only Payment Links
 
 The Create Payment Link endpoint (`POST /api/v1/payment-links/amount-only`) requires only the amount. Order ID, Payment ID, receiving route, UPI QR/intent, and checkout URL are all generated automatically. No manual Order ID, customer name, customer mobile, or UTR is required.
+## Persistent Croftweaver quality workflow (24/7 Pay adaptation)
+
+Use [Croftweaver](https://github.com/karero/croftweaver) as a reference skill suite for this repository on **every future website or dashboard change**. Before editing, consult the relevant upstream `skills/*/SKILL.md` instructions; keep this Node/Render/PostgreSQL/payment product instead of replacing it with the Astro/Cloudflare scaffold.
+
+- `website-design-system` and `website-brand-kit`: preserve shared 24/7 Pay brand tokens, AA contrast, keyboard navigation, responsive 360 / 768 / 1280 layouts, SVG safety and legible empty/error states.
+- `copywriting` and `website-content-guide`: clear merchant-facing explanations, honest payment status, no fictitious client reviews, certification, proof of funds, or valuation.
+- `website-qa`: add executable browser tests for every visible navigation item, permission role, empty state, backend route, invite workflow and callback state; keep GitHub CI green before release.
+- `double-knuth` and `website-review`: two-pass review: code correctness and cross-file route/permission/menu/API consistency. Zero undefined callbacks/functions and zero inert buttons.
+- `facts-check` and `website-launch-check`: verify public claims against actual registered APIs, Render logs and provider state, never by checking README only.
+- `site-architecture` and `website-seo-geo`: apply to public marketing content only. Do not make sensitive administrator/merchant pages indexable.
+
+This is a repository-persistent mapping and does not imply that the upstream tools were installed globally on every developer's machine. Engineers or coding agents can install the upstream skills separately using the maintained Croftweaver setup, and should review upstream changes rather than execute untrusted installation scripts automatically.
+
+### Product ownership / operational UX contract
+
+The platform owner (`SUPER_ADMIN`) can access aggregate merchant KPIs, selected-merchant operations, payment verification, API diagnostics, callbacks and platform Gmail invite settings. Merchant users are server-restricted to their own tenant. Every screen backed by a permission must be exercised in isolated role-based E2E tests. Missing merchant selection shows a useful card, **never** an undefined-function error.
+
+The "Check payment" action is read-only and never changes a payment status. Verified payment, callback HTTP acknowledgement, observed bank notification, and actual settled funds are distinct states. Gmail OAuth must ask for `gmail.send` only and all refresh tokens must be encrypted at rest.
