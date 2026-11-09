@@ -2,9 +2,9 @@ import {useEffect,useState,type FormEvent} from 'react';
 import {Buildings,UsersThree,ArrowClockwise,Plus,ShieldCheck,CheckCircle,WarningCircle} from '@phosphor-icons/react';
 import {Card,CardTitle} from './components/ui/card';
 import {Button} from './components/ui/button';
-import {get,adminCreateMerchant,type PlatformMerchant,type StaffUser} from './api';
-type Props={view:'admin'|'merchants'|'team';canReadMerchants:boolean;canCreateMerchants:boolean;canReadStaff:boolean};
-export function AdminConsole({view,canReadMerchants,canCreateMerchants,canReadStaff}:Props){
+import {get,adminCreateMerchant,adminInviteStaff,type PlatformMerchant,type StaffUser} from './api';
+type Props={view:'admin'|'merchants'|'team';canReadMerchants:boolean;canCreateMerchants:boolean;canReadStaff:boolean;canInviteStaff:boolean};
+export function AdminConsole({view,canReadMerchants,canCreateMerchants,canReadStaff,canInviteStaff}:Props){
  const[merchants,setMerchants]=useState<PlatformMerchant[]>([]);
  const[total,setTotal]=useState(0);
  const[staff,setStaff]=useState<StaffUser[]>([]);
@@ -15,6 +15,8 @@ export function AdminConsole({view,canReadMerchants,canCreateMerchants,canReadSt
  const[success,setSuccess]=useState('');
  const[refresh,setRefresh]=useState(0);
  const[showCreate,setShowCreate]=useState(false);
+ const[showStaffInvite,setShowStaffInvite]=useState(false);
+ const[staffInvite,setStaffInvite]=useState({email:'',role:'OPERATIONS'});
  const[fields,setFields]=useState({businessName:'',contactName:'',mobile:'',email:''});
  useEffect(()=>{
   const ctl=new AbortController();setLoading(true);setError('');
@@ -34,6 +36,13 @@ export function AdminConsole({view,canReadMerchants,canCreateMerchants,canReadSt
   }catch(err){setError(err instanceof Error?err.message:'Merchant creation failed.');}
   finally{setBusy(false);}
  }
+ async function invite(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();if(!canInviteStaff||busy)return;
+  setBusy(true);setError('');setSuccess('');
+  try{await adminInviteStaff(staffInvite);setSuccess('Staff invitation submitted using your existing delivery system.');setShowStaffInvite(false);setStaffInvite({email:'',role:'OPERATIONS'});}
+  catch(err){setError(err instanceof Error?err.message:'Unable to invite staff.');}
+  finally{setBusy(false);}
+ }
  const filtered=merchants.filter(m=>[m.profile?.businessName,m.profile?.contactName,m.merchant_id,m.status].some(x=>String(x||'').toLowerCase().includes(query.toLowerCase())));
  const filteredStaff=staff.filter(m=>[m.email,m.role].some(x=>String(x||'').toLowerCase().includes(query.toLowerCase())));
  return <div className="saas-admin">
@@ -51,7 +60,12 @@ export function AdminConsole({view,canReadMerchants,canCreateMerchants,canReadSt
    </form>}
    {canReadMerchants?<><label className="saas-search">Search merchants<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search business or ID"/></label><div className="table-scroll" role="region" aria-label="Merchant accounts" tabIndex={0}><table><thead><tr><th>Business</th><th>Contact</th><th>Status</th><th>Merchant ID</th></tr></thead><tbody>{filtered.map(m=><tr key={m.merchant_id}><td><strong>{m.profile?.businessName||'Merchant'}</strong></td><td>{m.profile?.contactName||'—'}</td><td><span className={'status '+(m.status==='ACTIVE'?'good':'pending')}>{m.status}</span></td><td className="monospace">{m.merchant_id}</td></tr>)}{!loading&&!filtered.length&&<tr><td colSpan={4}>No matching merchant accounts.</td></tr>}</tbody></table></div><p className="fineprint">Showing {filtered.length} of up to 100 loaded records; total {total}. Merchant payment collection is managed by each merchant's own account.</p></>:<p>Merchant directory access is not assigned to this role.</p>}
   </Card>}
-  {(view==='team'||view==='admin')&&<Card><div className="section-head"><div><span className="micro">ACCESS AND OPERATIONS</span><CardTitle>Platform staff</CardTitle></div><UsersThree size={21} weight="duotone"/></div>{canReadStaff?<div className="table-scroll"><table><thead><tr><th>Email</th><th>Role</th><th>Account status</th></tr></thead><tbody>{filteredStaff.map(u=><tr key={u.id}><td>{u.email}</td><td>{u.role}</td><td><span className={'status '+(u.active?'good':'pending')}>{u.active?'ACTIVE':'DISABLED'}</span></td></tr>)}{!loading&&!filteredStaff.length&&<tr><td colSpan={3}>No staff records to show.</td></tr>}</tbody></table></div>:<p>Staff administration is available to authorized platform administrators.</p>}</Card>}
+  {(view==='team'||view==='admin')&&<Card><div className="section-head"><div><span className="micro">ACCESS AND OPERATIONS</span><CardTitle>Platform staff</CardTitle></div>{canInviteStaff?<Button onClick={()=>setShowStaffInvite(v=>!v)}><Plus size={16}/>{showStaffInvite?'Close':'Invite staff'}</Button>:<UsersThree size={21} weight="duotone"/>}</div>
+ {showStaffInvite&&canInviteStaff&&<form className="saas-merchant-form" onSubmit={invite}>
+  <label>Work email<input required type="email" value={staffInvite.email} onChange={e=>setStaffInvite(v=>({...v,email:e.target.value}))}/></label>
+  <label>Platform role<select value={staffInvite.role} onChange={e=>setStaffInvite(v=>({...v,role:e.target.value}))}>{['OPERATIONS','FINANCE','SUPPORT','SECURITY','AUDITOR'].map(role=><option key={role} value={role}>{role}</option>)}</select></label>
+  <div className="saas-form-foot"><span>Invitation is sent by the existing secure platform service.</span><Button disabled={busy}>{busy?'Sending…':'Send invitation'}</Button></div>
+ </form>}{canReadStaff?<div className="table-scroll"><table><thead><tr><th>Email</th><th>Role</th><th>Account status</th></tr></thead><tbody>{filteredStaff.map(u=><tr key={u.id}><td>{u.email}</td><td>{u.role}</td><td><span className={'status '+(u.active?'good':'pending')}>{u.active?'ACTIVE':'DISABLED'}</span></td></tr>)}{!loading&&!filteredStaff.length&&<tr><td colSpan={3}>No staff records to show.</td></tr>}</tbody></table></div>:<p>Staff administration is available to authorized platform administrators.</p>}</Card>}
   <Card className="saas-admin-note"><ShieldCheck size={23}/><div><CardTitle>Security roles remain separate</CardTitle><p>A platform operator manages the SaaS; a merchant owner or team member operates that merchant's payments. Both use this same interface, but neither role can bypass backend authorization or financial state checks.</p></div></Card>
  </div>;
 }
