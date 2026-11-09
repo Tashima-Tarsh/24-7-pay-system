@@ -84,6 +84,32 @@ export function registerPlatformPayments(server,ctx,identity){
   if(body.velocity!==undefined){const v=body.velocity;if(v!==null&&(!Number.isSafeInteger(v.maxOrders)||v.maxOrders<1||v.maxOrders>1000||!Number.isSafeInteger(v.maxAmountPaise)||v.maxAmountPaise<1))throw error(400,'Velocity requires maxOrders 1–1000 and a positive integer maxAmountPaise per minute.');branding.platformVelocity=v;}
   updates.branding=branding;db.transaction(()=>{merchantRepo.update(mid,updates);identity.audit(req,'MERCHANT_SETTINGS_UPDATED',mid,{fields:Object.keys(body)});});HttpServer.json(res,200,fields(merchantRepo.findById(mid)));
  });
+ // Read-only, merchant-scoped diagnostics for the payment-link form. Neither
+ // account health nor a successful intent preflight proves bank settlement.
+ get('/payment-readiness','payments.create',(req,res)=>{
+  const mid=tenant(req),merchant=merchantRepo.findById(mid);
+  const state=db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',[mid]);
+  const activeAccount=accountRepo.findActiveForMerchant(mid);
+  const channel=upiChannelSettings(merchant);
+  const issues=[];
+  if(state&&state.status!=='ACTIVE')issues.push({
+    code:'MERCHANT_NOT_ACTIVE',
+    message:state.status==='SUSPENDED'||state.status==='REJECTED'||state.status==='UNDER_REVIEW'
+      ?'Merchant account requires an administrator review before new payments.'
+      :'Complete merchant owner verification or business onboarding to create payments.',
+    action:'MERCHANT_ONBOARDING'
+  });
+  if(!activeAccount)issues.push({code:'NO_RECEIVING_ACCOUNT',message:'Add and enable your business receiving UPI ID to issue payment links.',action:'ADD_RECEIVING_UPI'});
+  if(channel.enabled===false)issues.push({code:'UPI_CHANNEL_DISABLED',message:'UPI collection is disabled in merchant settings.',action:'UPI_CHANNEL_SETTINGS'});
+  HttpServer.json(res,200,{
+    ready:issues.length===0,issues,
+    account:activeAccount?{upiId:activeAccount.upiId,payeeName:activeAccount.payeeName}:null,
+    merchantStatus:state?.status||'LEGACY_ACCOUNT',
+    maxAmountPaise:channel.maxAmountPaise??2000000,
+    // This does not independently verify bank VPA ownership or credit.
+    authorization:'MERCHANT_PERMISSIONS_VERIFIED'
+  });
+ });
  get('/receiving-accounts','connections.manage',(req,res)=>HttpServer.json(res,200,{accounts:accountRepo.findByMerchantId(tenant(req))}));
  post('/receiving-accounts','connections.manage',async(req,res)=>{const b=await HttpServer.parseBody(req);if(!isValidVpa(b.upiId)||typeof b.payeeName!=='string'||!b.payeeName.trim()||b.payeeName.length>150)throw error(400,'Provide a valid UPI ID and bank payee name.');const mid=tenant(req);if(accountRepo.findByMerchantId(mid).length>=1000)throw error(400,'Account storage limit is 1,000 per merchant.');const firstReceivingAccount=accountRepo.findByMerchantId(mid).length===0;const initialActivation=firstReceivingAccount&&b.confirmVpaOwnership===true;const account=accountRepo.create({merchantId:mid,upiId:b.upiId,payeeName:b.payeeName,isActive:initialActivation,bankName:b.bankName,accountHolderName:b.accountHolderName,accountNumber:b.accountNumber,ifsc:b.ifsc});identity.audit(req,'RECEIVING_ACCOUNT_ADDED',account.id,{initialActivation});HttpServer.json(res,201,{account});});
  post('/receiving-accounts/:id/state','connections.manage',async(req,res,p)=>{const b=await HttpServer.parseBody(req),mid=tenant(req),a=accountRepo.findById(p.id);if(!a||a.merchantId!==mid)throw error(404,'Account not found.');if(typeof b.active!=='boolean')throw error(400,'Provide active true or false.');const account=b.active?accountRepo.activateAccount(mid,p.id):accountRepo.deactivateAccount(mid,p.id);identity.audit(req,'RECEIVING_ACCOUNT_STATE',p.id,{active:b.active});HttpServer.json(res,200,{account});});
