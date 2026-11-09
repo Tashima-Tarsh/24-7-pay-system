@@ -76,6 +76,7 @@ const testFiles = [
   'scripts/production-infrastructure.test.js',
   'scripts/hosted-routing.test.js',
   'scripts/frontend-contract.test.js',
+  'scripts/production-observer-boundary.test.js',
   'scripts/clean-transaction-history.test.js',
   'scripts/production-audit-probes.test.js',
   'scripts/check-merchant-onboarding.test.js'

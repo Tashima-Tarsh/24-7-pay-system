@@ -56,6 +56,9 @@ export class AttributionEngine {
   }
 
   reconcilePendingPayment(sessionId) {
+    // Notifications and customer UTR reports are not independent proof of credit.
+    // Only verified bank/provider ingress can settle a production payment.
+    if (process.env.NODE_ENV === 'production') return null;
     const session=this.sessionRepo.findById(sessionId);
     if(![PaymentStatus.ACTIVE,PaymentStatus.PROCESSING,PaymentStatus.VERIFICATION_PENDING].includes(session?.status)) return null;
     const reportedUtr = session.metadata?.reportedUtr || null;
@@ -259,19 +262,19 @@ export class AttributionEngine {
    * }}
    */
   processObservation(normalizedObs) {
-    // Production notifications remain supplementary unless an approved bank observer
-    // supplies a UTR that identifies exactly one live session.  In particular, do
-    // not let an observation without a UTR fall through to the amount-only matcher.
-    if(process.env.NODE_ENV==='production') {
-      const matchingSessions = BANK_SOURCES.includes(normalizedObs.source) && normalizedObs.bankReferenceNumber
-        ? this.sessionRepo.db.query(`SELECT id FROM payment_sessions WHERE receiving_account_id=? AND amount_paise=? AND status IN ('ACTIVE','PROCESSING','VERIFICATION_PENDING') AND json_extract(metadata,'$.reportedUtr')=?`,[normalizedObs.receivingAccountId,Number(normalizedObs.amountPaise),normalizedObs.bankReferenceNumber])
-        : [];
-      if(matchingSessions.length !== 1) {
-        const prior=this.obsRepo.findByFingerprint(normalizedObs.fingerprintHash);
-        const saved=prior||this.obsRepo.create(normalizedObs);
-        if(!prior)this.auditRepo?.log({entityType:'PAYMENT_OBSERVATION',entityId:saved.id,action:'SUPPLEMENTARY_EVIDENCE_RECORDED',actorType:'OBSERVER',details:{source:normalizedObs.source,requires:'PROVIDER_OR_BANK_CONFIRMATION'}});
-        return {attributed:false,duplicate:Boolean(prior),lateMatch:false,observationId:saved.id,outcomeStatus:'VERIFICATION_PENDING'};
-      }
+    // Raw observer notifications (Gmail, SMS, app messages) may be spoofed.
+    // Store them as supplementary evidence, never as financial SUCCESS in production.
+    // A matching UTR is a correlation key, not bank-credit proof.
+    if (process.env.NODE_ENV === 'production') {
+      const prior = this.obsRepo.findByFingerprint(normalizedObs.fingerprintHash);
+      const saved = prior || this.obsRepo.create(normalizedObs);
+      if (!prior) this.auditRepo?.log({
+        entityType: 'PAYMENT_OBSERVATION', entityId: saved.id,
+        action: 'SUPPLEMENTARY_EVIDENCE_RECORDED', actorType: 'OBSERVER',
+        details: { source: normalizedObs.source, requires: 'PROVIDER_OR_BANK_CONFIRMATION' }
+      });
+      return { attributed: false, duplicate: Boolean(prior), lateMatch: false,
+        observationId: saved.id, outcomeStatus: 'VERIFICATION_PENDING' };
     }
     // Tier 1: Check fingerprint for deduplication
     const existing = this.obsRepo.findByFingerprint(normalizedObs.fingerprintHash);
