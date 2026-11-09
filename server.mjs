@@ -131,8 +131,9 @@ const server = http.createServer(async (req, res) => {
 
   // Health check
   if (route === 'health') {
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, status: 'UP', apiOnline: Boolean(apiServer) }));
+    const ready = Boolean(apiServer);
+    res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ ok: ready, status: ready ? 'UP' : 'DEGRADED', apiOnline: ready }));
     return;
   }
 

@@ -642,14 +642,17 @@ registerHyperswitchRoutes(server, context);
   registerProviderConnectionsRoutes(server, context);
   registerAcceptanceRulesRoutes(server, context);
 
-  // Initialize PaymentGateway with WebSocket listener for UPI signals (port 6101)
+  // WebSocket client signals alone cannot prove bank credit. Keep this listener disabled
+  // for real payments; isolated test fixtures may explicitly opt in.
+  let paymentGateway = null;
   try {
-    const paymentGateway = new PaymentGateway(context);
+    paymentGateway = new PaymentGateway(context);
     context.paymentGateway = paymentGateway;
-    paymentGateway.initWebSocketListener(Number(process.env.UPI_WS_PORT || 6101));
+    if (process.env.NODE_ENV === 'test' && process.env.UPI_WS_TEST_ENABLED === 'true') {
+      paymentGateway.initWebSocketListener(Number(process.env.UPI_WS_PORT || 6101));
+    }
   } catch (err) {
     console.warn('[PaymentGateway] WebSocket listener unavailable:', err.message);
-    console.warn('[PaymentGateway] Continuing without real-time UPI listener; SSE still available via API.');
   }
 
 function destroy() {

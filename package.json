@@ -19,6 +19,7 @@
     "db:setup": "node scripts/init-db.cjs",
     "sync:package": "node scripts/sync-package.cjs",
     "start": "node server.mjs",
+    "start:hosted": "node server.mjs",
     "start:prod": "node scripts/start.js",
     "start:local": "node scripts/start-local.js",
     "start:tunnel": "node scripts/start-quick-tunnel.js",

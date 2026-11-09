@@ -413,6 +413,12 @@ export class PaymentGateway {
    * Signal format: { orderId, utr, amount, payerVpa, status, timestamp }
    */
   async handlePaymentSignal(signal) {
+    // UTR, amount and status supplied by a client do not establish bank credit.
+    // Production settlement must use authenticated, reconciled PSP/bank evidence.
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('[PaymentGateway] Ignored unverified WebSocket payment signal');
+      return;
+    }
     const { orderId, utr, amount, payerVpa, status } = signal;
 
     if (status !== 'SUCCESS') {

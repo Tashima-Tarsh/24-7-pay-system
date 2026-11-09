@@ -247,7 +247,7 @@
       <p class="text-slate-300 mb-6">Your payment has been successfully verified.</p>
       
       <div class="bg-white/5 rounded-xl p-4 border border-white/10 mb-6 text-left">
-        <p class="text-xs text-slate-400 uppercase tracking-wider mb-2">Transaction Details</div>
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-2">Transaction Details</p>
         <div class="space-y-2 text-sm">
           <div class="flex justify-between">
             <span class="text-slate-400">Order ID</span>
@@ -284,7 +284,7 @@
       <p id="failure-reason" class="text-slate-300 mb-6">The payment could not be completed.</p>
       
       <div class="bg-white/5 rounded-xl p-4 border border-white/10 mb-6 text-left">
-        <p class="text-xs text-slate-400 uppercase tracking-wider mb-2">Session Details</div>
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-2">Session Details</p>
         <div class="space-y-2 text-sm">
           <div class="flex justify-between">
             <span class="text-slate-400">Order ID</span>
@@ -346,7 +346,9 @@
 
       function showState(id) {
         Object.values(elements).forEach(el => el.classList.add('hide'));
-        document.getElementById(id).classList.remove('hide');
+        const target = elements[id];
+        if (target) target.classList.remove('hide');
+        else console.error('Unknown checkout state:', id);
       }
 
       function getOrderId() {
@@ -432,12 +434,12 @@
           document.querySelectorAll('.bg-emerald-500').forEach(el => {
             el.style.backgroundColor = pc;
           });
-          document.querySelectorAll('.hover:bg-emerald-600').forEach(el => {
+          document.querySelectorAll('[class~="hover:bg-emerald-600"]').forEach(el => {
             el.style.transition = 'all 0.2s';
             el.onmouseenter = () => { el.style.backgroundColor = pc; };
             el.onmouseleave = () => { el.style.backgroundColor = ''; };
           });
-          document.querySelectorAll('.text-emerald-400, .text-emerald-300, .bg-emerald-500/20').forEach(el => {
+          document.querySelectorAll('[class~="text-emerald-400"], [class~="text-emerald-300"], [class~="bg-emerald-500/20"]').forEach(el => {
             el.style.color = pc;
           });
         }
@@ -662,7 +664,7 @@
 
         const btn = $('utr-form').querySelector('button[type="submit"]');
         const originalText = btn.textContent;
-        btn.textContent = 'Verifying&hellip;';
+        btn.textContent = 'Verifying…';
         btn.disabled = true;
 
         try {
@@ -691,7 +693,7 @@
 
       // Retry button
       $('retry-btn').addEventListener('click', () => {
-        $('retry-btn').textContent = 'Retrying&hellip;';
+        $('retry-btn').textContent = 'Retrying…';
         $('retry-btn').disabled = true;
         fetch(`/api/v1/checkout/${encodeURIComponent(orderId)}/retry-new-payment`, {
           method: 'POST',
@@ -713,8 +715,9 @@
 
       // Reload / new payment buttons
       $('reload-btn').addEventListener('click', () => location.reload());
-      $('new-payment-btn').addEventListener('click', () => location.reload());
-      $('back-home-btn').addEventListener('click', () => location.reload());
+      $('new-payment-btn').addEventListener('click', () => { window.location.href = '/'; });
+      $('back-home-btn').addEventListener('click', () => { window.location.href = '/'; });
+      $('retry-payment-btn').addEventListener('click', () => $('retry-btn').click());
 
       document.getElementById('year').textContent = new Date().getFullYear();
     })();

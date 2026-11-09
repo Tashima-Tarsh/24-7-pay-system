@@ -327,7 +327,7 @@
         <a href="#dashboard">Dashboard</a>
         <a href="#pricing">Pricing</a>
       </div>
-      <a href="#" class="btn btn-outline">Sign in</a>
+      <a href="/admin" class="btn btn-outline">Sign in</a>
       <button class="mobile-toggle" id="mobileToggle" aria-label="Open menu">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
       </button>
@@ -349,7 +349,7 @@
           <h1 class="fade-in" style="animation-delay:0.3s">Accept payments<br>directly into your VPA.</h1>
           <p class="fade-in" style="animation-delay:0.4s">No aggregator. No fund holding. Settle directly to your current account via UPI intent and collect — instant, irreversible, yours.</p>
           <div class="hero-actions fade-in" style="animation-delay:0.5s">
-            <a href="#dashboard" class="btn btn-primary">Start accepting payments</a>
+            <a href="/admin" class="btn btn-primary">Open payment dashboard</a>
             <a href="#features" class="btn btn-outline">Read the docs</a>
           </div>
         </div>
@@ -403,19 +403,19 @@
       <aside class="sidebar" id="sidebar">
         <div class="dash-logo"><div class="mark"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div></div>Y<span style="color:var(--accent)">OU</span>PI PG</div>
         <nav class="nav-list">
-          <div class="nav-item active" onclick="setActive(this)">
+          <div class="nav-item active">
             <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M3 9l18-6-18 6z"/></svg>
             Dashboard
           </div>
-          <div class="nav-item" onclick="setActive(this)">
+          <div class="nav-item">
             <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.47M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Transactions
           </div>
-          <div class="nav-item" onclick="setActive(this)">
+          <div class="nav-item">
             <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.47"/></svg>
             Merchants
           </div>
-          <div class="nav-item" onclick="setActive(this)">
+          <div class="nav-item">
             <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Settings
           </div>
@@ -431,7 +431,7 @@
             <h2>Dashboard</h2>
             <p style="color:var(--text-muted);font-size:14px;">Payment activity across your VPA.</p>
           </div>
-          <button class="btn btn-outline">Export CSV</button>
+          <a href="/admin" class="btn btn-outline">Open live dashboard</a>
         </div>
         <div class="dash-stats">
           <div class="stat-card">
@@ -534,6 +534,9 @@
         items.forEach(function(i){ i.classList.remove('active'); });
         el.classList.add('active');
       }
+      document.querySelectorAll('.nav-item').forEach(function(item){
+        item.addEventListener('click', function(){ setActive(item); });
+      });
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         var style = document.createElement('style');
         style.textContent = '.fade-in{animation:none!important;opacity:1!important;transform:none!important;} .live-dot{animation:none!important;opacity:1!important;}';

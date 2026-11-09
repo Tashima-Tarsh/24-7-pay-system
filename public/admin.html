@@ -449,7 +449,9 @@
 
         // Verify token by calling a public-ish admin endpoint
         try {
-          const res = await apiFetch('/api/v1/admin/queue');
+          const res = await apiFetch('/api/v1/admin/queue', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
           if (res.ok) {
             adminToken = token;
             localStorage.setItem('admin_token', token);
@@ -578,7 +580,7 @@
             const statusClass = p.status === 'SUCCESS' ? 'status-success' :
                               p.status === 'FAILED' || p.status === 'CANCELLED' ? 'status-failed' :
                               p.status === 'PENDING' || p.status === 'QUEUED' ? 'status-pending' : 'status-active';
-            row = document.createElement('tr');
+            const row = document.createElement('tr');
             row.innerHTML = `
               <td class="font-mono text-slate-300">#${p.orderId || '—'}</td>
               <td class="amount text-white">${p.amountPaise ? (Number(p.amountPaise)/100).toLocaleString('en-IN', {style:'currency',currency:'INR'}) : '₹0.00'}</td>
