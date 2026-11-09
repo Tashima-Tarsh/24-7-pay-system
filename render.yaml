@@ -1,15 +1,15 @@
 services:
   - type: web
-    name: dynamo-pay
+    name: dynamo-pay-live
     runtime: node
     repo: https://github.com/Tashima-Tarsh/24-7-pay-system
     branch: main
     plan: free
     region: singapore
-    buildCommand: npm ci --include=dev && npm run typecheck && npm run build
-    startCommand: npm run start:hosted
+    buildCommand: cd apps/checkout-portal && npm ci && npm run build && cd ../../ && npm ci --include=dev
+    startCommand: node scripts/start-hosted.mjs
     healthCheckPath: /_ready
-    autoDeployTrigger: checksPass
+    autoDeploy: false
     envVars:
       - key: GIT_LFS_SKIP_SMUDGE
         value: "1"
@@ -32,4 +32,6 @@ services:
       - key: GMAIL_OAUTH_CLIENT_ID
         sync: false
       - key: GMAIL_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REDIRECT_URI
         sync: false
