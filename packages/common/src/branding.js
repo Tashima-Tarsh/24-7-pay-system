@@ -1,15 +1,15 @@
 /**
- * Sanbook Pay — Central Product Branding & Configuration
- * Authoritative constants for Sanbook Pay FinTech platform.
+ * 24/7 Pay — Central Product Branding & Configuration
+ * Authoritative constants for the 24/7 Pay platform.
  */
 
-export const PRODUCT_NAME = 'Sanbook Pay';
-export const PRODUCT_SLUG = 'sanbook-pay';
-export const APP_ID = 'sanbook-pay';
-export const DASHBOARD_TITLE = 'Sanbook Pay Merchant Console';
-export const CHECKOUT_TITLE = 'Sanbook Pay Secure Checkout';
-export const API_DISPLAY_NAME = 'Sanbook Pay API';
-export const RECEIPT_BRAND = 'Sanbook Pay';
+export const PRODUCT_NAME = '24/7 Pay';
+export const PRODUCT_SLUG = '24-7-pay';
+export const APP_ID = '24-7-pay';
+export const DASHBOARD_TITLE = '24/7 Pay Merchant Workspace';
+export const CHECKOUT_TITLE = '24/7 Pay Secure Checkout';
+export const API_DISPLAY_NAME = '24/7 Pay API';
+export const RECEIPT_BRAND = '24/7 Pay';
 
 export const SanbookPayConfig = Object.freeze({
   productName: PRODUCT_NAME,
@@ -19,13 +19,13 @@ export const SanbookPayConfig = Object.freeze({
   checkoutTitle: CHECKOUT_TITLE,
   apiDisplayName: API_DISPLAY_NAME,
   receiptBrand: RECEIPT_BRAND,
-  defaultSupportEmail: process.env.SUPPORT_EMAIL || 'support@sanbookpay.com',
+  defaultSupportEmail: process.env.SUPPORT_EMAIL || null,
   defaultPrimaryColor: process.env.DEFAULT_PRIMARY_COLOR || '#059669', // Emerald accent
   darkNavyBg: '#0f172a',
   whiteBg: '#ffffff',
   headerTheme: 'dark',
-  customDomain: process.env.SANBOOK_PAY_DOMAIN || process.env.YOUPI_DOMAIN || null,
-  companyName: process.env.COMPANY_NAME || 'Sanbook Technologies Private Limited',
+  customDomain: process.env.PAY_PUBLIC_DOMAIN || process.env.YOUPI_DOMAIN || null,
+  companyName: process.env.COMPANY_NAME || '24/7 Pay',
   logoUrl: process.env.DEFAULT_LOGO_URL || null,
   version: '2.0.0-production'
 });
