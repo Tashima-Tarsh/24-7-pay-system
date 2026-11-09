@@ -40,14 +40,15 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
   return()=>controller.abort();
  },[canCreate,isPlatform,readinessVersion]);
  const reduce=useReducedMotion();
- const canSubmit=canCreate&&!isPlatform&&!loading&&!readinessBusy&&readiness?.ready===true;
+ // Readiness is advisory: a failed diagnostic must never disable a valid payment API request.
+ const canSubmit=canCreate&&!isPlatform&&!loading;
  const href=checkoutHref(result?.checkoutUrl);
  const total=Number(amount);
  const validAmount=/^\d{1,8}(?:\.\d{1,2})?$/.test(amount)&&Number.isFinite(total)&&total>0;
  const validOrder=/^[-A-Za-z0-9_]{1,120}$/.test(orderId);
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();
-  if(!canSubmit){setFailure('Resolve the payment setup requirements shown above, then select Check again.');return;}
+  if(!canSubmit)return;
   if(!validOrder||!validAmount){setFailure('Enter a valid order reference and an amount greater than ₹0, with up to two decimal places.');return;}
   setLoading(true);setFailure('');setResult(null);setCopied(false);
   // Maintain one idempotency key across explicit retry attempts for an unchanged request.
