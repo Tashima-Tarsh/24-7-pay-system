@@ -14,42 +14,12 @@ export function registerCodeAttestationRoutes(server, ctx) {
     return match ? match[1].trim() : '';
   }
 
-  // GET /api/v1/attestation/github — verify code integrity against GitHub
-  server.get('/api/v1/attestation/github', async (req, res) => {
-    const token = requireAuth(req);
-    if (!token) return HttpServer.json(res, 401, { error: 'Unauthorized' });
-
-    const { commit, path } = req.query || {};
-    const repo = 'Tashima-Tarsh/Sanbookpay';
-    const branch = 'feat/sanbookpay-upi-intent-universal-engine';
-
-    // Return attestation metadata that clients can verify against GitHub API
-    return HttpServer.json(res, 200, {
-      attestation: {
-        repo,
-        branch,
-        commit: commit || 'HEAD',
-        path: path || null,
-        verified: true,
-        method: 'github_commit_signature',
-        attestationUrl: `https://api.github.com/repos/${repo}/commits/${commit || 'HEAD'}`,
-        rawContentUrl: path
-          ? `https://raw.githubusercontent.com/${repo}/${branch}/${encodeURIComponent(path)}`
-          : null,
-        generatedAt: new Date().toISOString()
-      },
-      codeIntegrity: {
-        typecheck: 'PASS',
-        tests: '63/63 PASS',
-        secretScan: 'PASS',
-        lastVerified: new Date().toISOString()
-      },
-      antiImpersonation: {
-        merchantBound: true,
-        deviceFingerprint: true,
-        signatureRequired: true,
-        note: 'Verify deployed code matches this attestation before processing payments'
-      }
+  // A legacy route cannot attest a deployment without trusted build provenance.
+  // Keep the endpoint for compatibility without exposing source repository details.
+  server.get('/api/v1/attestation/github', (req, res) => {
+    return HttpServer.json(res, 410, {
+      error: 'Source-based attestation is no longer available.',
+      code: 'ATTESTATION_UNAVAILABLE'
     });
   });
 
