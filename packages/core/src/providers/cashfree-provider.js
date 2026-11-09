@@ -343,7 +343,7 @@ export class CashfreeProvider extends PaymentProvider {
       amount: amountRupees,
       transferId: payout.transferId,
       transferMode: (payout.payoutRail || 'IMPS').toLowerCase(),
-      remarks: payout.remarks || 'Sanbook Pay Authorized Payout'
+      remarks: payout.remarks || '24/7 Pay Authorized Payout'
     };
 
     const res = await this._request(`${this.payoutBaseUrl}/requestTransfer`, {
@@ -411,7 +411,7 @@ export class CashfreeProvider extends PaymentProvider {
     const payload = {
       refund_amount: amountRupees,
       refund_id: refund.refundId,
-      refund_note: refund.reason || 'Sanbook Pay Authorized Refund'
+      refund_note: refund.reason || '24/7 Pay Authorized Refund'
     };
 
     const res = await this._request(`${this.pgBaseUrl}/orders/${encodeURIComponent(refund.merchantOrderId)}/refunds`, {
