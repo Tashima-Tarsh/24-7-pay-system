@@ -372,3 +372,11 @@ body[data-pay-surface="workspace"] .primary-button:not(:disabled):hover{transfor
 @media(max-width:720px){body[data-pay-surface="workspace"] .studio-chart-layout{grid-template-columns:minmax(0,1fr)}body[data-pay-surface="workspace"] .studio-chart-legend{width:100%}}
 @media(max-width:440px){body[data-pay-surface="workspace"] .studio-quick-actions{grid-template-columns:minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){body[data-pay-surface="workspace"] .studio-quick-action,body[data-pay-surface="workspace"] .primary-button{transition:none!important}body[data-pay-surface="workspace"] .studio-quick-action:hover,body[data-pay-surface="workspace"] .primary-button:hover{transform:none!important}}
+
+/* Safe navigation into the independent React premium studio; legacy controls remain intact. */
+body[data-pay-surface="workspace"] .premium-switcher-link{display:flex;align-items:center;gap:12px;padding:13px 12px;margin:0 0 15px;border:1px solid rgba(197,244,193,.26);border-radius:14px;background:linear-gradient(130deg,rgba(174,243,166,.13),rgba(206,251,197,.05));color:#ecf7e9;text-decoration:none;font-size:12px;font-weight:750;transition:transform .22s,border-color .22s}
+body[data-pay-surface="workspace"] .premium-switcher-link:hover{transform:translateY(-2px);border-color:rgba(207,250,197,.6)}
+body[data-pay-surface="workspace"] .premium-switcher-link span:nth-child(2){flex:1;min-width:0}
+body[data-pay-surface="workspace"] .premium-switcher-link small{display:block;margin-top:3px;font-size:10px;font-weight:500;opacity:.74}
+body[data-pay-surface="workspace"] .premium-switcher-link:focus-visible{outline:var(--pay-focus);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){body[data-pay-surface="workspace"] .premium-switcher-link{transition:none!important}body[data-pay-surface="workspace"] .premium-switcher-link:hover{transform:none}}

@@ -1,30 +1,39 @@
-# 24/7 Pay premium React studio — protected migration
+# 24/7 Pay — Cinematic Premium Merchant Studio
 
-This is a **parallel, read-only React/Vite UI**, not a replacement payment gateway or a new verification system. The current production workspace remains `/platform` and the production Node gateway, routes, database and callbacks remain unchanged.
+A full-screen, responsive React/Vite merchant interface at `/premium-studio/index.html`. It keeps the original production backend, `/platform` workspace, checkout flow, financial database, verification state machine and outgoing callbacks unchanged.
 
-Actual libraries: React 19, Radix Tabs, Tailwind CSS v4 + shadcn-style local Button/Card primitives (configured via `components.json`), Motion (Framer Motion successor), Phosphor Icons React and Visx Pie. The production API reference continues to use the already deployed Scalar page.
+## Technology
 
-## Safety boundaries
-- Reads the existing same-origin bearer session created by `/platform` from sessionStorage. Unauthorized users are directed to the existing login.
-- Makes **GET requests only** to existing merchant-operations endpoints; no financial writes, UTR processing, webhook retries or manual releases.
-- Uses backend-recorded amounts and states; never fabricates settlement rates or success outcomes.
-- All UI lives under the separate Vite project in `premium-studio/`. The existing root `package-lock.json`, `server.mjs`, `apps/payment-api`, `public/assets/247-portal.js` and checkout paths are untouched.
-- The build emits `public/premium-studio` only after a successful compile. Do not replace `/platform` until a full functional browser review and production rollback drill.
+React 18, Tailwind v4, shadcn-style Button/Card primitives, Radix Tabs, Motion, Phosphor React icons, Visx charts, editorial typography and responsive Apple-inspired rounded controls. Scalar documentation remains at `/api-reference.html`.
 
-## Test
+## Real payment-link creation
+
+1. Sign in with your existing merchant credentials directly in Premium Studio (or use an existing same-tab session).
+2. Open **Create payment link**, enter an order reference and INR amount, and submit.
+3. The frontend calls `POST /api/platform/v1/payments` with the existing bearer session and a stable `Idempotency-Key`.
+4. A successful backend response supplies `checkoutUrl`. Only same-origin HTTP(S) checkout paths are opened or copied.
+5. The existing customer checkout handles active UPI QR and app-intent handoff. **UPI app return is not confirmation.** Only the existing bank/PSP provider-authoritative backend status may confirm the order.
+
+Payment creation is limited to authenticated **merchant** accounts with the `payments.create` permission. Platform operators may inspect transactions but do not impersonate merchant accounts for payment creation. The frontend does not have a mark-paid, manual UTR approval, ledger rewrite, settlement override, or spoofed callback path.
+
+## Safety boundary
+
+- GET-only for monitoring KPIs, payments and callback delivery records.
+- The *only business write* in Premium Studio is the existing permissioned payment-creation API. User sign-in continues to use the existing bearer authentication route.
+- The idempotency key is reused for explicit retries of an unchanged request, avoiding unintended duplicates after an uncertain network response.
+- Bank/PSP verification, refunds, payouts, settlement, ledger, payment state transitions and signed webhook delivery are not implemented in the frontend and remain exclusively backend-owned.
+- Original active merchant console, backend source code, `server.mjs`, root npm workspace and database schema are untouched.
+
+## Build and review
+
 ```sh
 node --test scripts/premium-react-boundary.test.js
-npm install --prefix premium-studio --no-package-lock
+npm ci --prefix premium-studio --no-audit --no-fund
 npm run build --prefix premium-studio
 ```
 
-The isolated `premium-studio.yml` workflow performs build and TypeScript validation on the PR. The existing payment regression workflow runs independently. Its artifact is a staged build for review, **not a production rollout**.
+The isolated CI workflow compiles the static output to `public/premium-studio/` and archives it for review. Production should deploy the compiled assets only after TypeScript, financial boundary tests, the pre-existing payment regression workflow, and the Render rollout succeed.
 
-## Planned promotion
-1. Ensure both workflows pass and no backend files changed.
-2. Review compiled build in an authenticated browser on a staging URL, including all roles and merchant isolation.
-3. Confirm mobile accessibility, API error states and CSP/static assets.
-4. Only then expose the compiled `/premium-studio/` route as an optional preview without redirecting `/platform`.
-5. Leave any cutover to a separate reviewed change with immediate rollback capability.
+### Review before replacing classic `/platform`
 
-No real-money payment is initiated by this UI preview.
+Verify: merchant sign-in, role-based permissions, payment link creation against a safely configured merchant account, same-origin checkout URL, QR and UPI intent handoff on a physical device, duplicate submission idempotency, responsive mobile layout, browser accessibility, and production rollback. Until verified, keep the classic workspace as an always-available alternative.

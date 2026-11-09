@@ -1,7 +1,7 @@
 name: Premium React studio (isolated)
 on:
   push:
-    branches: [feature/premium-react-studio-safe]
+    branches: [feature/premium-react-studio-safe, feature/cinematic-payment-links-studio]
     paths: ['premium-studio/**','scripts/premium-react-boundary.test.js','.github/workflows/premium-studio.yml']
   pull_request:
     branches: [main]
@@ -37,12 +37,12 @@ jobs:
           path: public/premium-studio
           if-no-files-found: error
       - name: Commit reproducible lockfile and preview build to feature branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/premium-react-studio-safe'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/feature/premium-react-studio-safe' || github.ref == 'refs/heads/feature/cinematic-payment-links-studio')
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f premium-studio/package-lock.json public/premium-studio
           if ! git diff --cached --quiet; then
             git commit -m "Build isolated premium React preview and lock dependencies"
-            git push origin HEAD:feature/premium-react-studio-safe
+            git push origin HEAD:"${GITHUB_REF_NAME}"
           fi
