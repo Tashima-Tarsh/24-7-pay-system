@@ -88,6 +88,8 @@ export function registerPlatformPayments(server,ctx,identity){
  // account health nor a successful intent preflight proves bank settlement.
  get('/payment-readiness','payments.create',(req,res)=>{
   const mid=tenant(req),merchant=merchantRepo.findById(mid);
+  // Reconcile verified legacy onboarding before presenting payment readiness.
+  activateEligibleMerchant(db,mid,{audit:details=>identity.audit(req,'MERCHANT_ONBOARDING_AUTO_COMPLETED',mid,details)});
   const state=db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',[mid]);
   const activeAccount=accountRepo.findActiveForMerchant(mid);
   const channel=upiChannelSettings(merchant);
