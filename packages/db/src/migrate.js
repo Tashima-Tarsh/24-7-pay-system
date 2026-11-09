@@ -409,14 +409,14 @@ export function runMigrations(targetDb) {
   if (existing.length === 0) {
     defaultMerchant = merchantRepo.create({
       id: '00000000-0000-0000-0000-000000000001',
-      businessName: 'Sanbook Pay Store',
+      businessName: '24/7 Pay',
       slug: 'demo-store',
-      contactEmail: 'support@sanbookpay.com',
+      contactEmail: 'support@247pay.invalid',
       contactPhone: '9876543210',
       webhookUrl: process.env.COIN_STORE_WEBHOOK_URL || 'http://localhost:5000/api/webhook',
       webhookSecret: getCoinStoreWebhookSecret(),
       branding: {
-        appName: 'Sanbook Pay',
+        appName: '24/7 Pay',
         primaryColor: '#059669',
         logoUrl: null
       }
