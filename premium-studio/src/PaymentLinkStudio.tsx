@@ -59,7 +59,7 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,compact=false}
    <p>Build a real UPI checkout in seconds. The payment engine, receiving account and confirmation flow remain exactly as configured.</p></div>
    <span className="link-studio-emblem"><LinkSimple size={23} weight="duotone" aria-hidden="true"/></span>
   </div>
-  {!canCreate||isPlatform?<div role="status" className="payment-permission-note"><LockKey size={20} aria-hidden="true"/><span>{blocked} <a href="/platform">Use the existing workspace</a>.</span></div>:
+  {!canCreate||isPlatform?<div role="status" className="payment-permission-note"><LockKey size={20} aria-hidden="true"/><span>{blocked} Sign in with a merchant owner or authorized team account.</span></div>:
   <form onSubmit={submit} className="payment-link-form">
    <div className="form-fields">
     <label className="payment-field"><span>Order reference</span><input className={inputClass} name="orderId" value={orderId} onChange={e=>updateOrder(e.target.value)} autoComplete="off" maxLength={120} required pattern="[-A-Za-z0-9_]{1,120}" aria-invalid={!validOrder&&orderId.length>0}/><small>Unique reference for your order</small></label>
