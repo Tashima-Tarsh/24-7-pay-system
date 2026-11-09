@@ -620,6 +620,7 @@ export function runMigrations(targetDb) {
   db.exec(`CREATE TABLE IF NOT EXISTS pp_audit (
     id TEXT PRIMARY KEY,
     merchant_id TEXT,
+    user_id TEXT,
     entity_id TEXT,
     details TEXT,
     actor_type TEXT,
@@ -636,6 +637,14 @@ export function runMigrations(targetDb) {
     rejection_reason TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  // Merchant onboarding still writes the platform user_id in pp_audit.
+  // Apply this idempotently for databases that ran the prior revision.
+  if (db.dialect === 'postgres') {
+    db.exec('ALTER TABLE pp_audit ADD COLUMN IF NOT EXISTS user_id TEXT');
+  } else {
+    const columns = db.query('PRAGMA table_info(pp_audit)').map(c => c.name);
+    if (!columns.includes('user_id')) db.exec('ALTER TABLE pp_audit ADD COLUMN user_id TEXT');
+  }
   // Add columns to an existing pre-revision table if they don't exist.
   try { db.exec("ALTER TABLE pp_audit ADD COLUMN actor_type VARCHAR(20);"); } catch {}
   try { db.exec("ALTER TABLE pp_audit ADD COLUMN actor_id BIGINT;"); } catch {}
