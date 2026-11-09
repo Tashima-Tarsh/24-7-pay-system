@@ -91,6 +91,14 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.getByRole('heading',{name:'Add a receiving account'}).waitFor({timeout:12000});
     await page.locator('button[data-view="developers"]').click();
     await page.getByRole('heading',{name:'Merchant API credentials'}).waitFor({timeout:12000});
+    assert.equal(await page.locator('button[data-view="invite-email"]').isVisible(),false,'Merchant must not see the platform Gmail configuration');
+    const deniedMail=await page.evaluate(async()=>{
+      const secret=sessionStorage.getItem('247pay-new-workspace-session');
+      const r=await fetch('/api/platform/v1/gmail/sender',{headers:{Authorization:'Bearer '+secret}});
+      return r.status;
+    });
+    assert.equal(deniedMail,403,'Merchant must not inspect or configure the platform invitation sender');
+
     await page.getByRole('heading',{name:'API request history'}).waitFor({timeout:12000});
     await page.locator('button[data-view="callbacks"]').click();
     await page.getByRole('heading',{name:'Callback deliveries'}).waitFor({timeout:12000});
