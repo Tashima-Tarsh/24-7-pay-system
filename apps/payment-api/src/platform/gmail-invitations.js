@@ -52,13 +52,31 @@ function messageText(message,origin) {
 }
 export function createPlatformGmailInvitationService(db,{env=process.env,googleProvider}={}) {
   db.execute('CREATE TABLE IF NOT EXISTS pp_gmail_sender (id TEXT PRIMARY KEY,email TEXT NOT NULL,refresh_token_cipher TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)');
+  db.execute('CREATE TABLE IF NOT EXISTS pp_gmail_oauth_client (id TEXT PRIMARY KEY,client_id TEXT NOT NULL,client_secret_cipher TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)');
   db.execute('CREATE TABLE IF NOT EXISTS pp_gmail_oauth_states (state_hash TEXT PRIMARY KEY,owner_user_id TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL)');
-  const config=()=>({
-    origin:getOrigin(env),
-    clientId:env.GMAIL_SEND_CLIENT_ID||'',
-    clientSecret:env.GMAIL_SEND_CLIENT_SECRET||'',
-    keyReady:typeof env.ENCRYPTION_MASTER_KEY==='string'&&env.ENCRYPTION_MASTER_KEY.length>=32
-  });
+  const config=()=>{
+    const stored=db.queryOne("SELECT * FROM pp_gmail_oauth_client WHERE id='platform'");
+    const keyReady=typeof env.ENCRYPTION_MASTER_KEY==='string'&&env.ENCRYPTION_MASTER_KEY.length>=32;
+    let secret='';
+    if(stored&&keyReady){try{secret=decrypt(stored.client_secret_cipher,env);}catch{}}
+    else if(!stored)secret=env.GMAIL_SEND_CLIENT_SECRET||'';
+    return {
+      origin:getOrigin(env),clientId:stored?.client_id||env.GMAIL_SEND_CLIENT_ID||'',
+      clientSecret:secret,keyReady,clientStored:!!stored
+    };
+  };
+  function saveClient({clientId,clientSecret}={}){
+    if(typeof clientId!=='string'||!/^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId)||clientId.length>220)
+      throw serverError(400,'Supply a valid Google OAuth Web application Client ID');
+    if(typeof clientSecret!=='string'||clientSecret.length<10||clientSecret.length>300||/[\r\n]/.test(clientSecret))
+      throw serverError(400,'Supply the Google OAuth client secret securely');
+    const encrypted=encrypt(clientSecret,env);
+    db.execute('INSERT INTO pp_gmail_oauth_client(id,client_id,client_secret_cipher,created_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET client_id=excluded.client_id,client_secret_cipher=excluded.client_secret_cipher,updated_at=excluded.updated_at',
+      ['platform',clientId,encrypted,now(),now()]);
+    // Old refresh tokens cannot be used with a different OAuth client.
+    db.execute("DELETE FROM pp_gmail_sender WHERE id='platform'");
+    return status();
+  }
   const ready=()=>{const c=config();return !!(c.origin&&c.clientId&&c.clientSecret&&c.keyReady);};
   const redirectUri=()=>config().origin?config().origin+'/api/platform/v1/gmail/callback':null;
   const library=async()=>googleProvider||((await import('googleapis')).google);
@@ -69,7 +87,11 @@ export function createPlatformGmailInvitationService(db,{env=process.env,googleP
     return new google.auth.OAuth2(c.clientId,c.clientSecret,redirectUri());
   };
   const getRecord=()=>db.queryOne("SELECT * FROM pp_gmail_sender WHERE id='platform'");
-  const status=()=>({connected:Boolean(getRecord()),email:getRecord()?.email||null,oauthReady:ready(),redirectUri:redirectUri(),scope:'https://www.googleapis.com/auth/gmail.send'});
+  const status=()=>{
+    const c=config(),record=getRecord();
+    return {connected:Boolean(record),email:record?.email||null,oauthReady:ready(),clientStored:c.clientStored,
+      redirectUri:redirectUri(),scope:'https://www.googleapis.com/auth/gmail.send'};
+  };
   async function connect(userId) {
     const auth=await oauth();
     const state=crypto.randomBytes(32).toString('base64url');
@@ -128,5 +150,5 @@ export function createPlatformGmailInvitationService(db,{env=process.env,googleP
     db.execute("DELETE FROM pp_gmail_sender WHERE id='platform'");
     return {connected:false,revocationNote:'Local authorization removed. Revoke access from Google Account security settings if required.'};
   }
-  return {status,connect,callback,send,disconnect};
+  return {status,saveClient,connect,callback,send,disconnect};
 }
