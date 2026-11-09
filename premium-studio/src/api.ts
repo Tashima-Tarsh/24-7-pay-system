@@ -35,6 +35,16 @@ export async function signIn(email:string,password:string):Promise<void>{
  if(!payload||typeof payload!=='object'||!('sessionToken'in payload)||typeof payload.sessionToken!=='string'||!('user'in payload))throw new Error('Could not establish an authenticated workspace session.');
  sessionStorage.setItem(SESSION_KEY,payload.sessionToken);
 }
+export async function switchWorkspaceAccount():Promise<void>{
+ const token=sessionStorage.getItem(SESSION_KEY);
+ try{
+  if(token)await fetch('/api/platform/v1/logout',{
+   method:'POST',credentials:'omit',cache:'no-store',
+   headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+   body:'{}'
+  });
+ }finally{sessionStorage.removeItem(SESSION_KEY);}
+}
 export type ReceivingAccount={
  id:string;merchantId:string;upiId:string;payeeName:string;isActive:boolean;
  isMerchantEnabled:boolean;isSlotBusy?:boolean;currentActiveSessionId?:string|null;
