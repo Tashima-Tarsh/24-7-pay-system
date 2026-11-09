@@ -1,441 +1,128 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>24/7 Pay | UPI Payment Platform</title>
-<meta name="description" content="24/7 Pay — UPI payment links, QR checkout, verification workflows and merchant operations. Open the secure admin console to manage your payments.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-  :root {
-    --primary: #0A0E27;
-    --accent: #00D4FF;
-    --violet: #7C3AED;
-    --surface: rgba(255, 255, 255, 0.03);
-    --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.15);
-    --text: #FFFFFF;
-    --text-muted: rgba(255, 255, 255, 0.55);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--primary);
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    font-size: 17px;
-    line-height: 1.6;
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-  }
-  h1, h2, h3, .heading {
-    font-family: 'Space Grotesk', sans-serif;
-    letter-spacing: -0.02em;
-    color: var(--text);
-  }
-  h1 { font-size: 64px; line-height: 1.05; }
-  h2 { font-size: 52px; line-height: 1.1; }
-  h3 { font-size: 32px; line-height: 1.2; }
-  .mono { font-family: 'JetBrains Mono', monospace; }
-  a { color: inherit; text-decoration: none; }
-  ul { list-style: none; }
-
-  /* Background layers */
-  .mesh-bg {
-    position: fixed; inset: 0; z-index: -2;
-    background:
-      radial-gradient(circle at 15% 35%, rgba(0, 212, 255, 0.10) 0%, transparent 45%),
-      radial-gradient(circle at 85% 65%, rgba(124, 58, 237, 0.08) 0%, transparent 45%),
-      conic-gradient(from 0deg at 50% 50%, #0A0E27 0%, #121833 30%, #0A0E27 55%, #121833 80%, #0A0E27 100%);
-    background-size: 200% 200%;
-    animation: meshMove 24s ease infinite;
-  }
-  @keyframes meshMove {
-    0%, 100% { background-position: 0% 0%; }
-    50% { background-position: 100% 100%; }
-  }
-  .grid-bg {
-    position: fixed; inset: 0; z-index: -1;
-    background-image:
-      repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 40px),
-      repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 40px);
-    pointer-events: none;
-  }
-
-  /* Navigation */
-  nav {
-    position: sticky; top: 0; z-index: 50;
-    background: rgba(10, 14, 39, 0.6);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
-  }
-  .nav-inner { height: 64px; display: flex; align-items: center; justify-content: space-between; }
-  .logo { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
-  .logo-mark { color: var(--accent); }
-  .nav-links { display: flex; gap: 32px; align-items: center; }
-  .nav-links a { color: var(--text-muted); font-size: 15px; transition: color 0.2s cubic-bezier(0.4,0,0.2,1); }
-  .nav-links a:hover { color: var(--accent); }
-  .mobile-toggle {
-    display: none; align-items: center; gap: 8px; background: none;
-    border: 1px solid var(--border); color: var(--text);
-    padding: 8px 12px; border-radius: 8px; cursor: pointer;
-  }
-
-  /* Hero */
-  section { padding: 120px 0; position: relative; z-index: 1; }
-  .container { width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 32px; }
-  .hero { min-height: 90vh; display: flex; align-items: center; }
-  .hero-inner { display: grid; grid-template-columns: 60% 40%; gap: 64px; align-items: center; }
-  .hero-content h2 { font-size: 20px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 12px; }
-  .hero-content h1 { font-size: 64px; line-height: 1.05; margin-bottom: 24px; }
-  .hero-content p { font-size: 18px; line-height: 1.6; color: var(--text-muted); max-width: 480px; margin-bottom: 32px; }
-  .hero-actions { display: flex; gap: 16px; }
-
-  .badge {
-    display: inline-flex; align-items: center; gap: 10px;
-    background: rgba(0, 212, 255, 0.08);
-    border: 1px solid rgba(0, 212, 255, 0.25);
-    color: var(--accent);
-    font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.05em;
-    padding: 8px 16px; border-radius: 8px; margin-bottom: 24px;
-  }
-  .live-dot {
-    width: 8px; height: 8px; background: var(--accent);
-    border-radius: 50%; animation: pulse 2s infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(0,212,255,0.4); }
-    50% { opacity: 0.6; transform: scale(1.25); box-shadow: 0 0 0 6px rgba(0,212,255,0); }
-    100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(0,212,255,0); }
-  }
-
-  /* Buttons */
-  .btn {
-    height: 48px; padding: 0 24px;
-    font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 16px;
-    border-radius: 8px; border: none; cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    letter-spacing: -0.01em;
-  }
-  .btn-primary { background: var(--accent); color: var(--primary); }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,212,255,0.3); }
-  .btn-outline {
-    background: transparent; color: var(--text);
-    border: 1px solid var(--border-strong);
-  }
-  .btn-outline:hover { transform: translateY(-2px); border-color: var(--accent); color: var(--accent); }
-
-  /* Abstract geometric shape - CSS only */
-  .geo-wrap { position: relative; width: 100%; height: 420px; }
-  .geo-shape {
-    position: absolute; inset: 0;
-    background:
-      conic-gradient(from 90deg at 30% 30%, rgba(0,212,255,0.12) 0deg, transparent 120deg, rgba(124,58,237,0.10) 180deg, transparent 300deg),
-      radial-gradient(circle at 70% 80%, rgba(0,212,255,0.06) 0%, transparent 50%);
-    border: 1px solid var(--border);
-    border-radius: 32px; overflow: hidden;
-  }
-  .geo-node {
-    position: absolute; border-radius: 50%; filter: blur(56px); opacity: 0.35;
-  }
-  .geo-node-1 { width: 260px; height: 260px; background: var(--accent); top: -60px; left: -80px; }
-  .geo-node-2 { width: 200px; height: 200px; background: var(--violet); bottom: -50px; right: -60px; }
-  .geo-grid {
-    position: absolute; inset: 16px;
-    background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
-    background-size: 20px 20px; border-radius: 24px;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0) border-box;
-    -webkit-mask-composite: destination-out; mask-composite: exclude;
-    pointer-events: none;
-  }
-
-  /* Stats bar */
-  .stats-bar {
-    display: flex; gap: 32px; padding: 48px 0;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-  }
-  .stat-item {
-    display: flex; align-items: baseline; gap: 10px;
-    border-left: 1px solid var(--border); padding-left: 32px;
-  }
-  .stat-item:first-child { border-left: none; padding-left: 0; }
-  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
-  .stat-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-
-  /* Feature cards - glassmorphism */
-  .features { background: rgba(16, 22, 45, 0.4); }
-  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
-  .glass-card {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.1);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    padding: 40px 32px; border-radius: 16px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative; overflow: hidden;
-  }
-  .glass-card:hover {
-    border-color: rgba(0,212,255,0.35);
-    box-shadow: 0 0 0 1px rgba(0,212,255,0.3);
-  }
-  .feature-icon {
-    width: 48px; height: 48px; border: 1px solid var(--border);
-    border-radius: 12px; display: flex; align-items: center; justify-content: center;
-    margin-bottom: 24px; color: var(--accent);
-  }
-  .feature-icon svg { width: 22px; height: 22px; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-  .glass-card h3 { font-size: 20px; margin-bottom: 12px; }
-  .glass-card p { font-size: 15px; color: var(--text-muted); line-height: 1.6; }
-
-  /* Staggered fade in */
-  .fade-in { opacity: 0; transform: translateY(24px); animation: fadeInUp 0.7s cubic-bezier(0.4,0,0.2,1) forwards; }
-  @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
-  .fade-in:nth-child(1){animation-delay:0.1s} .fade-in:nth-child(2){animation-delay:0.2s} .fade-in:nth-child(3){animation-delay:0.3s}
-  .fade-in:nth-child(4){animation-delay:0.4s} .fade-in:nth-child(5){animation-delay:0.5s} .fade-in:nth-child(6){animation-delay:0.6s}
-  .fade-in:nth-child(7){animation-delay:0.7s} .fade-in:nth-child(8){animation-delay:0.8s}
-
-  /* Dashboard */
-  .dashboard { background: var(--primary); }
-  .dash-wrap { display: flex; position: relative; }
-  .sidebar {
-    position: fixed; top: 64px; left: 0; bottom: 0; width: 240px;
-    background: rgba(16, 22, 45, 0.8);
-    border-right: 1px solid var(--border);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    padding: 32px; display: flex; flex-direction: column;
-    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
-    z-index: 40;
-  }
-  .dash-logo {
-    font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 18px;
-    letter-spacing: -0.02em; margin-bottom: 40px; display: flex; align-items: center; gap: 10px;
-  }
-  .dash-logo .mark {
-    width: 28px; height: 28px; border: 2px solid var(--accent); border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .dash-logo .mark svg { width: 14px; height: 14px; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-  .nav-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: auto; }
-  .nav-item {
-    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-    border-radius: 8px; font-size: 15px; color: var(--text-muted);
-    transition: all 0.2s cubic-bezier(0.4,0,0.2,1); cursor: pointer; border-left: 3px solid transparent;
-  }
-  .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
-  .nav-item.active {
-    background: rgba(0, 212, 255, 0.06);
-    color: var(--text); border-left: 3px solid var(--accent);
-  }
-  .nav-item svg { width: 18px; height: 18px; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; fill: none; flex-shrink: 0; }
-  .user-card {
-    margin-top: auto; padding-top: 32px; border-top: 1px solid var(--border);
-    background: rgba(255,255,255,0.02); border-radius: 12px; padding: 20px;
-  }
-  .user-card .name { font-size: 14px; font-weight: 600; color: var(--text); }
-  .user-card .email { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-
-  .main-content { flex: 1; margin-left: 240px; padding: 40px 32px; max-width: calc(100vw - 240px); }
-  .dash-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
-  .dash-header h2 { font-size: 32px; }
-  .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 40px; }
-  .stat-card {
-    background: rgba(255,255,255,0.02);
-    border: 2px solid var(--border); border-radius: 12px; padding: 32px;
-    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
-  }
-  .stat-card:hover { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(0,212,255,0.3); }
-  .stat-card .label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
-  .stat-card .value { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
-  .stat-card .delta { font-size: 13px; font-weight: 600; color: #10B981; display: flex; align-items: center; gap: 6px; }
-  .stat-card .delta svg { width: 12px; height: 12px; stroke-width: 1.5; stroke-linecap: round; }
-
-  .table-section {
-    background: rgba(255,255,255,0.02); border: 2px solid var(--border); border-radius: 16px; padding: 32px;
-  }
-  .table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .table-header h3 { font-size: 20px; }
-  table { width: 100%; border-collapse: separate; border-spacing: 0; }
-  th {
-    text-align: left; font-size: 12px; font-weight: 600; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.1em; padding: 16px 0;
-    border-bottom: 1px solid var(--border); font-family: 'Space Grotesk', sans-serif;
-  }
-  td { padding: 0; border-bottom: 1px solid var(--border); color: var(--text-muted); }
-  tr { height: 64px; transition: background 0.2s cubic-bezier(0.4,0,0.2,1); }
-  tr:hover { background: rgba(0,212,255,0.05); }
-  tr td { padding: 16px 0; }
-  tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
-  .tx-id { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); font-weight: 600; }
-  .status-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 20px; padding: 0 12px; border-radius: 999px;
-    font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
-  }
-  .status-success { background: rgba(16, 185, 129, 0.1); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
-  .status-pending { background: rgba(245, 158, 11, 0.1); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
-  .status-failed { background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
-
-  /* Mobile */
-  @media (max-width: 768px) {
-    .nav-links { display: none; position: absolute; top: 64px; right: 20px; left: 20px; flex-direction: column; gap: 0; padding: 12px; background: #10182e; border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 20px 48px rgba(0,0,0,.4); }
-    .nav-links.open { display: flex; }
-    .nav-links a { display: block; width: 100%; padding: 12px 16px; }
-    .mobile-toggle { display: flex; }
-    .hero-inner { grid-template-columns: 1fr; gap: 40px; }
-    .hero-content h1 { font-size: 44px; }
-    h1 { font-size: 44px; } h2 { font-size: 40px; } h3 { font-size: 28px; }
-    .feature-grid { grid-template-columns: 1fr; }
-    .stats-bar { flex-direction: column; gap: 24px; }
-    .stat-item {
-      border-left: none; padding-left: 0; border-top: 1px solid var(--border);
-      padding-top: 20px; width: 100%; justify-content: space-between;
-    }
-    .stat-item:first-child { border-top: none; padding-top: 0; }
-    .dash-wrap { flex-direction: column; }
-    .sidebar {
-      position: relative; top: 0; width: 100%; height: auto;
-      border-right: none; border-bottom: 1px solid var(--border);
-      flex-direction: row; padding: 16px 20px; align-items: center;
-      justify-content: space-between; transform: translateY(100%);
-    }
-    .sidebar.open { transform: translateY(0); }
-    .nav-list { flex-direction: row; gap: 20px; margin-bottom: 0; flex-wrap: wrap; }
-    .user-card { display: none; }
-    .main-content { margin-left: 0; max-width: 100%; padding: 24px 20px; }
-    .dash-stats { grid-template-columns: 1fr 1fr; }
-    .table-section { overflow-x: auto; padding: 20px; }
-    .geo-wrap { height: 300px; }
-    .hero-actions { flex-direction: column; width: 100%; }
-    .hero-actions .btn { width: 100%; justify-content: center; }
-    section { padding: 80px 0; }
-  }
-  @media (max-width: 480px) {
-    .dash-stats { grid-template-columns: 1fr; }
-    .hero-content h1 { font-size: 36px; }
-    .container { padding: 0 20px; }
-  }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080e1d">
+  <meta name="description" content="24/7 Pay brings UPI checkout, payment status and merchant operations into one thoughtful experience. Understand each payment from the first tap to a verified outcome.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="24/7 Pay — Payments without the guesswork">
+  <meta property="og:description" content="A clearer way to collect UPI payments and stay on top of every order.">
+  <meta property="og:url" content="https://two4-7-pay-live.onrender.com/">
+  <title>24/7 Pay — A clearer way to collect UPI payments</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/247-site.css">
+  <script src="/assets/247-site.js" type="module"></script>
 </head>
 <body>
-  <nav>
-    <div class="container nav-inner">
-      <a href="/" class="logo" aria-label="24/7 Pay home">24/7 <span class="logo-mark">PAY</span></a>
-      <div class="nav-links" id="siteNav">
-        <a href="#features">Features</a>
-        <a href="#dashboard">How it works</a>
-        <a href="/admin">Admin dashboard</a>
-      </div>
-      <a href="/admin" class="btn btn-outline">Sign in</a>
-      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation" aria-controls="siteNav" aria-expanded="false">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-      </button>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="page-glow" aria-hidden="true"></div>
+  <header class="topbar" id="top">
+    <div class="nav-wrap">
+      <a class="brand" href="/" aria-label="24/7 Pay home"><span class="brand-icon" aria-hidden="true"><span></span><span></span></span><span>24/7 <em>PAY</em></span></a>
+      <button id="mobile-menu" class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-nav"><span></span><span></span><span></span></button>
+      <nav id="primary-nav" class="nav-links" aria-label="Primary navigation">
+        <a href="#product">Product</a>
+        <a href="#how">How it works</a>
+        <a href="#use-cases">Solutions</a>
+        <a href="#developers">Developers</a>
+        <a href="#questions">FAQs</a>
+      </nav>
+      <div class="nav-actions"><a class="text-link" href="/platform">Sign in</a><a class="btn btn-small btn-primary" href="/platform">Open workspace <span aria-hidden="true">↗</span></a></div>
     </div>
-  </nav>
-
-  <div class="mesh-bg"></div>
-  <div class="grid-bg"></div>
-
-  <section class="hero fade-in" style="animation-delay:0.1s">
-    <div class="container">
-      <div class="hero-inner">
-        <div class="hero-content">
-          <div class="badge">24/7 PAY &nbsp;·&nbsp; UPI PAYMENT WORKSPACE</div>
-          <h2 class="fade-in" style="animation-delay:0.2s">PAYMENTS WITHOUT THE GUESSWORK</h2>
-          <h1 class="fade-in" style="animation-delay:0.3s">Your payments.<br>Your control.</h1>
-          <p class="fade-in" style="animation-delay:0.4s">Create UPI checkout experiences, monitor payment status and manage merchant operations from one secure workspace. A payment is confirmed only after trusted verification.</p>
-          <div class="hero-actions fade-in" style="animation-delay:0.5s">
-            <a href="/admin" class="btn btn-primary">Open 24/7 Pay console</a>
-            <a href="#features" class="btn btn-outline">Explore features</a>
-          </div>
-        </div>
-        <div class="hero-visual fade-in" style="animation-delay:0.6s">
-          <div class="geo-wrap">
-            <div class="geo-shape">
-              <div class="geo-node geo-node-1"></div>
-              <div class="geo-node geo-node-2"></div>
-              <div class="geo-grid"></div>
-            </div>
-          </div>
+  </header>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="pulse-dot"></span> THE 24/7 PAY EXPERIENCE</p>
+        <h1 id="hero-title">Payments should feel <span class="gradient-text">simple.</span> Even when the work behind them isn't.</h1>
+        <p class="hero-lead">Give customers an easy way to pay. Stay on top of orders, payment updates, and the details that matter — from one thoughtfully built workspace.</p>
+        <div class="hero-cta"><a class="btn btn-primary btn-big" href="/platform">Explore your workspace <span aria-hidden="true">↗</span></a><a class="btn btn-ghost btn-big" href="#how">See how it works <span aria-hidden="true">↓</span></a></div>
+        <div class="hero-under"><span class="under-icon" aria-hidden="true">◎</span><span>Made for UPI-first businesses. Designed for clarity at every step.</span></div>
+      </div>
+      <div class="hero-visual">
+        <div class="scene-backdrop"><canvas id="network-scene" aria-label="Decorative animated payment network" role="img"></canvas></div>
+        <div class="scene-label scene-label-a" aria-hidden="true"><span class="tiny-dot cyan"></span> PAYMENT STARTED</div>
+        <div class="scene-label scene-label-b" aria-hidden="true"><span class="tiny-dot violet"></span> STATUS UPDATED</div>
+        <div class="product-preview" aria-label="Illustrative payment journey, not a live transaction">
+          <div class="preview-head"><span class="preview-brand"><span class="preview-icon">↗</span> Order overview</span><span class="preview-demo">EXAMPLE FLOW</span></div>
+          <div class="preview-amount-label">What your customer sees</div>
+          <div class="preview-amount">₹500<span>.00</span></div>
+          <div class="preview-divider"></div>
+          <div class="preview-row"><span>Payment method</span><strong>UPI</strong></div>
+          <div class="preview-row"><span>Payee details</span><strong>Shown before paying</strong></div>
+          <div class="preview-steps"><div class="step-icon done">✓</div><div class="step-track"></div><div class="step-icon next">◎</div><div class="step-track pending"></div><div class="step-icon waiting">3</div></div>
+          <div class="preview-step-text"><span>Order created</span><span>Customer pays</span><span>Verified result</span></div>
+          <div class="preview-note"><span class="dot-green"></span> Payment status is confirmed by trusted evidence, not a button tap.</div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <div class="stats-bar fade-in" style="animation-delay:0.7s" aria-label="Platform capabilities">
-    <div class="stat-item"><span class="stat-value">UPI</span><span class="stat-label">Intent and QR</span></div>
-    <div class="stat-item"><span class="stat-value">API</span><span class="stat-label">Status and integrations</span></div>
-    <div class="stat-item"><span class="stat-value">24/7</span><span class="stat-label">Pay control panel</span></div>
-  </div>
-
-  <section id="features" class="features">
-    <div class="container">
-      <div class="fade-in" style="animation-delay:0.1s">
-        <h2 style="font-size:48px;margin-bottom:12px;">Built for the complete payment journey.</h2>
-        <p style="color:var(--text-muted);max-width:560px;">Use the 24/7 Pay checkout, verification and operational tools together.</p>
-      </div>
+    </section>
+    <section class="trust-strip" aria-label="Product principles">
+      <div class="wrap trust-content"><span>Built around the things that matter</span><div><b>Clear checkout</b><b>Reliable updates</b><b>Merchant control</b><b>Thoughtful security</b></div></div>
+    </section>
+    <section id="product" class="section wrap">
+      <div class="section-intro" data-reveal><p class="eyebrow">LESS CHASING. MORE CLARITY.</p><h2>One place to see the whole <span class="gradient-text">payment story.</span></h2><p>Customers want paying to be effortless. You need to know what happened afterwards. 24/7 Pay is built with both sides in mind.</p></div>
       <div class="feature-grid">
-        <div class="glass-card fade-in" style="animation-delay:0.2s">
-          <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-          <h3>UPI Intent Collect</h3>
-          <p>Open a compatible UPI application with payment details from an authorized checkout session.</p>
-        </div>
-        <div class="glass-card fade-in" style="animation-delay:0.3s">
-          <div class="feature-icon"><svg viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M3 9l9-3 9 3"/></svg></div>
-          <h3>Static &amp; Dynamic QR</h3>
-          <p>Let customers scan a UPI QR code or copy the configured payee VPA to complete payment.</p>
-        </div>
-        <div class="glass-card fade-in" style="animation-delay:0.4s">
-          <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/><path d="M20 4H9c-2.8 0-5.2 2.3-5.2 5.2v0"/></svg></div>
-          <h3>Payment Verification</h3>
-          <p>Keep orders pending until verified payment evidence is received through a trusted provider or bank integration.</p>
+        <article class="feature feature-main" data-reveal><div class="feature-icon icon-cyan">◇</div><h3>A checkout people can trust</h3><p>Simple payment details, a clear amount, and a familiar way to open their preferred UPI app. No unnecessary detours.</p><div class="feature-illustration" aria-hidden="true"><div class="mock-card"><span class="mock-overline">PAY WITH UPI</span><div class="mock-qr">▦</div><div class="mock-lines"><i></i><i></i><i></i></div></div><div class="mock-floating">↗ Open payment app</div></div></article>
+        <article class="feature" data-reveal><div class="feature-icon icon-violet">↯</div><h3>See what needs attention</h3><p>Follow payments as they move from waiting to verification. When something needs a closer look, it should be easy to spot.</p><div class="feature-footer"><span class="pill-state">Waiting</span><span class="pill-state active">Verifying</span><span class="pill-state confirmed">Confirmed</span></div></article>
+        <article class="feature" data-reveal><div class="feature-icon icon-mint">✦</div><h3>A better view of your business</h3><p>Bring orders, merchant settings, receiving accounts and payment history together — without jumping between disconnected tools.</p><div class="feature-footer feature-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></article>
+        <article class="feature" data-reveal><div class="feature-icon icon-cyan">⌁</div><h3>Connect it to your own product</h3><p>Use authenticated APIs and signed callbacks to keep your store, game or service in sync with payment events.</p><div class="feature-footer code-mini">order → payment → verified update</div></article>
+        <article class="feature" data-reveal><div class="feature-icon icon-violet">◎</div><h3>Know where the answer comes from</h3><p>A UPI app opening or someone entering a reference isn't proof of credit. We keep that distinction visible.</p><div class="feature-footer"><span class="evidence-mark">Independent confirmation required</span></div></article>
+      </div>
+    </section>
+    <section id="how" class="section dark-panel">
+      <div class="wrap">
+        <div class="section-intro" data-reveal><p class="eyebrow">FROM FIRST TAP TO FINAL ANSWER</p><h2>Every payment has a journey.<br><span class="gradient-text">Make it easier to follow.</span></h2><p>See what a typical payment experience looks like. This is a demonstration of the flow, not a real transaction.</p></div>
+        <div class="journey">
+          <div class="journey-picker" role="tablist" aria-label="Payment journey steps">
+            <button type="button" class="journey-tab selected" role="tab" aria-selected="true" data-step="0"><span class="journey-number">01</span><span><strong>Create an order</strong><small>Start with the amount</small></span></button>
+            <button type="button" class="journey-tab" role="tab" aria-selected="false" data-step="1"><span class="journey-number">02</span><span><strong>Let them pay</strong><small>QR or an UPI app</small></span></button>
+            <button type="button" class="journey-tab" role="tab" aria-selected="false" data-step="2"><span class="journey-number">03</span><span><strong>Follow the status</strong><small>No guesswork</small></span></button>
+            <button type="button" class="journey-tab" role="tab" aria-selected="false" data-step="3"><span class="journey-number">04</span><span><strong>Get the outcome</strong><small>Trusted confirmation</small></span></button>
+          </div>
+          <div class="journey-screen" aria-live="polite"><span class="screen-top">24/7 PAY / EXPERIENCE PREVIEW <span>● ● ●</span></span><div id="journey-graphic" class="journey-graphic"></div><p class="journey-kicker" id="journey-kicker">STEP 01 — CREATE</p><h3 id="journey-title">A payment starts with a clear request.</h3><p id="journey-body">Your business creates an order. The amount and recipient are set before a customer gets their checkout link.</p><div class="journey-progress"><span id="journey-progress" style="width:25%"></span></div></div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <section id="dashboard" class="dashboard">
-    <div class="container">
-      <div class="glass-card fade-in" style="max-width: 1050px; margin: 0 auto; padding: clamp(28px, 6vw, 64px);">
-        <div class="badge">THE REAL 24/7 PAY DASHBOARD</div>
-        <h2 style="font-size:clamp(32px,5vw,52px);line-height:1.12;margin:0 0 22px;">Your merchant operations belong behind a secure login.</h2>
-        <p style="color:var(--text-muted);font-size:18px;max-width:720px;margin-bottom:32px;">Manage merchants, payments, disputes and provider settings from the authenticated admin console. Financial totals and transaction histories are shown only from your actual connected data — not fabricated samples on a public landing page.</p>
-        <div class="feature-grid" style="gap:16px; margin-bottom:32px;">
-          <div class="stat-card" style="padding:22px;"><div class="label">Merchant workspace</div><div style="font-size:18px;font-weight:600;">Accounts and settings</div></div>
-          <div class="stat-card" style="padding:22px;"><div class="label">Payment activity</div><div style="font-size:18px;font-weight:600;">Real order statuses</div></div>
-          <div class="stat-card" style="padding:22px;"><div class="label">Verification</div><div style="font-size:18px;font-weight:600;">Authenticated evidence</div></div>
-        </div>
-        <a href="/admin" class="btn btn-primary">Enter admin console</a>
+    </section>
+    <section id="use-cases" class="section wrap">
+      <div class="section-intro" data-reveal><p class="eyebrow">FOR THE WAY YOU WORK</p><h2>Built to fit your business.<br>Not the other way around.</h2><p>Different businesses have different payment moments. The experience should feel familiar to your customers and useful to your team.</p></div>
+      <div class="solutions">
+        <article data-reveal><span class="solution-icon">✳</span><h3>Gaming & digital goods</h3><p>Connect a purchase to the correct order and player. Keep fulfillment tied to a verified payment result.</p><a href="/platform">Explore the workspace <span aria-hidden="true">↗</span></a></article>
+        <article data-reveal><span class="solution-icon">◈</span><h3>Online businesses</h3><p>Share payment links, keep checkout straightforward, and find the right order when a customer needs help.</p><a href="#how">See the customer journey <span aria-hidden="true">↗</span></a></article>
+        <article data-reveal><span class="solution-icon">⌘</span><h3>Teams with more to manage</h3><p>Keep your people, receiving accounts and payment operations organized in one clear view.</p><a href="/platform">Open your workspace <span aria-hidden="true">↗</span></a></article>
       </div>
-    </div>
-  </section>
+    </section>
+    <section id="developers" class="section wrap">
+      <div class="dev-panel" data-reveal>
+        <div class="dev-copy"><p class="eyebrow">MADE TO WORK WITH YOUR SYSTEM</p><h2>Built for the people who build.</h2><p>Connect 24/7 Pay to your application, follow every order, and know when a verified payment result is ready to act on.</p><div class="dev-benefits"><span>✓ Authenticated requests</span><span>✓ Signed event delivery</span><span>✓ Payment status tracking</span></div><a class="btn btn-primary" href="/platform">Open developer tools <span aria-hidden="true">↗</span></a></div>
+        <div class="dev-code" aria-label="Illustrative payment lifecycle, not executable code"><div class="code-head"><span class="lights"><b></b><b></b><b></b></span>PAYMENT LIFECYCLE<span>EXAMPLE</span></div><pre><code><span class="code-comment">// Your application creates an order</span>
+<span class="code-key">order</span>  <span class="code-arrow">→</span>  <span class="code-val">created</span>
 
-  <script>
-    (() => {
-      const toggle = document.getElementById('mobileToggle');
-      const nav = document.getElementById('siteNav');
-      function closeMenu() {
-        nav.classList.remove('open');
-        toggle.setAttribute('aria-expanded', 'false');
-      }
-      toggle.addEventListener('click', () => {
-        const open = nav.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', String(open));
-      });
-      nav.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMenu));
-      document.addEventListener('click', e => {
-        if (!nav.contains(e.target) && !toggle.contains(e.target)) closeMenu();
-      });
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        const style = document.createElement('style');
-        style.textContent = '.fade-in{animation:none!important;opacity:1!important;transform:none!important;}';
-        document.head.appendChild(style);
-      }
-    })();
-  </script>
+<span class="code-comment">// Customer opens their UPI app</span>
+<span class="code-key">status</span> <span class="code-arrow">→</span>  <span class="code-val">awaiting verification</span>
+
+<span class="code-comment">// Trusted confirmation arrives</span>
+<span class="code-key">status</span> <span class="code-arrow">→</span>  <span class="code-success">confirmed</span>
+
+<span class="code-comment">// Your backend receives an event</span>
+<span class="code-key">event</span>  <span class="code-arrow">→</span>  <span class="code-success">signed callback ✓</span></code></pre></div>
+      </div>
+    </section>
+    <section class="section wrap security-section" id="security">
+      <div data-reveal><p class="eyebrow">TRUST IS IN THE DETAILS</p><h2>Built to be clear when it matters most.</h2><p>Payments deserve more than a reassuring icon. They need clear amounts, meaningful status updates, sensible access controls, and a record of what happened.</p></div>
+      <div class="security-list" data-reveal><div><span>01</span><strong>Never confuse an app return with money received.</strong><p>Confirmation depends on the trusted sources configured for the merchant.</p></div><div><span>02</span><strong>Keep each business in its own workspace.</strong><p>Account permissions and API credentials determine access to private operations.</p></div><div><span>03</span><strong>Handle questions with context.</strong><p>Payment history and operational records help teams investigate unusual outcomes.</p></div></div>
+    </section>
+    <section id="questions" class="section wrap faq-section"><div class="section-intro"><p class="eyebrow">GOOD QUESTIONS, CLEAR ANSWERS</p><h2>Before you get started.</h2></div><div class="faq-list">
+      <details><summary>Can customers use their usual UPI apps?<span>+</span></summary><p>The checkout supports UPI payment instructions and app handoff on compatible devices. Available apps and success of the handoff depend on the device and UPI application.</p></details>
+      <details><summary>When does a payment become confirmed?<span>+</span></summary><p>Not when a customer taps a button or enters a UTR. Confirmation requires an authorized, trusted payment source and the matching checks for the original order.</p></details>
+      <details><summary>Can I connect this with my website or game?<span>+</span></summary><p>The backend includes authenticated payment APIs and signed callbacks. Your integration still needs merchant credentials, configuration and end-to-end testing.</p></details>
+      <details><summary>Is every feature available immediately?<span>+</span></summary><p>Some features depend on your provider, receiving account and hosting configuration. Your workspace shows the information available for your account, while unconfigured services remain clearly identified.</p></details>
+      <details><summary>Where do I see my payments and account settings?<span>+</span></summary><p>Use the merchant workspace to see payment history, operational updates and your permitted account settings. Platform operators have their own permission-based view.</p></details>
+    </div></section>
+    <section class="final-cta wrap" data-reveal><div class="cta-inner"><div class="cta-orb" aria-hidden="true"></div><p class="eyebrow">READY TO SEE THE BIGGER PICTURE?</p><h2>A clearer day starts with<br> a clearer way to pay.</h2><p>Bring your payment operations into focus. Explore your workspace and take the next step when your configuration is ready.</p><a href="/platform" class="btn btn-white btn-big">Go to your workspace <span aria-hidden="true">↗</span></a></div></section>
+  </main>
+  <footer class="footer"><div class="wrap footer-wrap"><div><a class="brand" href="/"><span class="brand-icon" aria-hidden="true"><span></span><span></span></span><span>24/7 <em>PAY</em></span></a><p>More clarity in every payment.</p></div><div class="footer-links"><a href="#product">Product</a><a href="#how">How it works</a><a href="#security">Security</a><a href="/platform">Workspace</a><a href="/admin">Legacy admin</a></div><div class="footer-bottom">© <span id="year">2026</span> 24/7 Pay. The services available depend on your configured account and payment providers.</div></div></footer>
 </body>
 </html>
