@@ -41,6 +41,8 @@ jobs:
         run: npm ci --install-links
       - name: Check active merchant workspace syntax
         run: node --check public/assets/247-portal.js
+      - name: Premium workspace integration contract checks
+        run: node --test scripts/premium-workspace-contract.test.js
       - name: Validate runtime JavaScript
         run: npm run build
       - name: Typecheck
