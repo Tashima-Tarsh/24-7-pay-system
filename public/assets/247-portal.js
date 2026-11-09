@@ -137,7 +137,8 @@ async function overview(){
  if(!result.length){const c=panel('Welcome','Your account is ready.');add(c,notice('Choose a section to review the tools available to this role.'));result.push(c);}
  return result;
 }
-async function payments(){const d=await api('/transactions?limit=50'),rows=d.items||[],c=panel('Payment history','Select a payment to see its recorded events and delivery history.');const search=el('input');search.type='search';search.placeholder='Search payments';search.setAttribute('aria-label','Search payments');const area=el('div');const paint=()=>area.replaceChildren(table(['Order','Amount','Method','Status','Created'],rows.filter(x=>(String(x.order_id||x.id)+' '+x.status+' '+x.method).toLowerCase().includes(search.value.toLowerCase())),x=>[el('span','mono',x.order_id||x.id),currency(x.amount_paise),x.method,status(x.status),date(x.created_at)],x=>transaction(x.id)));search.addEventListener('input',paint);paint();add(c,add(el('div','toolbar'),search),area);
+async function payments(){const scope=user.platform&&selectedMerchantId?'&merchantId='+encodeURIComponent(selectedMerchantId):'';
+ const d=await api('/transactions?limit=50'+scope),rows=d.items||[],c=panel('Payment history','Select a payment to see its recorded events and delivery history.');const search=el('input');search.type='search';search.placeholder='Search payments';search.setAttribute('aria-label','Search payments');const area=el('div');const paint=()=>area.replaceChildren(table(['Order','Amount','Method','Status','Created'],rows.filter(x=>(String(x.order_id||x.id)+' '+x.status+' '+x.method).toLowerCase().includes(search.value.toLowerCase())),x=>[el('span','mono',x.order_id||x.id),currency(x.amount_paise),x.method,status(x.status),date(x.created_at)],x=>transaction(x.id)));search.addEventListener('input',paint);paint();add(c,add(el('div','toolbar'),search),area);
 const result=[c];if(!user.platform&&allowed('payments.create')){const p=panel('Create a payment request','This uses your real payment configuration, not a demo.');const form=el('form','form-grid'),order=field('Order reference','text','orderId',{required:true,pattern:'[-A-Za-z0-9_]{1,120}',maxlength:120}),amount=field('Amount in rupees','number','amount',{required:true,min:0.01,step:0.01});order.control.value='ORDER-'+Date.now();const submit=el('button','primary-button','Create payment');submit.type='submit';const actions=add(el('div','form-actions'),submit);add(form,order.container,amount.container,actions);form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;try{const r=await api('/payments','POST',{orderId:order.control.value,amount:amount.control.value,currency:'INR'},{'Idempotency-Key':crypto.randomUUID()});const body=info([['Order',r.orderId],['Amount',r.amount],['Status',r.status]]);if(r.checkoutUrl){const u=new URL(r.checkoutUrl,location.origin);if(u.origin===location.origin)add(body,add(el('p'),(()=>{const a=el('a','card-link','Open customer checkout');a.href=u.pathname;return a;})()));}detail('Payment request',body);void render('payments');}catch(err){detail('Payment not created',notice(err.message,true));}finally{submit.disabled=false;}});add(p,form);result.unshift(p);}return result;}
 async function transaction(id){try{const r=await api('/transactions/'+encodeURIComponent(id)),x=r.transaction||{},box=el('div');add(box,info([['Order',x.order_id],['Payment ID',x.id],['Amount',currency(x.amount_paise)],['Method',x.method],['Status',x.status],['Created',date(x.created_at)]]));const c=panel('Order timeline','Recorded events and delivery updates');add(c,table(['Event','When'],r.timeline||[],e=>[e.event_type||e.action||e.outcome,date(e.created_at)]));add(box,c);detail('Payment details',box);}catch(err){detail('Payment details',notice(err.message,true));}}
 async function merchants(){const r=await api('/merchants?limit=50'),c=panel('Merchant directory','Visible only to authorized platform operators.');add(c,table(['Business','Status','Merchant ID','Created'],r.merchants||[],x=>[x.profile?.businessName||x.merchant_id,status(x.status),el('span','mono',x.merchant_id),date(x.created_at)],async x=>{try{detail('Merchant details',await api('/merchants/'+encodeURIComponent(x.merchant_id)));}catch(e){detail('Merchant',notice(e.message,true));}}));add(c,notice('Showing '+count((r.merchants||[]).length)+' of '+count(r.total)+' merchants.'));
@@ -370,6 +371,32 @@ async function developers(){
    r=>[r.method,el('span','mono',r.path),status(r.status),String(r.duration_ms)+' ms',date(r.created_at)]));
  }else add(usage,notice(usageResult.reason.message,true));
  result.push(usage);
+ const setup=panel('Merchant API integration','Use these server-to-server tools to create payment sessions and receive signed status callbacks.');
+ const baseUrl=location.origin;
+ add(setup,info([['API origin',baseUrl],['Payment creation','POST /api/v1/payments'],['Payment status','GET /api/v1/payments/:id'],
+ ['Callback authentication','Verify raw-body HMAC and deduplicate event IDs'],['Public documentation','docs/developers/WEBHOOK_INTEGRATION.md']]));
+ const docs=el('a','card-link','Read webhook integration guide on GitHub');
+ docs.href='https://github.com/Tashima-Tarsh/24-7-pay-system/blob/main/docs/developers/WEBHOOK_INTEGRATION.md';
+ docs.target='_blank';docs.rel='noopener noreferrer';add(setup,docs);
+ if(allowed('credentials.manage')&&allowed('webhooks.manage')){
+  const packBtn=button('Generate integration pack',async()=>{
+   if(!confirm('Create a new production API credential and show integration secrets once? The merchant must be fully configured.'))return;
+   try{
+    const pack=await api('/integration-pack','POST',{label:'Business integration'});
+    const body=el('div'),copy=button('Copy integration JSON',async()=>{
+     try{await navigator.clipboard.writeText(JSON.stringify(pack,null,2));copy.textContent='Copied';}
+     catch{copy.textContent='Copy unavailable';}
+    });
+    const secretInfo=el('pre','mono',JSON.stringify(pack,null,2));
+    add(body,notice('This information contains credentials. Save it privately now; the API secret will not be displayed again.'),
+      secretInfo,copy);
+    detail('One-time integration pack',body);
+    void render('developers');
+   }catch(err){detail('Integration pack unavailable',notice(err.message,true));}
+  },'primary-button');
+  add(setup,packBtn);
+ }
+ result.push(setup);
  return result;
 }
 async function connections(){
@@ -542,23 +569,43 @@ async function team(){
  add(p,table(['Member','Role','Status'],data.users||[],u=>[u.email,u.role,status(u.active?'ACTIVE':'INACTIVE')]));
  return[p];
 }
-async function settings(){if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
- const data=await api('/settings'),p=panel('Business settings','These settings appear in your account and may be used by your payment integrations.');
- const form=el('form','form-grid'),name=field('Business name','text','businessName',{required:true,minlength:2,maxlength:150}),url=field('Callback URL','url','webhookUrl',{placeholder:'https://your-business.example/payments/webhook'});
- name.control.value=data.businessName||'';url.control.value=data.webhookUrl||'';
- const save=el('button','primary-button','Save business settings');save.type='submit';
- add(form,name.container,url.container,add(el('div','form-actions'),save));
+async function settings(){
+ if(user.platform&&!selectedMerchantId)return[merchantSelectionCard()];
+ const data=await api('/settings'),
+   main=panel('Business profile and callback configuration','The details merchants see, and the HTTPS endpoint that receives signed payment events.');
+ const form=el('form','form-grid'),
+  name=field('Business name','text','businessName',{required:true,minlength:2,maxlength:150}),
+  url=field('Payment webhook URL (HTTPS)','url','webhookUrl',{placeholder:'https://your-business.example/webhooks/payments'}),
+  zone=field('Time zone','text','timeZone',{required:true,placeholder:'Asia/Kolkata'}),
+  appName=field('Customer-facing app name','text','appName',{maxlength:120}),
+  logoUrl=field('Logo image URL (HTTPS)','url','logoUrl',{placeholder:'https://your-business.example/logo.svg'}),
+  brand=field('Brand color (#RRGGBB)','text','primaryColor',{pattern:'#[0-9a-fA-F]{6}',placeholder:'#183D30'}),
+  submit=el('button','primary-button','Save business settings');submit.type='submit';
+ name.control.value=data.businessName||'';
+ url.control.value=data.webhookUrl||'';
+ zone.control.value=data.timeZone||'Asia/Kolkata';
+ appName.control.value=data.branding?.appName||'';
+ logoUrl.control.value=data.branding?.logoUrl||'';
+ brand.control.value=data.branding?.primaryColor||'';
+ add(form,name.container,url.container,zone.container,appName.container,logoUrl.container,brand.container,
+  notice('A callback URL must be publicly reachable over HTTPS. Setting this address does not prove it receives events; check Callback Deliveries after an actual provider-confirmed payment.'),
+  add(el('div','form-actions'),submit));
  form.addEventListener('submit',async e=>{
-  e.preventDefault();save.disabled=true;
-  try{const updated=await api('/settings','POST',{businessName:name.control.value,webhookUrl:url.control.value});
-   detail('Settings updated',info([['Business name',updated.businessName],['Callback URL',updated.webhookUrl||'Not configured']]));
-  }catch(err){detail('Settings not saved',notice(err.message,true));}
-  finally{save.disabled=false;}
+  e.preventDefault();submit.disabled=true;
+  try{
+   const payload={businessName:name.control.value,webhookUrl:url.control.value,timeZone:zone.control.value,
+    branding:{appName:appName.control.value,logoUrl:logoUrl.control.value,primaryColor:brand.control.value}};
+   const result=await api('/settings','POST',payload);
+   detail('Business settings saved',info([['Business',result.businessName],['Webhook destination',result.webhookUrl||'Not configured'],['Time zone',result.timeZone]]));
+   void render('settings');
+  }catch(err){detail('Business settings not saved',notice(err.message,true));}
+  finally{submit.disabled=false;}
  });
- add(p,form);
- const b=panel('Workspace identity','Your changes are recorded by the platform.');
- add(b,info([['Merchant ID',data.merchantId],['Email',data.contactEmail],['Time zone',data.timeZone]]));
- return[p,b];
+ add(main,form);
+ const details=panel('Account ownership','Merchant-scope access is enforced on the backend. Your business cannot access another business’s payment records.');
+ add(details,info([['Merchant ID',data.merchantId],['Contact email',data.contactEmail],['Contact phone',data.contactPhone],['Webhook URL',data.webhookUrl||'Not configured']]));
+ const link=button('Check callback deliveries',()=>select('callbacks'));add(details,link);
+ return[main,details];
 }
 async function invitationEmail(){
  if(user?.role!=='SUPER_ADMIN')return[panel('Access denied','Only the platform owner can connect an invitation email account.')];
