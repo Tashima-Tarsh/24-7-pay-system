@@ -78,6 +78,7 @@ const testFiles = [
   'scripts/frontend-contract.test.js',
   'scripts/production-observer-boundary.test.js',
   'scripts/sse-broadcaster.test.js',
+  'scripts/payment-creation-auth.test.js',
   'scripts/clean-transaction-history.test.js',
   'scripts/production-audit-probes.test.js',
   'scripts/check-merchant-onboarding.test.js'

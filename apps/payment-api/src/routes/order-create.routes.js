@@ -1,4 +1,5 @@
 import { HttpServer } from '../server.js';
+import { isAdminRequest } from '../auth-guard.js';
 import {
   PaymentStatus,
   safeEqual
@@ -52,6 +53,20 @@ export function registerOrderCreateRoutes(server, ctx) {
           error: 'Invalid merchant_id',
           code: 'INVALID_MERCHANT'
         });
+      }
+
+      // Creating a signed checkout token must require the owning merchant's
+      // server-side credential; a public browser cannot mint arbitrary orders.
+      if (process.env.NODE_ENV === 'production' && !isAdminRequest(req)) {
+        const mid = String(req.headers['x-merchant-id'] || '');
+        const key = String(req.headers['x-merchant-key'] || '');
+        if (mid !== String(merchant.id) || !key || !merchant.webhookSecret ||
+            !safeEqual(key, merchant.webhookSecret)) {
+          return HttpServer.json(res, 401, {
+            error: 'Merchant backend authentication required.',
+            code: 'AUTH_REQUIRED'
+          });
+        }
       }
 
         // Deliverable 7: Enforce merchant tier limits

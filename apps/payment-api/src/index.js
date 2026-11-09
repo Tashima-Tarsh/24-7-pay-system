@@ -577,8 +577,14 @@ export function createPaymentApp(customDb = null, options = {}) {
   server.use((req,res,pathname)=>{
     if(req.method==='POST'&&pathname==='/api/v1/payments'&&!isAdminRequest(req)){
       const mid=req.headers['x-merchant-id'];
-      if(!mid)return false;
-      const m=mid&&merchantRepo.findById(mid);
+      if(!mid){
+        // Test fixtures may use the historical demo merchant. Public production
+        // callers must identify and authenticate their own merchant backend.
+        if(process.env.NODE_ENV==='test')return false;
+        HttpServer.json(res,401,{error:'Merchant credentials required to create payments.',code:'AUTH_REQUIRED'});
+        return true;
+      }
+      const m=merchantRepo.findById(mid);
       if(!m||!safeEqual(String(req.headers['x-merchant-key']||''),m.webhookSecret||'')){HttpServer.json(res,401,{error:'Authenticate the merchant backend before creating a payment.',code:'AUTH_REQUIRED'});return true;}
       try{platformPayments.requireActive(mid);}catch(e){HttpServer.json(res,e.statusCode||403,{error:e.message,code:e.code});return true;}
     }
