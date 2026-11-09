@@ -199,3 +199,18 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 .auth-right-panel{overflow-y:auto}
 .saas-merchant-form select{min-height:47px;border:1px solid #d8e3d9;border-radius:12px;padding:11px 13px;background:white;font:inherit;min-width:0}
 @media(prefers-reduced-motion:reduce){.auth-mode-tabs button{transition:none!important}}
+
+/* Minimal merchant-payment readiness companion: preserve the existing studio UI. */
+.payment-readiness{display:grid;gap:13px;margin:8px 0 24px;padding:18px 20px;border:1px solid #dbe8d9;border-radius:16px;background:#f6faf4;color:#284a35}
+.payment-readiness-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.payment-readiness-header strong{font-size:12px;font-weight:750;letter-spacing:.015em}
+.payment-readiness-header button,.payment-readiness-issue button{padding:7px 11px;border:1px solid #bed8c3;background:#fff;border-radius:999px;color:#24613d;font-size:11px;font-weight:750;cursor:pointer}
+.payment-readiness-header button:disabled{opacity:.55;cursor:progress}
+.payment-readiness-ready{font-size:12px;line-height:1.7;color:#286642}
+.payment-readiness-issues{display:grid;gap:10px}
+.payment-readiness-issue{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;background:#fff;border:1px solid #efdfcb;border-radius:12px;font-size:12px;line-height:1.6;color:#6b5235;flex-wrap:wrap}
+.payment-readiness-issue svg{flex:none;margin-top:2px}
+.payment-readiness-issue span{flex:1;min-width:160px}
+.payment-readiness-issue button{white-space:nowrap;align-self:center}
+.payment-readiness :focus-visible{outline:3px solid #91d8a8;outline-offset:2px}
+@media(max-width:600px){.payment-readiness{padding:14px}.payment-readiness-issue{flex-direction:row}.payment-readiness-issue button{width:100%;min-height:40px}}
