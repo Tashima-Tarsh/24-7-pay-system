@@ -94,7 +94,7 @@ function resolveRoute(pathname) {
     return 'api';
   }
   if (pathname === '/') {
-    return 'checkout';
+    return 'landing';
   }
   if (pathname === '/checkout' || pathname.startsWith('/checkout/')) {
     return 'checkout';
@@ -134,6 +134,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Page routes - serve HTML
+  if (route === 'landing') {
+    const html = await readFilePromise(new URL('./landing.html', PUBLIC_DIR)).catch(() => null);
+    if (html) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('landing.html not found');
+    }
+    return;
+  }
+
   if (route === 'checkout') {
     const html = await readFilePromise(new URL('./checkout.html', PUBLIC_DIR)).catch(() => null);
     if (html) {
