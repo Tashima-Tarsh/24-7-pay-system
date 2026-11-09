@@ -22,7 +22,7 @@ if(values.test){
   runMigrations(db);
   const service=new NotificationDeliveryService(db);
   try{
-    const statuses=service.enqueue({sessionId:'owner-test-'+crypto.randomUUID(),emailSubject:'Sanbook Pay notification test',emailHtml:'<p>This is an owner-requested notification test. No payment occurred.</p>',smsMessage:'Sanbook Pay notification test. No payment occurred.'},{email:values.email,phone:values.phone});
+    const statuses=service.enqueue({sessionId:'owner-test-'+crypto.randomUUID(),emailSubject:'24/7 Pay notification test',emailHtml:'<p>This is an owner-requested notification test. No payment occurred.</p>',smsMessage:'24/7 Pay notification test. No payment occurred.'},{email:values.email,phone:values.phone});
     console.log('Test channels:',JSON.stringify(statuses));await service.processPending();
     const results=db.query('SELECT channel,status,last_error FROM notification_deliveries');console.log(JSON.stringify(results,null,2));
     const requested=[...(c.topic?['push']:[]),...(values.email!==undefined?['email']:[]),...(values.phone!==undefined?['sms']:[])];
