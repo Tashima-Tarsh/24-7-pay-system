@@ -705,6 +705,42 @@ export function registerCheckoutRoutes(server, ctx) {
     HttpServer.json(res, 200, health);
   });
 
+  // GET /api/v1/checkout/:id/events — SSE stream for real-time checkout status
+  server.get('/api/v1/checkout/:id/events', async (req, res, params) => {
+    const session = ctx.sessionRepo.findById(params.id);
+    if (!session) {
+      return HttpServer.json(res, 404, { error: 'Session not found' });
+    }
+
+    // Initialize SSE connection (topic = session UUID)
+    server.initSse(session.id, res);
+
+    // Send current state immediately so the client renders without waiting
+    const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa || session.payeeVpa;
+    const upiUri = session.status === PaymentStatus.ACTIVE && payeeVpa
+      ? buildUpiUri({ payeeVpa, payeeName: session.metadata?.receivingAccountSnapshot?.payeeName || 'Merchant', mcc: '5411' }, session.amountPaise, session.orderId, `Payment ${session.orderId}`, `/checkout/${session.id}`).uri
+      : null;
+
+    const currentState = {
+      status: session.status,
+      amount: toRupeesString(session.amountPaise),
+      orderId: session.orderId,
+      upiUri,
+      payeeVpa,
+      payeeName: session.metadata?.receivingAccountSnapshot?.payeeName || 'Merchant Store',
+      timeRemainingSeconds: session.status === PaymentStatus.ACTIVE && session.expiresAt
+        ? Math.max(0, Math.ceil((session.expiresAt.getTime() - Date.now()) / 1000))
+        : 0
+    };
+
+    if (session.status === PaymentStatus.SUCCESS) {
+      currentState.utr = session.metadata?.verifiedUtr || null;
+      currentState.verifiedAt = session.metadata?.verifiedAt || null;
+    }
+
+    res.write(`event: initial_state\ndata: ${JSON.stringify(currentState)}\n\n`);
+  });
+
   // GET /api/v1/checkout/:id/diagnostics — payer-safe timeline for a single checkout.
   // This records what the browser and observers actually reported. It does not claim
   // that a UPI app launch or browser return is proof that money was settled.

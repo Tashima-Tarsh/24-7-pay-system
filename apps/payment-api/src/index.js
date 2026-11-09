@@ -74,6 +74,7 @@ import {
   VpaRotationGuard
 } from '@youpi/core';
 import { HttpServer } from './server.js';
+import { PaymentGateway } from './server.js';
 import { authGuard, isAdminRequest } from './auth-guard.js';
 import { registerPaymentRoutes } from './routes/payments.routes.js';
 import { registerCheckoutRoutes } from './routes/checkout.routes.js';
@@ -553,7 +554,8 @@ export function createPaymentApp(customDb = null, options = {}) {
     connectionHealthEventRepo: connectionHealthEventRepository,
     adminAuditEventRepo: adminAuditEventRepository,
     callbackOutboxRepo: callbackOutboxRepository,
-    callbackDeliveryAttemptRepo: callbackDeliveryAttemptRepository
+    callbackDeliveryAttemptRepo: callbackDeliveryAttemptRepository,
+    httpServer: server
   };
 
   // Smart Routing Engine (created after context is available)
@@ -640,7 +642,12 @@ registerHyperswitchRoutes(server, context);
   registerProviderConnectionsRoutes(server, context);
   registerAcceptanceRulesRoutes(server, context);
 
-  function destroy() {
+  // Initialize PaymentGateway with WebSocket listener for UPI signals (port 6101)
+const paymentGateway = new PaymentGateway(context);
+context.paymentGateway = paymentGateway;
+paymentGateway.initWebSocketListener(Number(process.env.UPI_WS_PORT || 6101));
+
+function destroy() {
     notificationDeliveryService.stop();
     clearInterval(webhookRetryTimer);
     webhookEngine.stop();providerWebhookEngine.stop();
@@ -648,6 +655,10 @@ registerHyperswitchRoutes(server, context);
     timingEngine.destroy();
     if (typeof attributionEngine.destroy === 'function') {
       attributionEngine.destroy();
+    }
+    // Close WebSocket listener
+    if (paymentGateway && paymentGateway.wss) {
+      try { paymentGateway.wss.close(); } catch {}
     }
     // Dynamo Pay services shutdown
     dynamoQueue.disconnect().catch(() => {});

@@ -366,6 +366,7 @@
 
       let pollInterval = null;
       let isTerminal = false;
+      let eventSource = null;
 
       const $ = (id) => document.getElementById(id);
 
@@ -446,7 +447,7 @@
         const statusText = $('status-text');
         statusBadge.className = 'status-badge';
         const pulse = statusBadge.querySelector('.pulse-dot');
-        
+
         isTerminal = data.isTerminal === true;
 
         switch (data.status) {
@@ -473,6 +474,7 @@
               $('success-utr').textContent = data.utr;
             }
             stopPolling();
+            if (eventSource) { eventSource.close(); eventSource = null; }
             return;
           case 'FAILED':
             statusBadge.classList.add('status-failed');
@@ -482,18 +484,21 @@
               document.getElementById('failure-reason').textContent = data.cancelledReason;
             }
             stopPolling();
+            if (eventSource) { eventSource.close(); eventSource = null; }
             return;
           case 'EXPIRED':
             statusBadge.classList.add('status-expired');
             statusText.textContent = 'Expired';
             showState('expired');
             stopPolling();
+            if (eventSource) { eventSource.close(); eventSource = null; }
             return;
           case 'CANCELLED':
             statusBadge.classList.add('status-failed');
             statusText.textContent = 'Cancelled';
             showState('failed');
             stopPolling();
+            if (eventSource) { eventSource.close(); eventSource = null; }
             return;
           case 'BLOCKED':
             statusBadge.classList.add('status-blocked');
@@ -501,6 +506,7 @@
             showState('failed');
             document.getElementById('failure-reason').textContent = 'This session has been blocked due to suspicious activity.';
             stopPolling();
+            if (eventSource) { eventSource.close(); eventSource = null; }
             return;
           default:
             statusBadge.classList.add('status-loading');
@@ -559,20 +565,68 @@
         }
       }
 
+      function connectSse() {
+        const sseUrl = `/api/v1/checkout/${encodeURIComponent(orderId)}/events`;
+        eventSource = new EventSource(sseUrl);
+
+        eventSource.addEventListener('initial_state', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            renderState(data);
+          } catch (err) {
+            console.error('SSE initial_state parse error:', err);
+          }
+        });
+
+        eventSource.addEventListener('status_change', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            renderState(data);
+          } catch (err) {
+            console.error('SSE status_change parse error:', err);
+          }
+        });
+
+        eventSource.addEventListener('connected', (e) => {
+          console.log('[SSE] Connected to checkout stream');
+        });
+
+        eventSource.onerror = (err) => {
+          console.error('[SSE] Connection error, falling back to polling:', err);
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          startPolling();
+        };
+      }
+
+      function startPolling() {
+        stopPolling();
+        poll();
+        pollInterval = setInterval(poll, 3000);
+      }
+
       async function poll() {
         const data = await fetchState();
         if (data) {
           renderState(data);
           if (data.isTerminal === true) {
             stopPolling();
+            if (eventSource) { eventSource.close(); eventSource = null; }
           }
         }
       }
 
       // Initialize
       showState('loading');
-      poll();
-      pollInterval = setInterval(poll, 3000);
+      connectSse();
+      // Start polling as fallback after 5s if SSE hasn't connected
+      setTimeout(() => {
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+          startPolling();
+        }
+      }, 5000);
 
       // Copy VPA
       $('copy-vpa-btn').addEventListener('click', async () => {

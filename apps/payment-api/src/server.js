@@ -1,7 +1,8 @@
 import http from 'node:http';
 import { URL } from 'node:url';
-import { createLogger, LEVELS, getInternalServiceToken, safeEqual } from '@youpi/common';
+import { createLogger, LEVELS, getInternalServiceToken, safeEqual, PaymentStatus } from '@youpi/common';
 import { isIP } from 'node:net';
+import { WebSocketServer } from 'ws';
 
 export function resolveClientIp(req){
   const remote=(req.socket?.remoteAddress||'unknown').replace(/^::ffff:/,'');
@@ -352,5 +353,224 @@ export class HttpServer {
       // Not found
       HttpServer.json(res, 404, { error: `Route not found: ${method} ${pathname}` });
     });
+  }
+}
+
+/**
+ * PaymentGateway bridges UPI listener WebSocket signals to checkout sessions via SSE.
+ * Instantiated with the payment API context (repos, ledger, webhook engine).
+ */
+export class PaymentGateway {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.sseClients = new Map(); // orderId -> Set<response>
+    this.wss = null;
+    this.db = ctx.db;
+    this.sessionRepo = ctx.sessionRepo;
+    this.ledger = ctx.ledger;
+    this.webhookService = ctx.webhookService || ctx.webhookEngine;
+    this.httpServer = ctx.httpServer; // HttpServer instance for delegating SSE broadcasts
+  }
+
+  /**
+   * Initialize WebSocket server for UPI listener on port 6101.
+   */
+  initWebSocketListener(port = 6101) {
+    this.wss = new WebSocketServer({ port });
+
+    this.wss.on('connection', (ws) => {
+      console.log('[WS] UPI listener connected');
+
+      ws.on('message', async (data) => {
+        try {
+          const signal = JSON.parse(data.toString());
+          console.log('[WS] Received payment signal:', signal);
+          await this.handlePaymentSignal(signal);
+        } catch (err) {
+          console.error('[WS] Invalid message:', err);
+        }
+      });
+
+      ws.on('close', () => {
+        console.log('[WS] UPI listener disconnected');
+      });
+    });
+
+    this.wss.on('error', (err) => {
+      console.error('[WS] WebSocket server error:', err.message);
+    });
+
+    console.log(`[WS] WebSocket listener on port ${port}`);
+  }
+
+  /**
+   * Handle payment signal from UPI listener.
+   * Signal format: { orderId, utr, amount, payerVpa, status, timestamp }
+   */
+  async handlePaymentSignal(signal) {
+    const { orderId, utr, amount, payerVpa, status } = signal;
+
+    if (status !== 'SUCCESS') {
+      console.log(`[Payment] Ignoring non-success signal for ${orderId}`);
+      return;
+    }
+
+    // Find the checkout session by orderId (scan across all merchants)
+    const row = this.db.queryOne(
+      'SELECT id, merchant_id, amount_paise, status FROM payment_sessions WHERE order_id = ? AND status != ? LIMIT 1',
+      [orderId, PaymentStatus.SUCCESS]
+    );
+    if (!row) {
+      console.error(`[Payment] No session found for orderId: ${orderId}`);
+      return;
+    }
+
+    const sessionId = row.id;
+    const session = this.sessionRepo.findById(sessionId);
+    if (!session) {
+      console.error(`[Payment] Session not found in repo: ${sessionId}`);
+      return;
+    }
+
+    // Verify amount matches (amount_paise is stored as BigInt in SQLite)
+    const expectedAmount = BigInt(session.amountPaise);
+    const signalAmount = BigInt(amount);
+    if (expectedAmount !== signalAmount) {
+      console.error(`[Payment] Amount mismatch: expected ${expectedAmount}, got ${signalAmount}`);
+      return;
+    }
+
+    // === MARK AS SUCCESS ===
+    const now = new Date();
+    session.status = PaymentStatus.SUCCESS;
+    session.completedAt = now;
+    session.metadata = {
+      ...(session.metadata || {}),
+      verifiedUtr: utr,
+      payerVpa,
+      verifiedAt: now.toISOString(),
+      verificationMethod: 'UPI_LISTENER'
+    };
+
+    // Persist to DB
+    try {
+      this.db.execute(`
+        UPDATE payment_sessions
+        SET status = ?, completed_at = ?, reported_utr = ?, payer_name = ?, payer_vpa = ?,
+            metadata = ?, updated_at = ?
+        WHERE id = ?
+      `, [
+        PaymentStatus.SUCCESS,
+        now.toISOString(),
+        utr || null,
+        payerVpa || null,
+        payerVpa || null,
+        JSON.stringify(session.metadata),
+        now.toISOString(),
+        sessionId
+      ]);
+    } catch (err) {
+      console.error('[Payment] DB update error:', err.message);
+    }
+
+    // === POST TO LEDGER ===
+    this.broadcastSse(sessionId, 'status_change', {
+      status: PaymentStatus.SUCCESS,
+      utr,
+      payerVpa,
+      verifiedAt: now.toISOString(),
+      orderId: session.orderId
+    });
+
+    // === FIRE WEBHOOK TO MERCHANT ===
+    const webhookSvc = this.webhookService || this.ctx.webhookEngine;
+    if (webhookSvc && session.webhookUrl) {
+      try {
+        await webhookSvc.send(session.merchantId, {
+          event: 'PAYMENT_SUCCESS',
+          orderId: session.orderId,
+          paymentId: sessionId,
+          utr,
+          payerVpa,
+          amount: this.ctx.sessionRepo ? this._toRupees(session.amountPaise) : String(session.amountPaise),
+          amountPaise: String(session.amountPaise),
+          currency: session.currency,
+          verifiedAt: now.toISOString(),
+          verificationMethod: 'UPI_LISTENER'
+        });
+      } catch (err) {
+        console.error('[Payment] Webhook send error:', err.message);
+      }
+    }
+
+    console.log(`[Payment] ✅ Order ${orderId} marked SUCCESS (UTR: ${utr})`);
+  }
+
+  _toRupees(paise) {
+    const p = BigInt(paise);
+    const rupees = p / 100n;
+    const remainder = p % 100n;
+    return `₹${rupees}.${remainder.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * SSE endpoint for checkout pages - topic is the session UUID (id).
+   */
+  initSse(orderId, res) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+
+    res.write('event: connected\ndata: {"status":"connected"}\n\n');
+
+    if (!this.sseClients.has(orderId)) {
+      this.sseClients.set(orderId, new Set());
+    }
+    this.sseClients.get(orderId).add(res);
+
+    // Keepalive ping every 15s
+    const pingInterval = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        clearInterval(pingInterval);
+      }
+    }, 15000);
+
+    res.on('close', () => {
+      clearInterval(pingInterval);
+      const clients = this.sseClients.get(orderId);
+      if (clients) {
+        clients.delete(res);
+        if (clients.size === 0) {
+          this.sseClients.delete(orderId);
+        }
+      }
+    });
+  }
+
+  /**
+   * Broadcast to all SSE clients listening to an order (session UUID).
+   */
+  broadcastSse(orderId, event, data) {
+    // Also delegate to HttpServer's SSE clients (used by eventEmitter handlers, etc.)
+    if (this.httpServer && typeof this.httpServer.broadcastSse === 'function') {
+      this.httpServer.broadcastSse(orderId, event, data);
+    }
+
+    const clients = this.sseClients.get(orderId);
+    if (!clients || clients.size === 0) return;
+
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of clients) {
+      try {
+        client.write(payload);
+      } catch {
+        clients.delete(client);
+      }
+    }
   }
 }
