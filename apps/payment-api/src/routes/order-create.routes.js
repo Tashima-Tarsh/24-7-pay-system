@@ -1,5 +1,6 @@
 import { HttpServer } from '../server.js';
 import { isAdminRequest } from '../auth-guard.js';
+import { durableFinancialStorageAvailable } from '../financial-storage-guard.js';
 import {
   PaymentStatus,
   safeEqual
@@ -67,6 +68,14 @@ export function registerOrderCreateRoutes(server, ctx) {
             code: 'AUTH_REQUIRED'
           });
         }
+      }
+
+      if (!durableFinancialStorageAvailable(db)) {
+        return HttpServer.json(res, 503, {
+          error: 'Financial operations require durable PostgreSQL storage in production.',
+          code: 'DURABLE_STORAGE_REQUIRED',
+          retryable: true
+        });
       }
 
         // Deliverable 7: Enforce merchant tier limits

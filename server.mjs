@@ -133,9 +133,18 @@ const server = http.createServer(async (req, res) => {
 
   // Health check
   if (route === 'health') {
-    const ready = Boolean(apiServer);
+    const apiOnline = Boolean(apiServer);
+    const durableStorage = apiServer?.app?.context?.db?.dialect === 'postgres';
+    // /health checks the web process; /_ready checks real-money readiness.
+    const ready = apiOnline && (pathname === '/health' || process.env.NODE_ENV !== 'production' || durableStorage);
     res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ ok: ready, status: ready ? 'UP' : 'DEGRADED', apiOnline: ready }));
+    res.end(JSON.stringify({
+      ok: ready,
+      status: ready ? 'UP' : 'DEGRADED',
+      apiOnline,
+      financialReady: apiOnline && (process.env.NODE_ENV !== 'production' || durableStorage),
+      storage: durableStorage ? 'postgres' : 'sqlite'
+    }));
     return;
   }
 

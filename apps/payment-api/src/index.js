@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PaymentStatus, safeEqual } from '@youpi/common';
+import { rejectEphemeralFinancialWrite } from './financial-storage-guard.js';
 import { DynamoPayQueue } from '@youpi/common';
 import { DynamoPayWebhooks } from '@youpi/common';
 
@@ -590,6 +591,9 @@ export function createPaymentApp(customDb = null, options = {}) {
     }
     return false;
   });
+  // Keep the console running for setup, but reject financial writes on
+  // ephemeral SQLite when deployed in production.
+  server.use((req,res,pathname) => rejectEphemeralFinancialWrite(req,res,pathname,db));
   registerPaymentControls(server,context);
   registerPaymentRoutes(server, context);
   registerCheckoutRoutes(server, context);
