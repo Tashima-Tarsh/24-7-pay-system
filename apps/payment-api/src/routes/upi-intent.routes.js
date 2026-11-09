@@ -270,7 +270,7 @@ export function registerUpiIntentRoutes(server, ctx) {
       } catch {}
       const payeeVpa = profile ? profile.payeeVpa : receivingVpa;
       const payeeName = profile ? profile.payeeName : (merchant.businessName || merchant.name || 'Merchant');
-      const note = `Sanbookpay ${generatedOrderId}`;
+      const note = `24/7 Pay ${generatedOrderId}`;
 
       const checkoutUrl = `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${paymentId}`;
 
