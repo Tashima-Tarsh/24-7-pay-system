@@ -1021,6 +1021,10 @@ export function registerUpiMirrorRoutes(server, ctx) {
       const checksumUrl = process.env.DYNAMO_BRIDGE_APK_CHECKSUM_URL
         || '';
 
+      if (!/^https:\/\//i.test(downloadUrl) || !/^https:\/\//i.test(checksumUrl)) {
+        return HttpServer.json(res, 503, { error: 'Android Bridge download is not configured.' });
+      }
+
       // QR code payload: the download URL (merchant scans this on their phone)
       const qrPayload = JSON.stringify({
         type: 'dynamo-bridge-download',
