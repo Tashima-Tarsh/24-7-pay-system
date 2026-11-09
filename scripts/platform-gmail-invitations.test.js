@@ -70,3 +70,26 @@ test('missing Google OAuth configuration is a safe explicit error',async()=>{
   await assert.rejects(()=>s.connect(x.ownerId),/Configure GMAIL_SEND_CLIENT_ID/);
  }finally{x.db.close();}
 });
+
+test('platform owner can store OAuth client privately without Render client credentials',async()=>{
+ const x=setup();try{
+  const withoutEnv=createPlatformGmailInvitationService(x.db,{
+   env:{...x.env,GMAIL_SEND_CLIENT_ID:'',GMAIL_SEND_CLIENT_SECRET:''},
+   googleProvider:x.googleProvider
+  });
+  assert.equal(withoutEnv.status().oauthReady,false);
+  const changed=withoutEnv.saveClient({
+    clientId:'123456-merchantportal.apps.googleusercontent.com',
+    clientSecret:'GOCSPX_test_client_secret_2026'
+  });
+  assert.equal(changed.oauthReady,true);
+  assert.equal(changed.clientStored,true);
+  const row=x.db.queryOne("SELECT * FROM pp_gmail_oauth_client WHERE id='platform'");
+  assert.equal(row.client_id,'123456-merchantportal.apps.googleusercontent.com');
+  assert.ok(row.client_secret_cipher.startsWith('v1.'));
+  assert.ok(!row.client_secret_cipher.includes('GOCSPX_'));
+  await assert.rejects(()=>withoutEnv.send({kind:'merchant_owner_invitation',channel:'email',
+   to:'merchant@example.test',token:'temporary-token'}),/Connect the platform Gmail sender/);
+  assert.throws(()=>withoutEnv.saveClient({clientId:'wrong-id',clientSecret:'fake'}),/OAuth Web application/);
+ }finally{x.db.close();}
+});

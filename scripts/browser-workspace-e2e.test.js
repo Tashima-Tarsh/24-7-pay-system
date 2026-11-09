@@ -124,6 +124,15 @@ test('public website and new merchant workspace work without legacy cookies',{ti
     await page.locator('button[data-view="invite-email"]').click();
     await page.getByRole('heading',{name:'Personal Gmail sender'}).waitFor({timeout:12000});
     await page.getByText('Not connected').first().waitFor({timeout:12000});
+    await page.fill('#field-gmailClientId','123456-browserci.apps.googleusercontent.com');
+    await page.fill('#field-gmailClientSecret','GOCSPX_browser_test_secret_only');
+    await page.getByRole('button',{name:'Save OAuth configuration'}).click();
+    await page.waitForSelector('#detail-layer:not([hidden])',{timeout:12000});
+    assert.match(await page.locator('#detail-title').textContent(),/OAuth application saved/);
+    await page.locator('#detail-close').click();
+    await page.getByRole('button',{name:'Connect my Gmail'}).waitFor({timeout:12000});
+    // Do not complete external consent or send real mail during CI.
+
     await page.locator('button[data-view="overview"]').click();
     await page.getByRole('heading',{name:'Platform performance'}).waitFor({timeout:12000});
 
