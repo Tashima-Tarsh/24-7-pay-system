@@ -25,6 +25,15 @@ test('unified server.mjs serves public pages and proxies /api/* to the in-proces
    const base=`http://127.0.0.1:${port}`;
    assert.equal((await fetch(base+'/_ready')).status,200,'/_ready health check must return 200');
    assert.equal((await fetch(base+'/')).status,200,'landing page must return 200');
+   const workspace=await fetch(base+'/platform');
+   assert.equal(workspace.status,200,'new workspace must be served');
+   assert.match(await workspace.text(),/247-portal\.js/,'new workspace must load its own client');
+   assert.match(workspace.headers.get('content-security-policy')||'',/frame-ancestors 'none'/);
+   const merchant=await fetch(base+'/merchant');
+   assert.equal(merchant.status,200,'merchant route must use new workspace');
+   assert.match(await merchant.text(),/247-portal\.js/);
+   assert.equal((await fetch(base+'/assets/247-portal.js')).status,200,'workspace JS asset must be served');
+   assert.equal((await fetch(base+'/assets/247-portal.css')).status,200,'workspace CSS asset must be served');
    assert.equal((await fetch(base+'/checkout/test-order')).status,200,'checkout page must return 200');
    const apiRes=await fetch(base+'/api/v1/checkout/nonexistent/state');
    assert.equal(apiRes.status,404,'/api/* must be proxied to the payment API (404 from API for unknown session)');
