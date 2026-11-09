@@ -17,7 +17,7 @@ export function startCheckoutServer(port = null, options = {}) {
 
   // Try Next.js server first
   try {
-    const { NextServer } = require('next');
+    const { NextServer } = await import('next');
     const app = NextServer({
       dev: false,
       conf: { distDir },
