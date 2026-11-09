@@ -31,6 +31,7 @@ const testFiles = [
   'packages/db/src/__tests__/db.test.js',
   'packages/core/src/__tests__/core.test.js',
   'packages/core/src/__tests__/upi-intent-builder.test.js',
+  'packages/core/src/__tests__/intent-reliability.test.js',
   'packages/core/src/__tests__/psp-contracts.test.js',
   'packages/core/src/__tests__/queue-timing.test.js',
   'packages/core/src/__tests__/verification-pending.test.js',

@@ -1,6 +1,6 @@
 import { HttpServer } from '../server.js';
 import { toRupeesString, buildUpiPaymentUri, buildUpiPaymentIntentLinks, generateQrDataUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS, isInternalServiceRequest } from '@youpi/common';
-import { validateSessionDeviceAccess, buildUpiUri } from '@youpi/core';
+import { validateSessionDeviceAccess, buildUpiUri, inspectUpiIntent } from '@youpi/core';
 import { SplitSettlementRepository } from '@youpi/db';
 
 /**
@@ -676,6 +676,12 @@ export function registerCheckoutRoutes(server, ctx) {
       expiresAt: session.expiresAt ? session.expiresAt.toISOString() : null,
       serverNow: new Date().toISOString(),
       upiUri,
+      // Informational preflight only: do not mutate session or declare success.
+      intentPreflight: upiUri ? inspectUpiIntent(upiUri, {
+        expectedVpa: payeeVpa,
+        expectedAmountPaise: session.amountPaise,
+        expectedReference: session.orderId
+      }) : { ok: false, errors: ['INTENT_NOT_ACTIVE'], proofOfPayment: false },
       upiQr: upiUri ? generateQrDataUri(upiUri) : null,
       upiDeepLinks: upiUri ? buildUpiPaymentIntentLinks(upiUri) : null,
       payeeVpa,

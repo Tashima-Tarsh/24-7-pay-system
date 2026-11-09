@@ -44,7 +44,7 @@ test('Real checkout link creation enforces merchant permissions, idempotency and
  assert.match(creator,/supported UPI app intents/);
  assert.doesNotMatch(creator,/Mark as paid|I have paid|submitUTR|forceSuccess|settlePayment/i);
  assert.match(api,/x-247-auth-mode/);
- assert.match(app,/tab==='payment-links'/);
+ assert.match(app,/effectiveTab==='payment-links'/);
  assert.match(app,/permissions\?\.includes\('payments\.create'\)/);
 });
 test('Cinematic system has accessible login and reduced-motion controls',()=>{
@@ -55,4 +55,34 @@ test('Cinematic system has accessible login and reduced-motion controls',()=>{
  assert.match(css,/cinematic-hero/);
  assert.match(css,/apple-top-cta/);
  assert.match(css,/prefers-reduced-motion:reduce/);
+});
+
+test('Platform and merchant receive distinct premium studio navigation and merchant UPI onboarding',()=>{
+ const app=read('premium-studio/src/App.tsx');
+ const upi=read('premium-studio/src/MerchantUpiAccounts.tsx');
+ const api=read('premium-studio/src/api.ts');
+ assert.match(app,/const merchantTabs:/);
+ assert.match(app,/const platformTabs:/);
+ assert.match(app,/const availableTabs=scoped\?platformTabs:merchantTabs/);
+ assert.match(app,/setTab\('admin'\)/);
+ assert.match(app,/Receiving UPI IDs/);
+ assert.match(app,/canCreate=Boolean\(!data\.user\?\.platform/);
+ assert.match(app,/canManageVpa=Boolean\(!data\.user\?\.platform/);
+ assert.match(upi,/get<\{accounts:ReceivingAccount\[\]\}>\('\/receiving-accounts'/);
+ assert.match(upi,/addReceivingUpi\(vpa,name\)/);
+ assert.match(upi,/setReceivingUpiActive\(account\.id,next\)/);
+ assert.match(upi,/window\.confirm/);
+ assert.match(upi,/merchant OWNER or ADMIN/);
+ assert.match(api,/\/receiving-accounts/);
+ assert.match(api,/method:'POST'/);
+ assert.doesNotMatch(api,/\/mark-paid|\/ledger\/credit|\/settle-order/);
+});
+test('New UPI reliability module remains nonmutating and preflight is informational',()=>{
+ const checks=read('packages/core/src/vpa/intent-reliability.js');
+ const checkout=read('apps/payment-api/src/routes/checkout.routes.js');
+ assert.match(checks,/proofOfPayment:false/);
+ assert.match(checks,/INSUFFICIENT_VERIFIED_HISTORY/);
+ assert.match(checks,/event\.authoritative!==true/);
+ assert.match(checks,/event\.merchantId!==merchantId/);
+ assert.match(checkout,/intentPreflight: upiUri \? inspectUpiIntent/);
 });

@@ -1,7 +1,7 @@
 name: Premium React studio (isolated)
 on:
   push:
-    branches: [feature/premium-react-studio-safe, feature/cinematic-payment-links-studio]
+    branches: [feature/premium-react-studio-safe, feature/cinematic-payment-links-studio, feature/vpa-intent-reliability-safe]
     paths: ['premium-studio/**','scripts/premium-react-boundary.test.js','.github/workflows/premium-studio.yml']
   pull_request:
     branches: [main]
@@ -37,7 +37,7 @@ jobs:
           path: public/premium-studio
           if-no-files-found: error
       - name: Commit reproducible lockfile and preview build to feature branch
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/feature/premium-react-studio-safe' || github.ref == 'refs/heads/feature/cinematic-payment-links-studio')
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/feature/premium-react-studio-safe' || github.ref == 'refs/heads/feature/cinematic-payment-links-studio' || github.ref == 'refs/heads/feature/vpa-intent-reliability-safe')
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
