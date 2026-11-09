@@ -7,6 +7,14 @@ export function registerManualVerificationRoutes(server, ctx) {
 
   // POST /api/v1/payments/:id/manual-verify
   server.post('/api/v1/payments/:id/manual-verify', async (req, res, params) => {
+    // Deprecated: this legacy job used Gmail/SMS observation matches as if
+    // they were authoritative bank-credit confirmations.
+    if (process.env.NODE_ENV === 'production') {
+      return HttpServer.json(res, 403, {
+        error: 'Manual UTR verification cannot settle production funds. Use authenticated bank/PSP confirmation.',
+        code: 'MANUAL_SETTLEMENT_DISABLED'
+      });
+    }
     const paymentId = params.id;
     try {
       const body = await HttpServer.parseBody(req);

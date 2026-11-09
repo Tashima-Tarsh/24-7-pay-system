@@ -25,6 +25,13 @@ function isDevTool(pathname) {
  * @returns {null | 'admin'} null = public, 'admin' = admin token only
  */
 function requiredLevel(method, pathname) {
+  // Legacy financial administration routes previously accepted ANY non-empty
+  // bearer string. Production routes must be checked against ADMIN_API_TOKEN.
+  if (process.env.NODE_ENV === 'production' &&
+      (/^\/api\/v1\/(?:evidence|direct-bank|bank-reconciliation)(?:\/|$)/.test(pathname) ||
+       /^\/api\/v1\/payments\/[^/]+\/manual-verify$/.test(pathname))) {
+    return 'admin';
+  }
   if(/^\/api\/v1\/(collections|payouts|beneficiaries|banking|settlements|ledger|reconciliation|refunds|split-settlements|operations)(?:\/|$)/.test(pathname))return 'admin';
   if (pathname.startsWith('/api/v1/admin/')) {
     if (PUBLIC_ADMIN_PATHS.has(pathname)) return null;

@@ -594,6 +594,20 @@ export function createPaymentApp(customDb = null, options = {}) {
   // Keep the console running for setup, but reject financial writes on
   // ephemeral SQLite when deployed in production.
   server.use((req,res,pathname) => rejectEphemeralFinancialWrite(req,res,pathname,db));
+  // Supplementary Gmail/SMS/Android evidence cannot create financial success
+  // in production, regardless of who submits it. Keep read-only diagnostics.
+  server.use((req,res,pathname)=>{
+    if(process.env.NODE_ENV==='production' &&
+       ['POST','PUT','PATCH','DELETE'].includes(req.method) &&
+       /^\/api\/v1\/evidence\/(?:submit|gmail-email|android-sms|direct-bank)$/.test(pathname)){
+      HttpServer.json(res,403,{
+        error:'Supplementary notifications cannot independently confirm production payment credit.',
+        code:'LEGACY_EVIDENCE_SETTLEMENT_DISABLED'
+      });
+      return true;
+    }
+    return false;
+  });
   registerPaymentControls(server,context);
   registerPaymentRoutes(server, context);
   registerCheckoutRoutes(server, context);

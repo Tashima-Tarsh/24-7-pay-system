@@ -80,6 +80,7 @@ const testFiles = [
   'scripts/sse-broadcaster.test.js',
   'scripts/payment-creation-auth.test.js',
   'scripts/durable-financial-storage.test.js',
+  'scripts/legacy-confirmation-boundary.test.js',
   'scripts/clean-transaction-history.test.js',
   'scripts/production-audit-probes.test.js',
   'scripts/check-merchant-onboarding.test.js'
