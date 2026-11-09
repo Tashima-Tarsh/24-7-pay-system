@@ -35,6 +35,15 @@ export async function signIn(email:string,password:string):Promise<void>{
  if(!payload||typeof payload!=='object'||!('sessionToken'in payload)||typeof payload.sessionToken!=='string'||!('user'in payload))throw new Error('Could not establish an authenticated workspace session.');
  sessionStorage.setItem(SESSION_KEY,payload.sessionToken);
 }
+export async function registerMerchantAccount(data:{businessName:string;contactName:string;mobile:string;email:string;password:string}):Promise<void>{
+ const response=await fetch('/api/platform/v1/register',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify(data)
+ });
+ const payload:unknown=await response.json().catch(()=>null);
+ if(!response.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Unable to register your merchant account ('+response.status+').');
+ if(!payload||typeof payload!=='object'||!('merchantId'in payload)||!('status'in payload)||payload.status!=='ACTIVE')throw new Error('Merchant registration did not return an active account.');
+}
 export async function switchWorkspaceAccount():Promise<void>{
  const token=sessionStorage.getItem(SESSION_KEY);
  try{
