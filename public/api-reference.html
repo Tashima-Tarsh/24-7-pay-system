@@ -15,13 +15,5 @@
 <header class="api-navigation"><a href="/platform">← 24/7 Pay workspace</a><small>Merchant operations · API reference</small></header>
 <div class="api-fallback">This page documents selected public API contracts. <a href="/api-reference.json">Download the OpenAPI document</a>.
 Never enter real production secrets into a third-party browser or proxy. Payment success requires an authorized source record.</div>
-<div id="scalar-api" aria-label="Interactive API reference"></div>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-<script>
-if(window.Scalar&&typeof window.Scalar.createApiReference==='function'){
-  window.Scalar.createApiReference('#scalar-api',{url:'/api-reference.json',hideClientButton:true,showSidebar:true});
-}else{
-  const info=document.createElement('p');info.textContent='The interactive reference could not load. Use the OpenAPI JSON link above.';info.style.padding='24px';document.getElementById('scalar-api').appendChild(info);
-}
-</script>
+<iframe title="Scalar API reference" src="/scalar-frame.html" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="eager" style="width:100%;height:calc(100vh - 112px);min-height:650px;border:0;display:block;background:white"></iframe>
 </body></html>
