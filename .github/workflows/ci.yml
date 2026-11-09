@@ -97,6 +97,13 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --install-links
+      - name: Set isolated integration secrets
+        run: |
+          echo "ENCRYPTION_MASTER_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "ORDER_SIGNING_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "INITIAL_ADMIN_EMAIL=postgres-ci@example.test" >> "$GITHUB_ENV"
+          echo "INITIAL_ADMIN_PASSWORD=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - name: Exercise payment transactions on real PostgreSQL
         env:
           NODE_ENV: test
