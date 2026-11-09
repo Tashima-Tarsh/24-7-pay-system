@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
+import { execSync } from 'node:child_process';
 import { getInternalServiceToken } from '@youpi/common';
 import { restorePostgresFiles } from './postgres-bootstrap.js';
 
@@ -38,6 +39,11 @@ export async function startCheckoutServer(port = null, options = {}) {
   const bindHost = process.env.YOUPI_BIND_HOST || '127.0.0.1';
   const checkoutAppDir = path.join(root, 'apps', 'checkout-portal');
   const checkoutDistDir = path.join(checkoutAppDir, 'dist');
+
+  if (!fs.existsSync(path.join(checkoutDistDir, 'index.html'))) {
+    console.log('[Checkout Portal] dist not found, running build...');
+    execSync(`npm run build --workspace=checkout-portal`, { cwd: root, stdio: 'inherit' });
+  }
 
   const assetTypes = {
     '.css': 'text/css',
