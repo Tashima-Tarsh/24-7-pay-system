@@ -1,0 +1,42 @@
+name: Premium merchant mobile browser smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'premium-studio/**'
+      - 'scripts/premium-mobile-smoke.test.js'
+      - 'package.json'
+      - '.github/workflows/premium-mobile-smoke.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'premium-studio/**'
+      - 'scripts/premium-mobile-smoke.test.js'
+      - 'package.json'
+      - '.github/workflows/premium-mobile-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: premium-mobile-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install runtime and frontend dependencies
+        run: |
+          npm ci --install-links
+          npm ci --prefix premium-studio --include=dev --no-audit --no-fund
+      - name: Compile actual public React bundle
+        run: npm run build --prefix premium-studio
+      - name: Install headless Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Exercise mobile merchant workspace
+        run: node --test scripts/premium-mobile-smoke.test.js
