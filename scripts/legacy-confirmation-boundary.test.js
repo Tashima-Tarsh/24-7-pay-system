@@ -34,7 +34,17 @@ test('production blocks notification-only settlement and rejects arbitrary beare
       '/api/v1/evidence/android-sms',
       '/api/v1/evidence/direct-bank',
       '/api/v1/bank-reconciliation/run',
-      '/api/v1/direct-bank/connectors'
+      '/api/v1/direct-bank/connectors',
+      '/api/v1/receiving-accounts',
+      '/api/v1/provider-connections',
+      '/api/v1/acceptance-rules',
+      '/api/v1/disputes',
+      '/api/v1/payer-vpa/bind',
+      '/api/v1/multi-operator/users',
+      '/api/v1/circuit-breaker/arbitrary/trip',
+      '/api/v1/event-replay/bulk',
+      '/api/v1/attestation/merchant-bind',
+      '/api/v1/gmail/connections/arbitrary/refresh'
     ]){
       const anonymous=await request(base,route);
       const forged=await request(base,route,'Bearer invalid-admin-token');

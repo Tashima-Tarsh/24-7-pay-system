@@ -27,10 +27,15 @@ function isDevTool(pathname) {
 function requiredLevel(method, pathname) {
   // Legacy financial administration routes previously accepted ANY non-empty
   // bearer string. Production routes must be checked against ADMIN_API_TOKEN.
-  if (process.env.NODE_ENV === 'production' &&
-      (/^\/api\/v1\/(?:evidence|direct-bank|bank-reconciliation)(?:\/|$)/.test(pathname) ||
-       /^\/api\/v1\/payments\/[^/]+\/manual-verify$/.test(pathname))) {
-    return 'admin';
+  if (process.env.NODE_ENV === 'production') {
+    // Every legacy route that previously tested only for *presence* of a
+    // bearer string must validate the actual admin credential.
+    const legacyPrivileged = /^\/api\/v1\/(?:evidence|mobile-status|direct-bank|bank-reconciliation|disputes|payer-vpa|event-replay|multi-operator|circuit-breaker|acceptance-rules|attestation|receiving-accounts|provider-connections)(?:\/|$)/;
+    if (legacyPrivileged.test(pathname) ||
+        /^\/api\/v1\/payments\/[^/]+\/manual-verify$/.test(pathname) ||
+        (pathname.startsWith('/api/v1/gmail/') && pathname !== '/api/v1/gmail/callback')) {
+      return 'admin';
+    }
   }
   if(/^\/api\/v1\/(collections|payouts|beneficiaries|banking|settlements|ledger|reconciliation|refunds|split-settlements|operations)(?:\/|$)/.test(pathname))return 'admin';
   if (pathname.startsWith('/api/v1/admin/')) {
