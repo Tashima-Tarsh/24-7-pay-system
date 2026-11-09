@@ -13,7 +13,7 @@
     "notifications:setup": "node scripts/notifications.js --setup",
     "notifications:status": "node scripts/notifications.js",
     "notifications:test": "node scripts/notifications.js --test",
-    "build": "node scripts/check-runtime.js && npm ci --prefix premium-studio --no-audit --no-fund && npm run build --prefix premium-studio",
+    "build": "node scripts/check-runtime.js && npm ci --prefix premium-studio --include=dev --no-audit --no-fund && npm run build --prefix premium-studio",
     "build:typescript": "tsc -b",
     "clean": "node scripts/clean.js",
     "db:setup": "node scripts/init-db.cjs",
