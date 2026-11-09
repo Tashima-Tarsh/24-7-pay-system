@@ -233,7 +233,7 @@ export function registerPayoutsRoutes(server, ctx) {
           providerBeneId: beneficiary.provider_bene_id,
           amountPaise,
           payoutRail,
-          remarks: body.remarks || 'Sanbook Pay Payout'
+          remarks: body.remarks || '24/7 Pay Payout'
         });
         providerTransferId = payoutRes.providerTransferId;
         liveStatus = payoutRes.status;
