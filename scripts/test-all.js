@@ -67,6 +67,7 @@ const testFiles = [
   'apps/payment-api/src/__tests__/platform-account-separation.test.js',
   'apps/payment-api/src/__tests__/platform-operations.test.js',
   'apps/payment-api/src/__tests__/platform-payments.test.js',
+  'apps/payment-api/src/__tests__/webhook-test.test.js',
   'apps/payment-api/src/__tests__/external-banking.test.js',
   'apps/payment-api/src/__tests__/secure-platform-boundaries.test.js',
   'apps/payment-api/src/__tests__/provider-ingress.test.js',
