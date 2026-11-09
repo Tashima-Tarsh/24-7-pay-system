@@ -14,6 +14,7 @@ export function MerchantUpiAccounts({canManage,isPlatform,onAccountsChanged}:Pro
  const[success,setSuccess]=useState('');
  const[upiId,setUpiId]=useState('');
  const[payeeName,setPayeeName]=useState('');
+ const[confirmOwnership,setConfirmOwnership]=useState(false);
  const[busy,setBusy]=useState('');
  const[reload,setReload]=useState(0);
  const reduced=useReducedMotion();
@@ -35,9 +36,9 @@ export function MerchantUpiAccounts({canManage,isPlatform,onAccountsChanged}:Pro
   if(!VPA_FORMAT.test(vpa)||!name||name.length>150){setError('Enter a valid receiving UPI ID and the registered payee name (up to 150 characters).');return;}
   setBusy('create');setError('');setSuccess('');
   try{
-   const result=await addReceivingUpi(vpa,name);
-   setUpiId('');setPayeeName('');
-   setSuccess('Receiving UPI account added as inactive. Activate it only after verifying ownership and the payee details.');
+   const result=await addReceivingUpi(vpa,name,confirmOwnership);
+   setUpiId('');setPayeeName('');setConfirmOwnership(false);
+   setSuccess(result.account.isActive?'Receiving UPI account is ready for new payment links. Actual payment confirmation still requires bank/PSP evidence.':'Receiving UPI account saved. You can select it when you are ready to receive payments.');
    setAccounts(current=>[result.account,...current]);
    onAccountsChanged?.();refresh();
   }catch(err){setError(err instanceof Error?err.message:'Unable to add this UPI ID.');}
@@ -55,15 +56,15 @@ export function MerchantUpiAccounts({canManage,isPlatform,onAccountsChanged}:Pro
   }catch(err){setError(err instanceof Error?err.message:'Unable to change UPI account status.');}
   finally{setBusy('');}
  }
- if(isPlatform)return <Card><CardTitle>Merchant receiving accounts</CardTitle><p className="upi-empty-info">Platform administrators cannot attach personal UPI IDs to merchant accounts from this workspace. Use the platform administration console for merchant oversight.</p><a href="/platform" className="aside-footer-link">Open platform administration <ArrowSquareOut size={16}/></a></Card>;
+ if(isPlatform)return <Card><CardTitle>Merchant receiving accounts</CardTitle><p className="upi-empty-info">Platform administrators cannot attach personal UPI IDs to merchant accounts from this workspace. View your merchant network using the Merchants section.</p></Card>;
  if(!canManage)return <Card><CardTitle>Receiving UPI account access</CardTitle><p className="upi-empty-info"><LockKey size={19}/> Your assigned merchant role does not include <code>connections.manage</code>. A merchant OWNER or ADMIN can configure receiving UPI accounts. Payment creation separately requires <code>payments.create</code>; only an authorized owner/admin can change role permissions.</p></Card>;
  return <div className="merchant-upi-page">
   <motion.div initial={reduced?false:{opacity:0,y:9}} animate={{opacity:1,y:0}}>
-   <Card className="merchant-upi-form-card"><div className="upi-section-heading"><div><span className="micro">MERCHANT SETTLEMENT DESTINATION</span><h2>Add receiving UPI ID<span className="heading-period">.</span></h2><p>Register the payee VPA that belongs to your business. New accounts are inactive until you explicitly activate them.</p></div><span className="link-studio-emblem"><Bank size={25} weight="duotone"/></span></div>
+   <Card className="merchant-upi-form-card"><div className="upi-section-heading"><div><span className="micro">MERCHANT SETTLEMENT DESTINATION</span><h2>Add receiving UPI ID<span className="heading-period">.</span></h2><p>Set up your business UPI ID once. The first receiving account is enabled automatically when you confirm ownership; changing an existing receiver remains an explicit action.</p></div><span className="link-studio-emblem"><Bank size={25} weight="duotone"/></span></div>
    <form className="upi-create-form" onSubmit={create}>
     <label className="payment-field"><span>Merchant receiving UPI ID</span><input className="payment-link-input" value={upiId} onChange={e=>setUpiId(e.target.value)} placeholder="yourbusiness@bank" autoComplete="off" maxLength={320} required aria-label="Merchant receiving UPI ID"/><small>Use the exact approved bank/PSP-issued VPA. A valid format is not proof that the VPA is active.</small></label>
     <label className="payment-field"><span>Registered payee name</span><input className="payment-link-input" value={payeeName} onChange={e=>setPayeeName(e.target.value)} placeholder="Business or account holder" autoComplete="organization" maxLength={150} required aria-label="Registered payee name"/></label>
-    <Button className="apple-action-button" disabled={Boolean(busy)||!VPA_FORMAT.test(upiId.trim())||!payeeName.trim()} type="submit"><Plus size={18}/>{busy==='create'?'Saving…':'Add UPI account'}</Button>
+    <label className="upi-ownership-check"><input type="checkbox" checked={confirmOwnership} onChange={e=>setConfirmOwnership(e.target.checked)} required/><span>I confirm this UPI ID belongs to my business and the payee name is correct. This acknowledgement does not verify bank ownership.</span></label><Button className="apple-action-button" disabled={Boolean(busy)||!confirmOwnership||!VPA_FORMAT.test(upiId.trim())||!payeeName.trim()} type="submit"><Plus size={18}/>{busy==='create'?'Saving…':'Add UPI account'}</Button>
    </form>
    {error&&<div role="alert" className="payment-form-error"><WarningCircle size={18}/>{error}</div>}
    {success&&<div role="status" className="upi-success"><CheckCircle size={18}/>{success}</div>}

@@ -19,13 +19,21 @@ test('scoped keys enforce tenant, revocation, suspension, idempotency and persis
  db.execute('INSERT INTO pp_merchants VALUES(?,?,?,?,?)',[a.id,'ACTIVE','{}',new Date().toISOString(),new Date().toISOString()]);
  const server=new HttpServer();
  const identity={authorize:()=>true,tenant:req=>req.platform.merchantId,audit:()=>{}};
- server.use((req)=>{if(req.headers['x-test-owner'])req.platform={merchantId:a.id,userId:'test-owner',role:'OWNER',platform:false,permissions:['*']};return false;});
+ server.use((req)=>{if(req.headers['x-test-owner'])req.platform={merchantId:a.id,userId:'test-owner',role:'OWNER',platform:false,permissions:['*']};if(req.headers['x-test-new-owner'])req.platform={merchantId:b.id,userId:'test-new-owner',role:'OWNER',platform:false,permissions:['*']};return false;});
  const api=registerPlatformPayments(server,{db,merchantRepo,accountRepo,sessionRepo,auditRepo:{log(){}},queueEngine:{enqueueOrActivate:()=>({})},timingEngine:{startActiveTimer(){}},checkoutBaseUrl:'https://checkout.example.test'},identity);
  server.use(api.guard);
  const http=server.createServer();await new Promise(r=>http.listen(0,'127.0.0.1',r));
  const base='http://127.0.0.1:'+http.address().port;
  const call=async(path,body,headers={})=>{const res=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});return {status:res.status,body:await res.json()};};
  try{
+ // A verified first receiving account is active in one step, without a separate
+ // platform-admin activation. Subsequent receiver changes remain explicit.
+ db.execute('INSERT INTO pp_merchants VALUES(?,?,?,?,?)',[b.id,'ACTIVE','{}',new Date().toISOString(),new Date().toISOString()]);
+ const firstReceiver=await call('/api/platform/v1/receiving-accounts',{upiId:'first@okbank',payeeName:'Merchant B',confirmVpaOwnership:true},{'x-test-new-owner':'yes'});
+ assert.equal(firstReceiver.status,201);assert.equal(firstReceiver.body.account.isActive,true);
+ const nextReceiver=await call('/api/platform/v1/receiving-accounts',{upiId:'second@okbank',payeeName:'Merchant B',confirmVpaOwnership:true},{'x-test-new-owner':'yes'});
+ assert.equal(nextReceiver.status,201);assert.equal(nextReceiver.body.account.isActive,false);
+ assert.equal(accountRepo.findActiveForMerchant(b.id).upiId,'first@okbank','a second VPA cannot silently redirect existing payment collection');
  const channel=await call('/api/platform/v1/settings',{channel:{enabled:true,minAmountPaise:0,maxAmountPaise:2000000,allowedVpas:[]}},{'x-test-owner':'yes'});
  assert.equal(channel.status,200,'zero minimum is a valid channel setting');
  const connection=await call('/api/platform/v1/connections',{provider:'CASHFREE',environment:'SANDBOX',clientId:'test-client',clientSecret:'test-secret'},{'x-test-owner':'yes'});

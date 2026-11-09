@@ -110,10 +110,10 @@ function resolveRoute(pathname) {
   if (pathname === '/checkout' || pathname.startsWith('/checkout/')) {
     return 'checkout';
   }
-  if (pathname === '/admin') {
-    return 'admin';
+  if (pathname === '/legacy-console') {
+    return 'legacy-workspace';
   }
-  if (pathname === '/merchant' || pathname === '/platform' || pathname === '/dashboard' || pathname === '/super-admin') {
+  if (pathname === '/admin' || pathname === '/merchant' || pathname === '/platform' || pathname === '/dashboard' || pathname === '/super-admin') {
     return 'workspace';
   }
   return 'static';
@@ -179,9 +179,9 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (route === 'workspace') {
+  if (route === 'workspace' || route === 'legacy-workspace') {
     try {
-      const html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'platform.html'));
+      const html = await fs.promises.readFile(path.join(PUBLIC_DIR, route === 'workspace' ? 'premium-studio/index.html' : 'platform.html'));
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',

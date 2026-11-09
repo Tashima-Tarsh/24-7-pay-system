@@ -35,6 +35,15 @@ export async function signIn(email:string,password:string):Promise<void>{
  if(!payload||typeof payload!=='object'||!('sessionToken'in payload)||typeof payload.sessionToken!=='string'||!('user'in payload))throw new Error('Could not establish an authenticated workspace session.');
  sessionStorage.setItem(SESSION_KEY,payload.sessionToken);
 }
+export async function registerMerchantAccount(data:{businessName:string;contactName:string;mobile:string;email:string;password:string}):Promise<void>{
+ const response=await fetch('/api/platform/v1/register',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify(data)
+ });
+ const payload:unknown=await response.json().catch(()=>null);
+ if(!response.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Unable to register your merchant account ('+response.status+').');
+ if(!payload||typeof payload!=='object'||!('merchantId'in payload)||!('status'in payload)||payload.status!=='ACTIVE')throw new Error('Merchant registration did not return an active account.');
+}
 export async function switchWorkspaceAccount():Promise<void>{
  const token=sessionStorage.getItem(SESSION_KEY);
  try{
@@ -44,6 +53,32 @@ export async function switchWorkspaceAccount():Promise<void>{
    body:'{}'
   });
  }finally{sessionStorage.removeItem(SESSION_KEY);}
+}
+export type PlatformMerchant={merchant_id:string;status:string;profile?:{businessName?:string;contactName?:string;mobile?:string}};
+export type StaffUser={id:string;email:string;role:string;active:boolean};
+export async function adminCreateMerchant(data:{businessName:string;contactName:string;mobile:string;email:string}):Promise<{businessName:string;merchantId:string;invitationSent?:boolean}>{
+ const token=sessionStorage.getItem(SESSION_KEY);if(!token)throw new AuthRequired('Please sign in.');
+ const response=await fetch('/api/platform/v1/merchants',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  body:JSON.stringify(data)
+ });
+ const payload:unknown=await response.json().catch(()=>null);
+ if(response.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Session expired.');}
+ if(!response.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Could not create merchant ('+response.status+')');
+ if(!payload||typeof payload!=='object')throw new Error('Merchant response was invalid');
+ return payload as {businessName:string;merchantId:string;invitationSent?:boolean};
+}
+export async function adminInviteStaff(data:{email:string;role:string}):Promise<void>{
+ const token=sessionStorage.getItem(SESSION_KEY);if(!token)throw new AuthRequired('Please sign in.');
+ const res=await fetch('/api/platform/v1/staff/invite',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  body:JSON.stringify(data)
+ });
+ const body:unknown=await res.json().catch(()=>null);
+ if(res.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Session expired.');}
+ if(!res.ok)throw new Error(body&&typeof body==='object'&&'error'in body?String(body.error):'Could not send invitation ('+res.status+')');
 }
 export type ReceivingAccount={
  id:string;merchantId:string;upiId:string;payeeName:string;isActive:boolean;
@@ -67,8 +102,8 @@ async function writeMerchantAccount<T>(path:string,input:unknown):Promise<T>{
  );
  return payload as T;
 }
-export function addReceivingUpi(upiId:string,payeeName:string):Promise<{account:ReceivingAccount}>{
- return writeMerchantAccount('/receiving-accounts',{upiId,payeeName});
+export function addReceivingUpi(upiId:string,payeeName:string,confirmVpaOwnership:boolean):Promise<{account:ReceivingAccount}>{
+ return writeMerchantAccount('/receiving-accounts',{upiId,payeeName,confirmVpaOwnership});
 }
 export function setReceivingUpiActive(id:string,active:boolean):Promise<{account:ReceivingAccount}>{
  if(!/^[A-Za-z0-9-]{1,128}$/.test(id))throw new Error('Invalid account identifier');
