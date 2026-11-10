@@ -466,7 +466,7 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
       payeeName: receivingAccount.payeeName,
       amountPaise: 5000n,
       transactionRef: 'REG-UPI-45',
-      packageName: gpay.packageName
+      targetApp: 'gpay'
     });
     assert.ok(intent.startsWith('intent://pay?'));
     assert.ok(intent.includes('package=' + gpay.packageName));

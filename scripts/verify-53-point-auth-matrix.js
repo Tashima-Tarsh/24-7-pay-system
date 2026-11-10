@@ -633,11 +633,11 @@ async function run53PointMatrix() {
       payeeName: receivingAccount.payeeName,
       amountPaise: 5000n,
       transactionRef: 'REG-UPI-45',
-      packageName: gpay.packageName
+      targetApp: 'gpay'
     });
     assert.ok(intent.startsWith('intent://pay?'));
     assert.ok(intent.includes('package=' + gpay.packageName));
-    assert.equal(intent.includes('cu='), false);
+    assert.equal(intent.includes('cu=INR'), true);
     console.log('  [✓] Test 45 Passed: 30 UPI providers and Android package intent verified');
 
     // 46. Existing merchant/non-merchant UPI behavior works

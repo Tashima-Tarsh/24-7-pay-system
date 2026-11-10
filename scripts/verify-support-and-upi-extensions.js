@@ -344,28 +344,31 @@ async function runComprehensiveVerification() {
     assert.ok(qrSvg.includes('<svg') && qrSvg.includes('</svg>'));
     console.log('  [✓] Req 21 Passed: QR payload uses exact canonical parameter set');
 
-    // 22 & 23. Android provider launch URI preserves dynamic package targeting & canonical UPI payload
+    // 22 & 23. Android provider launch URI preserves dynamic package targeting & hardened UPI payload
     const phonepe = findUpiProviderById('phonepe');
     const intentUri = buildUpiIntentUri({
       payeeVpa: account.upiId,
       payeeName: account.payeeName,
       amountPaise: session.amountPaise,
       transactionRef: session.orderId,
-      packageName: phonepe.packageName,
-      currency: 'INR'
+      currency: 'INR',
+      targetApp: 'phonepe'
     });
 
     console.log('  [PhonePe Intent URI]:', intentUri);
     assert.ok(intentUri.startsWith('intent://pay?'));
     assert.ok(intentUri.includes('package=com.phonepe.app'));
-    assert.ok(intentUri.endsWith('#Intent;scheme=upi;package=com.phonepe.app;end'));
+    assert.ok(intentUri.includes('scheme=upi'));
+    assert.ok(intentUri.includes('S.browser_fallback_url='));
+    assert.ok(intentUri.endsWith(';end'));
 
     const intentPayload = intentUri.split('?')[1].split('#')[0];
     const intentParams = new URLSearchParams(intentPayload);
-    assert.deepEqual([...intentParams.keys()], ['pa', 'pn', 'am', 'tn']);
-    assert.equal(intentParams.get('cu'), null);
-    assert.equal(intentParams.get('tr'), null);
-    console.log('  [✓] Req 22 & 23 Passed: Provider intent preserves package targeting and has ONLY pa, pn, am, tn');
+    assert.deepEqual([...intentParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc']);
+    assert.equal(intentParams.get('cu'), 'INR');
+    assert.equal(intentParams.get('mc'), '5411');
+    assert.ok(intentParams.get('tr'));
+    console.log('  [✓] Req 22 & 23 Passed: Provider intent preserves package targeting with hardened payload');
 
     // --- 24. Attribution, Timer & Queue State Invariance ---
     console.log('\n[Requirement 24] Attribution, Timers & Verification Invariance...');

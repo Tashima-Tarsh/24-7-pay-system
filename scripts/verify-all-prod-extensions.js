@@ -33,13 +33,15 @@ async function verifyProductionExtensions() {
     amountPaise: 100n,
     transactionRef: 'COIN-ORD-1788969252735',
     currency: 'INR',
-    packageName: phonepe.packageName
+    targetApp: 'phonepe'
   });
   console.log('[✓] Dynamic Android Intent URI generated:');
   console.log('   ', testIntent);
   assert.ok(testIntent.startsWith('intent://pay?'));
   assert.ok(testIntent.includes('package=com.phonepe.app'));
-  assert.ok(testIntent.endsWith('#Intent;scheme=upi;package=com.phonepe.app;end'));
+  assert.ok(testIntent.includes('scheme=upi'));
+  assert.ok(testIntent.includes('S.browser_fallback_url='));
+  assert.ok(testIntent.endsWith(';end'));
 
   // 2. Check Production Database
   const prodDb = new Database({ dbPath });
