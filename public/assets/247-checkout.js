@@ -18,9 +18,9 @@ function externalReturn(url){
  try{const u=new URL(url);if(u.protocol==='https:'&&!u.username&&!u.password){a.href=u.href;a.hidden=false;}}catch{}
 }
 function hidePayment(){
- $('payment-instructions').hidden=true;$('qr').hidden=true;$('qr').removeAttribute('src');
- for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open','bhim-open'])$(id).removeAttribute('href');
- $('app-actions').hidden=true;$('timer').hidden=true;
+  $('payment-instructions').hidden=true;$('qr').hidden=true;$('qr').removeAttribute('src');
+  for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open','bhim-open']){const el=$(id);if(el){el.removeAttribute('href');el.onclick=null;}}
+  $('app-actions').hidden=true;$('timer').hidden=true;
 }
 function sessionDescription(data){
  const status=String(data.status||'UNKNOWN').toUpperCase();
@@ -99,7 +99,10 @@ function render(data){
   queryParams.delete('mode'); // mode is optional UPI param; omit for intent links
   const query=queryParams.toString();
   // Fallback URL: GPay/PhonePe redirect here after payment so checkout can poll status.
-  const fallbackUrl=encodeURIComponent(location.origin+location.pathname);
+  // Use /checkout/<paymentId> so the fallback always lands on the current order,
+  // even when the page was loaded via /checkout?id=... query form.
+  const checkoutPath='/checkout/'+encodeURIComponent(paymentId);
+  const fallbackUrl=encodeURIComponent(new URL(checkoutPath,location.origin).href);
   const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';S.browser_fallback_url='+fallbackUrl+';end';
   const iosUri=scheme=>scheme+query;
   const sources=[
@@ -123,14 +126,16 @@ function render(data){
         el.removeAttribute('href');
       }
     }
-    // Explicit per-button click handlers guarantee a user-gesture navigation
-    // to the intent URI. Android Chrome does not always honor intent:// in
-    // plain <a href> on its own; an explicit location.href inside a click
-    // handler (triggered by the user's tap) works reliably.
+    // One assignable onclick handler per element guarantees a user-gesture
+    // navigation to the intent URI. Android Chrome does not always honor
+    // intent:// in plain <a href> on its own; an explicit location.href
+    // inside a click handler (triggered by the user's tap) works reliably.
+    // Assigning onclick (not addEventListener) prevents duplicate handlers
+    // from stacking when the checkout re-renders on poll/SSE updates.
     for(const [id] of sources){
       const el=$(id);
       if(!el||!intentById[id])continue;
-      el.addEventListener('click',function(ev){
+      el.onclick=function(ev){
         ev.preventDefault();
         const uri=intentById[this.id];
         if(uri){
@@ -138,7 +143,7 @@ function render(data){
           display('app-handoff-note','Complete the payment in your UPI app, then return here. Awaiting verified bank/provider confirmation; do not pay twice.');
           location.href=uri;
         }
-      },{passive:false});
+      };
     }
     if(appHandoff){
       display('app-handoff-note','UPI app opened or selected. Return here after payment; waiting for trusted confirmation. Do not pay twice.');
@@ -198,11 +203,12 @@ else{
   pollingStartTime=Date.now();
   void refresh();connect();
   polling=setInterval(()=>{
-    // Stop polling after 5 minutes — payment likely abandoned or expired
+    // Stop polling after 5 minutes — server status/expiry determines terminal state.
+    // Keep polling so the original order can still resolve; show a status note instead
+    // of asking the user for a fresh link while the transfer may still settle.
     if(Date.now()-pollingStartTime>5*60*1000){
-      clearInterval(polling);polling=null;
-      statusLine('Payment session timed out','No response from the payment system for 5 minutes. Please ask your merchant for a fresh payment link.','warning');
-      hidePayment();$('retry-area').hidden=false;display('retry-message','Session timed out. Request a new payment link from your merchant.');
+      statusLine('Still awaiting confirmation','No confirmed payment result after 5 minutes. Your original order is still open; refresh to check its status.','warning');
+      $('retry-area').hidden=false;display('retry-message','Still awaiting confirmation. Refresh to check the order status.');
       return;
     }
     updateTimer();void refresh();

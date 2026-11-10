@@ -176,8 +176,11 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(queryParams.get('cu'), 'INR');
       assert.equal(queryParams.get('tr'), 'ORDER123');
       assert.equal(queryParams.get('tn'), 'Payment');
-      assert.equal(queryParams.get('mc'), '5411');
-      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tid', 'tn', 'mc']);
+      // MCC is only present when the merchant profile assigns one; never invented.
+      assert.ok(!queryParams.get('mc') || /^\d{4}$/.test(queryParams.get('mc')));
+      const expectedKeys = ['am', 'cu', 'pa', 'pn', 'tid', 'tn', 'tr'];
+      if (queryParams.get('mc')) expectedKeys.push('mc');
+      assert.deepEqual([...queryParams.keys()].sort(), expectedKeys.sort());
     });
 
     test('validates 30 official UPI application provider registry', () => {

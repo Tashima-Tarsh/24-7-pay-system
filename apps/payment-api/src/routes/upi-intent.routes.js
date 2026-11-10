@@ -486,7 +486,21 @@ export function registerUpiIntentRoutes(server, ctx) {
 
       // Generate identifiers.
       const paymentId = generateId('pay');
-      const generatedOrderId = orderId || `ORD_${crypto.randomUUID().toString().replace(/-/g, '').slice(0, 14)}`;
+
+      // Generate a unique UPI transaction reference (alphanumeric, max 35 chars).
+      // This is the value emitted as tr/tid in UPI URIs. It must be unique per
+      // payment so that ORD-123 and ORD123 do not collide after sanitization.
+      const sanitizedOrderId = orderId ? String(orderId).replace(/[^A-Za-z0-9]/g, '').slice(0, 35) : null;
+      let upiReference = sanitizedOrderId || generateId('upi').slice(0, 35);
+      // Ensure uniqueness across sanitized collisions (e.g. ORD-123 vs ORD123).
+      let retryCounter = 0;
+      while (sessionRepo.findByOrderId && sessionRepo.findByOrderId(merchant.id, upiReference)) {
+        retryCounter++;
+        const suffix = String(retryCounter).slice(-3);
+        upiReference = (sanitizedOrderId ? sanitizedOrderId.slice(0, 32) : generateId('upi').slice(0, 32)) + suffix;
+        if (upiReference.length > 35) upiReference = upiReference.slice(0, 35);
+        if (retryCounter > 100) throw new Error('Unable to generate unique UPI reference.');
+      }
 
       // Resolve receiving VPA and profile.
       let profile = null;
@@ -503,13 +517,13 @@ export function registerUpiIntentRoutes(server, ctx) {
         {
           payeeVpa,
           payeeName,
-          mcc: profile ? profile.mcc : '5411',
+          mcc: profile ? profile.mcc : undefined,
           orgid: profile ? profile.orgid : undefined,
           intentSignKeyPem: profile ? profile.intentSignKeyPem : undefined
         },
         finalAmountPaise,
-        generatedOrderId,
-        `24/7 Pay ${generatedOrderId}`,
+        upiReference,
+        `24/7 Pay ${upiReference}`,
         checkoutUrl
       );
       const deepLinkUniversal = built.uri;
@@ -519,16 +533,19 @@ export function registerUpiIntentRoutes(server, ctx) {
         payeeVpa,
         payeeName,
         amountPaise: finalAmountPaise,
-        transactionRef: generatedOrderId,
-        transactionNote: `24/7 Pay ${generatedOrderId}`,
+        transactionRef: upiReference,
+        transactionNote: `24/7 Pay ${upiReference}`,
         targetApp: 'generic', // Let Android OS show the chooser
-        checkoutUrl
+        checkoutUrl,
+        merchantCategoryCode: profile ? profile.mcc : undefined
       });
 
       const sessionMetadata = {
         ...metadata,
         paymentId,
-        orderId: generatedOrderId,
+        orderId: upiReference,
+        upiReference,
+        merchantOrderId: orderId || null,
         payeeVpa,
         upiUri: deepLinkUniversal,
         intentAndroid,
@@ -547,7 +564,7 @@ export function registerUpiIntentRoutes(server, ctx) {
           merchantId: merchant.id,
           customerId: customerId || null,
           receivingAccountId,
-          orderId: generatedOrderId,
+          orderId: upiReference,
           amountPaise: finalAmountPaise,
           baseAmountPaise: finalAmountPaise,
           currency: finalCurrency,
@@ -560,7 +577,7 @@ export function registerUpiIntentRoutes(server, ctx) {
         });
       } catch (createErr) {
         if (createErr.code === 'ERR_SQLITE_ERROR' && createErr.message.includes('UNIQUE constraint failed: payment_sessions.merchant_id, payment_sessions.order_id')) {
-          const existing = sessionRepo.findByOrderId(merchant.id, generatedOrderId);
+          const existing = sessionRepo.findByOrderId(merchant.id, upiReference);
           if (existing) {
             session = existing;
           } else {
@@ -582,13 +599,13 @@ export function registerUpiIntentRoutes(server, ctx) {
           status: PaymentStatus.INITIATED,
           amountPaise: finalAmountPaise,
           currency: finalCurrency,
-          reference: generatedOrderId,
+          reference: upiReference,
           reportedStatus: PaymentStatus.INITIATED,
           evidenceLevel: PaymentEvidenceLevel.REPORTED,
           observedAt: nowIso(),
           processedAt: nowIso(),
           correlationId: generateId('corr'),
-          rawPayload: { orderId: generatedOrderId, paymentId, upiUri: deepLinkUniversal, receivingVpa },
+          rawPayload: { orderId: upiReference, paymentId, upiUri: deepLinkUniversal, receivingVpa },
           merchantId: merchant.id
         });
       } catch (err) {

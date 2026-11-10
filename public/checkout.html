@@ -573,10 +573,10 @@
           if(url){el.href=url;intentById[id]=url;el.classList.remove('hide');}
           else{el.removeAttribute('href');el.classList.add('hide');}
         }
-        // Explicit per-button click handlers guarantee user-gesture navigation
-        // to the intent URI. Android Chrome does not always honor intent:// in
-        // plain <a href> on its own; an explicit location.href inside a click
-        // handler (triggered by the user's tap) works reliably.
+        // One assignable onclick handler per element prevents duplicate handlers
+        // from stacking when the checkout re-renders on poll/SSE updates.
+        // Android Chrome requires user-gesture navigation via location.href
+        // for intent:// URIs.
         for(const [id] of [
           ['open-upi'],
           ['open-gpay'],
@@ -585,13 +585,13 @@
         ]){
           const el=$(id[0]);
           if(!el||!intentById[id[0]])continue;
-          el.addEventListener('click',function(ev){
+          el.onclick=function(ev){
             ev.preventDefault();
             const uri=intentById[this.id];
             if(uri){
               location.href=uri;
             }
-          },{passive:false});
+          };
         }
         $('checkout-stage-message').textContent=payable
           ? 'Verify payee and amount in your UPI app; confirmation requires trusted payment evidence.'

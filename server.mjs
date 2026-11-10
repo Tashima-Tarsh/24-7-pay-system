@@ -12,20 +12,55 @@ const PORT = Number(process.env.PORT || 7000);
 const API_PORT = 6100;
 const API_HOST = '127.0.0.1';
 
-// Ensure data directory exists for SQLite
-const dbPath = process.env.SQLITE_DB_PATH || path.join(rootDir, 'data', 'youpi_pg.sqlite');
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// Ensure required security environment variables have valid values if unset
-process.env.NODE_ENV ||= 'production';
-process.env.SQLITE_DB_PATH ||= dbPath;
-process.env.YOUPI_BIND_HOST ||= '127.0.0.1';
-process.env.PAYMENT_API_PORT ||= String(API_PORT);
-process.env.ENCRYPTION_MASTER_KEY ||= crypto.randomBytes(32).toString('hex');
-process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
-process.env.ORDER_SIGNING_SECRET ||= crypto.randomBytes(32).toString('hex');
+// Ensure required security environment variables are set in production.
+// Fail boot if any are missing or use unsafe defaults — never silently
+// generate replacements that would invalidate existing encrypted data.
+const REQUIRED_SECRET_VARS = ['ENCRYPTION_MASTER_KEY', 'JWT_SECRET', 'ORDER_SIGNING_SECRET'];
+const UNSAFE_DEFAULTS = new Set([
+  'youpi_jwt_secret_change_in_production_min_32_chars_long',
+  'AdminSecurePassword123!',
+  'android_pairing_enrollment_secret_key_32_chars',
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+]);
+
+function isUnsafeOrMissing(value) {
+  return !value || value.length < 32 || UNSAFE_DEFAULTS.has(value);
+}
+
+for (const key of REQUIRED_SECRET_VARS) {
+  const val = process.env[key];
+  if (IS_PRODUCTION && isUnsafeOrMissing(val)) {
+    console.error(`[FATAL] Production requires a valid persistent ${key}. Set it in Render environment and restart.`);
+    process.exit(1);
+  }
+}
+
+// Preserve development/test defaults only when not in production.
+if (!IS_PRODUCTION) {
+  process.env.ENCRYPTION_MASTER_KEY ||= crypto.randomBytes(32).toString('hex');
+  process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
+  process.env.ORDER_SIGNING_SECRET ||= crypto.randomBytes(32).toString('hex');
+}
+
 process.env.INITIAL_ADMIN_EMAIL ||= 'admin@247pay.local';
 process.env.INITIAL_ADMIN_PASSWORD ||= crypto.randomBytes(16).toString('hex');
+
+// Production storage guard: refuse financial writes if ephemeral SQLite.
+const DATABASE_URL = process.env.DATABASE_URL;
+const USES_POSTGRES = Boolean(DATABASE_URL && /^postgres(?:ql)?:\/\//i.test(DATABASE_URL));
+
+if (IS_PRODUCTION && !USES_POSTGRES) {
+  console.error('[FATAL] Production requires DATABASE_URL pointing to PostgreSQL. Ephemeral SQLite is unsafe for financial data.');
+  process.exit(1);
+}
+
+// Ensure data directory exists for SQLite (dev/test only)
+const dbPath = process.env.SQLITE_DB_PATH || path.join(rootDir, 'data', 'youpi_pg.sqlite');
+if (!USES_POSTGRES) {
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+}
 
 // Start backend payment API directly in-process
 let apiServer = null;
@@ -164,6 +199,15 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('landing.html not found');
     }
+    return;
+  }
+
+  // QR endpoint: /checkout/<id>/qr.svg returns the session's UPI QR code
+  const qrMatch = pathname.match(/^\/checkout\/([^/]+)\/qr\.svg$/);
+  if (qrMatch) {
+    const paymentId = qrMatch[1];
+    // Proxy to payment API for QR generation
+    streamPipe(req, res, API_HOST, API_PORT, `/api/v1/checkout/${encodeURIComponent(paymentId)}/upi-qr`);
     return;
   }
 

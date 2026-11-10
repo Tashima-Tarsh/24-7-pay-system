@@ -153,7 +153,9 @@ export function buildUpiIntentUri(options) {
   params.set('tr', tr);   // Transaction Reference (merchant ref)
   params.set('tid', tr);  // Transaction ID (mandatory per NPCI; GPay enforces this)
   params.set('tn', tn);
-  params.set('mc', '5411'); // Safe, universally accepted Merchant Category Code (Grocery)
+  if (options.merchantCategoryCode && /^\d{4}$/.test(String(options.merchantCategoryCode))) {
+    params.set('mc', String(options.merchantCategoryCode));
+  }
 
   // Replace '+' with '%20' for maximum compatibility with older UPI app parsers
   const queryString = params.toString().replace(/\+/g, '%20');
