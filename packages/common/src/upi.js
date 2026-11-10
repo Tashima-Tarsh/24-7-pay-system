@@ -156,6 +156,13 @@ export function buildUpiIntentUri(options) {
   // so UPI apps redirect to the public domain (not localhost) on production deployments.
   const checkoutUrl = (options.checkoutUrl || process.env.PUBLIC_CHECKOUT_URL || 'http://localhost:7000').trim();
 
+  // Production guard: refuse to emit intents with localhost/non-HTTPS fallback
+  if (process.env.NODE_ENV === 'production') {
+    if (!checkoutUrl || /localhost|127\.0\.0\.1/i.test(checkoutUrl) || !checkoutUrl.startsWith('https://')) {
+      throw new Error('PUBLIC_CHECKOUT_URL must be set to the production HTTPS origin in production');
+    }
+  }
+
   let intentUri = `intent://pay?${queryString}#Intent;scheme=upi`;
 
   if (targetPackage) {

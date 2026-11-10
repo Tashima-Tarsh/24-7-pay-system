@@ -70,6 +70,13 @@ export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
   // so UPI apps redirect to the public domain (not localhost) after payment.
   const resolvedFallback = fallbackUrl || process.env.PUBLIC_CHECKOUT_URL || null;
 
+  // Production guard: refuse to emit intent links without a valid HTTPS fallback
+  if (process.env.NODE_ENV === 'production') {
+    if (!resolvedFallback || /localhost|127\.0\.0\.1/i.test(resolvedFallback) || !resolvedFallback.startsWith('https://')) {
+      throw new Error('PUBLIC_CHECKOUT_URL must be set to the production HTTPS origin in production');
+    }
+  }
+
   // Build query params, stripping mode (optional UPI param that may cause GPay/PhonePe rejection).
   // QR codes keep their mode; intent links don't need it.
   const queryParams = new URLSearchParams(upiUri.slice('upi://pay?'.length));
