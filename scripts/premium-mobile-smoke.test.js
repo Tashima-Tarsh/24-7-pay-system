@@ -118,8 +118,9 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   const receiver=await fetch(base+'/api/platform/v1/receiving-accounts',{method:'POST',headers:scopedHeaders,body:JSON.stringify({upiId:'smoke-test@okbank',payeeName:'Mobile Smoke Merchant',confirmVpaOwnership:true})});
   assert.equal(receiver.status,201,'Could not configure test receiving UPI account: '+await receiver.text());
   const payment=await fetch(base+'/api/platform/v1/payments',{method:'POST',headers:{...scopedHeaders,'idempotency-key':'checkout-render-test-01'},body:JSON.stringify({orderId:'CHECKOUT_SMOKE_01',amount:'2.00',currency:'INR'})});
-  assert.equal(payment.status,201,'Real isolated payment request failed: '+await payment.text());
-  const created=await payment.json();
+  const paymentBody=await payment.text();
+  assert.equal(payment.status,201,'Real isolated payment request failed: '+paymentBody);
+  const created=JSON.parse(paymentBody);
   assert.ok(created.paymentId,'Payment creation must return a payment identifier');
   const state=await fetch(base+'/api/v1/checkout/'+encodeURIComponent(created.paymentId)+'/state');
   assert.equal(state.status,200);
