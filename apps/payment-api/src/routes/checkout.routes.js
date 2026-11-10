@@ -473,16 +473,10 @@ export function registerCheckoutRoutes(server, ctx) {
       payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
       payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
     }
-    // Bind the production Dynamo Pay checkout to its existing receiving account.
-    if (process.env.NODE_ENV === 'production' &&
-        session.merchantId === '00000000-0000-0000-0000-000000000001' &&
-        !session.metadata?.externalCollection) {
-      const routedAccount = snapshot || receivingAccount;
-      const fixedVpa = '9082843142@slc';
-      payeeVpa = routedAccount?.id === '00000000-0000-0000-0000-000000000002' &&
-        routedAccount.upiId?.toLowerCase() === fixedVpa ? fixedVpa : null;
-      payeeName = payeeVpa ? 'Nitish Kumar' : null;
-    }
+    // The payment session's assigned receiving account is authoritative.
+    // Never replace or suppress it using deployment-specific merchant IDs or VPAs.
+    // An account switch affects new orders only; earlier checkout links retain
+    // the receivingAccountSnapshot recorded when their session was created.
     const isMerchantEnabled = receivingAccount
       ? Boolean(receivingAccount.isMerchantEnabled)
       : (snapshot?.isMerchantEnabled !== undefined ? Boolean(snapshot.isMerchantEnabled) : true);
