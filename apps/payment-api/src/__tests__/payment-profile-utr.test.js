@@ -187,3 +187,18 @@ test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, 
     testDb.close();
   }
 });
+
+test('platform payment checkout keeps the VPA captured when the order was created',async()=>{
+ const db=new Database({inMemory:true});runMigrations(db);
+ const merchants=new MerchantRepository(db),receivers=new ReceivingAccountRepository(db),sessions=new PaymentSessionRepository(db),profiles=new PpMerchantPaymentProfileRepository(db);
+ const merchant=merchants.getDefault(),receiver=receivers.findActiveForMerchant(merchant.id);
+ const order=sessions.create({merchantId:merchant.id,receivingAccountId:receiver.id,orderId:'SNAPSHOT-CHECKOUT-1',amountPaise:100n,currency:'INR',method:'UPI',status:PaymentStatus.ACTIVE,metadata:{platform:true,receivingAccountSnapshot:{id:receiver.id,upiId:receiver.upiId,payeeName:receiver.payeeName}}});
+ profiles.upsert(merchant.id,{payeeVpa:'different-receiver@okbank',payeeName:'Different Receiver',payeeEmail:'billing@example.test',mcc:'5411',isActive:1});
+ const server=await startServer(0,db);
+ try{
+  const state=await request('http://localhost:'+server.port,'/api/v1/checkout/'+order.id+'/state');
+  assert.equal(state.status,200);
+  assert.equal(state.body.payeeVpa,receiver.upiId);
+  assert.equal(new URL(state.body.upiUri).searchParams.get('pa'),receiver.upiId);
+ }finally{await server.close();db.close();}
+});
