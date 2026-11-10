@@ -101,13 +101,41 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   await page.goto(base+'/checkout/e2e-checkout-id-123',{waitUntil:'domcontentloaded'});
   await page.locator('#qr').waitFor({state:'visible',timeout:15000});
   assert.ok((await page.locator('#qr').getAttribute('src')).startsWith('data:image/svg+xml;base64,'));
-  for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open']){
+  for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open','bhim-open']){
    const button=page.locator('#'+id);
    await button.waitFor({state:'visible'});
    assert.ok(await button.getAttribute('href'),id+' must have a payment handoff URI');
   }
   assert.ok((await page.locator('#gpay-open').getAttribute('href')).includes('package=com.google.android.apps.nbu.paisa.user'));
   assert.ok((await page.locator('#phonepe-open').getAttribute('href')).includes('package=com.phonepe.app'));
+  assert.ok((await page.locator('#bhim-open').getAttribute('href')).includes('package=in.org.npci.upiapp'));
+  // The customer's app launch must never itself mark a payment successful.
+  await page.evaluate(()=>{
+   const button=document.querySelector('#gpay-open');
+   button.addEventListener('click',event=>event.preventDefault(),{capture:true,once:true});
+   button.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+  });
+  await page.getByText(/Awaiting verified bank\/provider confirmation/).waitFor({timeout:15000});
+  assert.match(await page.locator('#status-title').innerText(),/Ready when you are/);
+
+  const ios=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,
+   userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'});
+  const iosPage=await ios.newPage();
+  await iosPage.route('**/api/v1/checkout/e2e-checkout-id-123/state',route=>route.fulfill({
+   status:200,contentType:'application/json',body:JSON.stringify({
+    paymentId:'e2e-checkout-id-123',orderId:'MOBILE_E2E_ORDER',amount:'1.00',status:'ACTIVE',
+    merchantName:'Test Merchant',payeeVpa:'qaexample@okbank',payeeName:'Test Merchant',
+    upiUri:uri,upiQr:generateQrDataUri(uri),upiDeepLinks:buildUpiPaymentIntentLinks(uri)
+   })
+  }));
+  await iosPage.goto(base+'/checkout/e2e-checkout-id-123',{waitUntil:'domcontentloaded'});
+  await iosPage.locator('#qr').waitFor({state:'visible',timeout:15000});
+  assert.match(await iosPage.locator('#gpay-open').getAttribute('href')||'',/^gpay:\/\/upi\/pay\?/);
+  assert.match(await iosPage.locator('#phonepe-open').getAttribute('href')||'',/^phonepe:\/\/upi\/pay\?/);
+  assert.match(await iosPage.locator('#paytm-open').getAttribute('href')||'',/^paytmmp:\/\/pay\?/);
+  assert.match(await iosPage.locator('#bhim-open').getAttribute('href')||'',/^bhim:\/\/upi\/pay\?/);
+  await ios.close();
+
 
 
   // End-to-end checkout rendering from a real isolated payment session, not a mocked response.
@@ -129,6 +157,14 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   if(checkoutState.status==='ACTIVE'){
    assert.match(checkoutState.upiUri||'',/^upi:\/\/pay\?/);
    assert.match(checkoutState.upiQr||'',/^data:image\/svg\+xml;base64,/);
+   const parsed=new URL(checkoutState.upiUri);
+   assert.equal(parsed.searchParams.get('pn'),'Mobile Smoke Merchant','Payee name must be encoded exactly once');
+   assert.equal(parsed.searchParams.get('pa'),'smoke-test@okbank');
+   assert.equal(parsed.searchParams.get('am'),'2.00');
+   assert.equal(parsed.searchParams.get('cu'),'INR');
+   assert.equal(parsed.searchParams.get('tr'),'CHECKOUTSMOKE01');
+   assert.equal(parsed.searchParams.get('mc'),null,'Do not fabricate a merchant category code');
+
    const checkout=await context.newPage();
    await checkout.goto(base+'/checkout/'+encodeURIComponent(created.paymentId),{waitUntil:'domcontentloaded'});
    await checkout.locator('#qr:not([hidden])').waitFor({timeout:15000});
