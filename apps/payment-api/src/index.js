@@ -251,19 +251,25 @@ export function createPaymentApp(customDb = null, options = {}) {
   const server = new HttpServer();
   server.use(authGuard);
   let checkoutBaseUrl = process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000';
-  try {
-    const rootEnv = path.resolve(__dirname, '../../../.env');
-    if (fs.existsSync(rootEnv)) {
-      const raw = fs.readFileSync(rootEnv, 'utf8');
-      for (const line of raw.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('BASE_CHECKOUT_URL=')) {
-          const val = trimmed.split('=')[1]?.trim();
-          if (val) checkoutBaseUrl = val.replace(/^["']|["']$/g, '');
-        }
-      }
-    }
-  } catch {}
+
+  const configuredOrigin =
+    process.env.BASE_CHECKOUT_URL ||
+    process.env.PUBLIC_CHECKOUT_URL ||
+    process.env.RENDER_EXTERNAL_URL;
+
+  if (!configuredOrigin && process.env.NODE_ENV === 'production') {
+    throw new Error('A public HTTPS checkout origin is required');
+  }
+
+  const publicUrl = new URL(configuredOrigin || 'http://localhost:7000');
+  if (
+    publicUrl.username || publicUrl.password ||
+    publicUrl.pathname !== '/' || publicUrl.search || publicUrl.hash ||
+    (process.env.NODE_ENV === 'production' && publicUrl.protocol !== 'https:')
+  ) {
+    throw new Error('Invalid public checkout origin');
+  }
+  checkoutBaseUrl = publicUrl.origin;
 
   // BULLETPROOF QUEUE PROMOTION HANDLER
   function handleSlotFreedAndPromote(receivingAccountId) {

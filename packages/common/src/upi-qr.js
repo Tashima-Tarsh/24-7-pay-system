@@ -5,6 +5,7 @@
  * All features are 100% free (Government of India mandates 0% MDR on UPI since 2020).
  */
 import { generateQrSvg } from '@youpi/core';
+import { normalizePayeeName } from './upi.js';
 
 /**
  * Builds a standard NPCI UPI payment URI.
@@ -26,8 +27,8 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
 
   const params = new URLSearchParams();
   params.set('pa', vpa.trim());
-  // Sanitize payee name: strip special chars, cap at 50 chars. URLSearchParams handles encoding.
-  const safeName = name.replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 50);
+  // Sanitize payee name: NFC-normalized, capped at 50 chars. URLSearchParams handles encoding.
+  const safeName = normalizePayeeName(name);
   params.set('pn', safeName);
   if (merchantCode) params.set('mc', merchantCode.trim());
   // mode: 04 = fixed amount (user cannot edit), 02 = editable amount

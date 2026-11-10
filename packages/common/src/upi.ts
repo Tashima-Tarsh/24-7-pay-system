@@ -1,5 +1,24 @@
 import { toRupeesString } from './money.js';
 
+/**
+ * Normalizes a payee name for UPI: NFC normalization, strips control chars,
+ * collapses whitespace, enforces 1–50 character limit. Preserves Indian
+ * and other non-ASCII letters that URLSearchParams encodes safely.
+ * @param {string} value
+ * @returns {string}
+ */
+export function normalizePayeeName(value: string): string {
+  if (typeof value !== 'string') throw new Error('Payee name is required');
+  const name = value.normalize('NFC')
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (!name || Array.from(name).length > 50) {
+    throw new Error('Registered payee name must contain 1–50 characters');
+  }
+  return name;
+}
+
 export interface BuildUpiUriOptions {
   payeeVpa: string;
   payeeName: string;
@@ -82,8 +101,8 @@ export function buildUpiIntentUri(options: BuildUpiIntentUriOptions): string {
     throw new Error('Invalid UPI VPA. Ensure format is: username@bank');
   }
 
-  // 2. Sanitize Payee Name (Max 50 chars. Strip special chars that crash UPI apps)
-  const pn = String(options.payeeName).replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 50);
+  // 2. Sanitize Payee Name (Max 50 chars. NFC-normalized; URLSearchParams encodes safely)
+  const pn = normalizePayeeName(options.payeeName);
 
   // 3. Format Amount (GPay STRICTLY requires exactly 2 decimal places, e.g., "50.00")
   let am: string | undefined;
