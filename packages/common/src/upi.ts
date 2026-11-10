@@ -129,14 +129,19 @@ export function buildUpiIntentUri(options: BuildUpiIntentUriOptions): string {
 
   // 8. Construct Android Intent URI
   // Format: intent://pay?{query}#Intent;scheme=upi;package={package};S.browser_fallback_url={url};end
-  let intentUri = `intent://pay?${queryString}#Intent;scheme=upi`;
+  let intentUri = `intent://pay?${queryString}#Intent;scheme=upi;mode=02`;
 
   if (targetPackage) {
     intentUri += `;package=${targetPackage}`;
   }
 
-  const fallbackUrl = encodeURIComponent(options.checkoutUrl || `https://yourdomain.com/status?ref=${tr}`);
-  intentUri += `;S.browser_fallback_url=${fallbackUrl};end`;
+  const checkoutUrl = options.checkoutUrl?.trim();
+  if (checkoutUrl) {
+    const fallbackUrl = encodeURIComponent(checkoutUrl);
+    intentUri += `;S.browser_fallback_url=${fallbackUrl}`;
+  }
+
+  intentUri += ';end';
 
   return intentUri;
 }
