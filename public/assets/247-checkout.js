@@ -1,7 +1,8 @@
 const $=id=>document.getElementById(id);
 const found=location.pathname.match(/^\/checkout\/([^/]+)\/?$/);
 const paymentId=found?decodeURIComponent(found[1]):new URLSearchParams(location.search).get('id');
-const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const android=/Android/i.test(navigator.userAgent);
+const mobile=android||/iPhone|iPad|iPod/i.test(navigator.userAgent);
 let current=null,events=null,polling=null,loading=false,terminal=false,deadline=0,retryTimer=null;
 const terminalStates=new Set(['SUCCESS','FAILED','EXPIRED','CANCELLED','BLOCKED']);
 const safeUri=(url,prefix)=>typeof url==='string'&&url.startsWith(prefix)&&!(/[\s\u0000-\u001f]/.test(url))?url:null;
@@ -67,7 +68,13 @@ function render(data){
  const uriPayee=verifiedUpi?new URL(verifiedUpi).searchParams.get('pa'):null;
  const payeeVpa=typeof data.payeeVpa==='string'&&data.payeeVpa?data.payeeVpa:uriPayee;
  const payable=(status==='ACTIVE'||status==='INTENT_ISSUED')&&Boolean(verifiedUpi)&&Boolean(payeeVpa);
+ if(!payable&&(status==='ACTIVE'||status==='INTENT_ISSUED')){
+  statusLine('UPI details unavailable','The receiving UPI ID is not ready for this order. Ask your merchant to verify the assigned account.','warning');
+  $('retry-area').hidden=false;
+  display('retry-message','Do not pay until the correct QR and receiving UPI ID appear.');
+ }
  if(payable){
+  $('retry-area').hidden=true;
   $('payment-instructions').hidden=false;
   display('payee-name',data.payeeName||data.merchantName||'Merchant');
   display('payee-vpa',payeeVpa);
@@ -96,7 +103,7 @@ function render(data){
    ['phonepe-open',safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app'),'intent://pay?'],
    ['paytm-open',safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm'),'intent://pay?']
   ];
-  if(mobile){$('app-actions').hidden=false;for(const [id,url,prefix]of sources){const allowed=safeUri(url,prefix),el=$(id);if(allowed){el.href=allowed;el.hidden=false;}else{el.hidden=true;el.removeAttribute('href');}}}
+  if(mobile){$('app-actions').hidden=false;for(const [id,url,prefix]of sources){const allowed=(!android&&id!=='upi-open')?null:safeUri(url,prefix),el=$(id);if(allowed){el.href=allowed;el.hidden=false;}else{el.hidden=true;el.removeAttribute('href');}}}
   if(data.timeRemainingSeconds>0){
     deadline=Date.now()+Math.min(86400,Number(data.timeRemainingSeconds))*1000;
     $('timer').hidden=false;updateTimer();
