@@ -63,18 +63,38 @@ function render(data){
   if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(support))display('support','Questions? Contact '+support);
  }
  if(terminal){showResult({...data,status},title,description,kind);stop();return;}
- const payable=(status==='ACTIVE'||status==='INTENT_ISSUED')&&Boolean(safeUri(data.upiUri,'upi://pay?'))&&Boolean(data.payeeVpa);
+ const verifiedUpi=safeUri(data.upiUri,'upi://pay?');
+ const uriPayee=verifiedUpi?new URL(verifiedUpi).searchParams.get('pa'):null;
+ const payeeVpa=typeof data.payeeVpa==='string'&&data.payeeVpa?data.payeeVpa:uriPayee;
+ const payable=(status==='ACTIVE'||status==='INTENT_ISSUED')&&Boolean(verifiedUpi)&&Boolean(payeeVpa);
  if(payable){
   $('payment-instructions').hidden=false;
   display('payee-name',data.payeeName||data.merchantName||'Merchant');
-  display('payee-vpa',data.payeeVpa);
+  display('payee-vpa',payeeVpa);
   const qr=data.upiQr;
   if(typeof qr==='string'&&qr.startsWith('data:image/svg+xml;base64,')){
    $('qr').src=qr;$('qr').hidden=false;$('qr-fallback').hidden=true;
-  }else{$('qr-fallback').hidden=false;}
-  const links=data.upiDeepLinks||{},sources=[
-   ['upi-open',data.upiUri,'upi://pay?'],['gpay-open',links.gpay,'intent://pay?'],
-   ['phonepe-open',links.phonepe,'phonepe://pay?'],['paytm-open',links.paytm,'paytmmp://pay?']
+  }else{
+   $('qr-fallback').hidden=false;
+   // Recover the QR from the existing authenticated-by-session checkout endpoint
+   // only while this payment remains payable. Never display an old QR on expiry.
+   const activeId=paymentId;
+   fetch('/api/v1/checkout/'+encodeURIComponent(activeId)+'/upi-qr',{cache:'no-store',credentials:'omit'})
+    .then(r=>r.ok?r.json():null).then(q=>{
+      if(!q||!current||current.status!==status||terminal)return;
+      if(typeof q.upiQr==='string'&&q.upiQr.startsWith('data:image/svg+xml;base64,')){
+        $('qr').src=q.upiQr;$('qr').hidden=false;$('qr-fallback').hidden=true;
+      }
+    }).catch(()=>{});
+  }
+  const links=data.upiDeepLinks||{};
+  const query=verifiedUpi.slice('upi://pay?'.length);
+  const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';end';
+  const sources=[
+   ['upi-open',verifiedUpi,'upi://pay?'],
+   ['gpay-open',safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user'),'intent://pay?'],
+   ['phonepe-open',safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app'),'intent://pay?'],
+   ['paytm-open',safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm'),'intent://pay?']
   ];
   if(mobile){$('app-actions').hidden=false;for(const [id,url,prefix]of sources){const allowed=safeUri(url,prefix),el=$(id);if(allowed){el.href=allowed;el.hidden=false;}else{el.hidden=true;el.removeAttribute('href');}}}
   if(data.timeRemainingSeconds>0){
