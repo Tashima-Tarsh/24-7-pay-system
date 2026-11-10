@@ -96,7 +96,7 @@ export function registerDynamoPayRoutes(server, ctx) {
     if(process.env.DYNAMO_UNIFIED_GATEWAY==='true'){
       try{const value=fs.readFileSync(new URL('../../../../data/.secrets/quick_tunnel_url',import.meta.url),'utf8').trim();if(/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(value))return value;}catch{}
     }
-    return (process.env.BASE_CHECKOUT_URL||'http://localhost:7000').replace(/\/+$/,'');
+    return (process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000').replace(/\/+$/,'');
   }
   function collectionResponse(session){
     const account=session.metadata?.receivingAccountSnapshot||{};

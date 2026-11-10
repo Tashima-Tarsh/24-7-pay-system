@@ -250,7 +250,7 @@ export function createPaymentApp(customDb = null, options = {}) {
 
   const server = new HttpServer();
   server.use(authGuard);
-  let checkoutBaseUrl = process.env.BASE_CHECKOUT_URL || 'http://localhost:7000';
+  let checkoutBaseUrl = process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000';
   try {
     const rootEnv = path.resolve(__dirname, '../../../.env');
     if (fs.existsSync(rootEnv)) {

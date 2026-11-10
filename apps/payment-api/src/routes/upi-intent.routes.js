@@ -244,7 +244,7 @@ export function registerUpiIntentRoutes(server, ctx) {
               upiQr: (existing.metadata && existing.metadata.upiQr) || null,
               copyVpa: (existing.metadata && existing.metadata.copyVpa) || null,
               signed: (existing.metadata && existing.metadata.signed) || false,
-              checkoutUrl: `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${existing.id}`,
+              checkoutUrl: `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${existing.id}`,
               expiresAt: existing.expiresAt ? existing.expiresAt.toISOString() : null,
               createdAt: existing.createdAt ? existing.createdAt.toISOString() : null
             });
@@ -273,7 +273,7 @@ export function registerUpiIntentRoutes(server, ctx) {
       const payeeName = profile ? profile.payeeName : (merchant.businessName || merchant.name || 'Merchant');
       const note = `24/7 Pay ${generatedOrderId}`;
 
-      const checkoutUrl = `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${paymentId}`;
+      const checkoutUrl = `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${paymentId}`;
 
       const built = buildUpiUri(
         {
@@ -388,7 +388,7 @@ export function registerUpiIntentRoutes(server, ctx) {
         upiQr,
         copyVpa,
         signed: built.signed,
-        checkoutUrl: `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${session.id}`,
+        checkoutUrl: `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${session.id}`,
         expiresAt: expiresAt.toISOString(),
         createdAt: session.createdAt ? session.createdAt.toISOString() : nowIso(),
         idempotencyKey
@@ -496,7 +496,7 @@ export function registerUpiIntentRoutes(server, ctx) {
       const payeeVpa = profile ? profile.payeeVpa : receivingVpa;
       const payeeName = profile ? profile.payeeName : (merchant.businessName || merchant.name || 'Merchant');
 
-      const checkoutUrl = returnUrl || `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${paymentId}`;
+      const checkoutUrl = returnUrl || `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${paymentId}`;
 
       // Build the deep_link_universal (upi://) — works on iOS, desktop, native apps.
       const built = buildUpiUri(
@@ -615,7 +615,7 @@ export function registerUpiIntentRoutes(server, ctx) {
         currency: session.currency,
         status: session.status,
         merchant_id: session.merchantId,
-        checkout_url: `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${session.id}`,
+        checkout_url: `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${session.id}`,
         expires_at: expiresAt.toISOString(),
         idempotency_key: idempotencyKey
       });
