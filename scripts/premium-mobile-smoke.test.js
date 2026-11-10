@@ -100,14 +100,14 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   }));
   await page.goto(base+'/checkout/e2e-checkout-id-123',{waitUntil:'domcontentloaded'});
   await page.locator('#qr').waitFor({state:'visible',timeout:15000});
-  assert.match(await page.locator('#qr').getAttribute('src'),/^data:image\\/svg\\+xml;base64,/);
+  assert.ok((await page.locator('#qr').getAttribute('src')).startsWith('data:image/svg+xml;base64,'));
   for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open']){
    const button=page.locator('#'+id);
    await button.waitFor({state:'visible'});
    assert.ok(await button.getAttribute('href'),id+' must have a payment handoff URI');
   }
-  assert.match(await page.locator('#gpay-open').getAttribute('href'),/package=com\\.google\\.android\\.apps\\.nbu\\.paisa\\.user/);
-  assert.match(await page.locator('#phonepe-open').getAttribute('href'),/package=com\\.phonepe\\.app/);
+  assert.ok((await page.locator('#gpay-open').getAttribute('href')).includes('package=com.google.android.apps.nbu.paisa.user'));
+  assert.ok((await page.locator('#phonepe-open').getAttribute('href')).includes('package=com.phonepe.app'));
 
   await context.close();
  }finally{if(browser)await browser.close();child.kill();await closed;fs.rmSync(dir,{recursive:true,force:true});}
