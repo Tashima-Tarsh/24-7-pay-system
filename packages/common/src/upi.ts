@@ -16,7 +16,21 @@ export interface BuildUpiUriOptions {
 export function isValidVpa(vpa: string): boolean {
   if (!vpa || typeof vpa !== 'string') return false;
   const clean = vpa.trim();
-  return /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z0-9.\-_]{2,64}$/.test(clean);
+
+  // Reject non-ASCII characters (homograph / IDN lookalike prevention)
+  if (/[^\x00-\x7F]/.test(clean)) return false;
+
+  // Strict NPCI format: username@bank
+  const vpaRegex = /^[a-z0-9.\-_]{2,256}@[a-z0-9.\-_]{2,64}$/i;
+  if (!vpaRegex.test(clean)) return false;
+
+  // Reject consecutive dots/dashes/underscores
+  if (/\.\./.test(clean) || /--/.test(clean) || /__/.test(clean)) return false;
+
+  // Reject starting or ending with special characters
+  if (/^[.\-_]/.test(clean) || /[.\-_]$/.test(clean)) return false;
+
+  return true;
 }
 
 /**
@@ -34,10 +48,18 @@ export function buildUpiUri(options: BuildUpiUriOptions): string {
   params.set('pa', options.payeeVpa.trim());
   params.set('pn', options.payeeName.trim());
   params.set('am', amountStr);
-  const txnId = (options.transactionRef || options.transactionNote || '').trim();
-  if (txnId) {
-    params.set('tn', txnId);
-  }
+
+  // Transaction Ref: alphanumeric only, max 35 chars (Paytm/PhonePe strict).
+  const trRaw = String(options.transactionRef || '').trim();
+  const tr = trRaw.replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);
+  if (tr) params.set('tr', tr);
+
+  // Transaction Note: max 30 chars per NPCI, strip emojis.
+  const tnRaw = String(options.transactionNote || 'Payment').trim();
+  const tn = tnRaw
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .substring(0, 30);
+  if (tn) params.set('tn', tn);
 
   return `upi://pay?${params.toString()}`;
 }
@@ -55,7 +77,7 @@ export interface BuildUpiIntentUriOptions extends BuildUpiUriOptions {
 export function buildUpiIntentUri(options: BuildUpiIntentUriOptions): string {
   // 1. Sanitize VPA (Strict validation)
   const pa = String(options.payeeVpa).trim();
-  if (!/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z0-9.\-_]{2,64}$/.test(pa)) {
+  if (!isValidVpa(pa)) {
     throw new Error('Invalid UPI VPA. Ensure format is: username@bank');
   }
 

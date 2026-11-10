@@ -1,4 +1,5 @@
 import { HttpServer } from '../server.js';
+import { safeEqual } from '@youpi/common';
 
 /**
  * Provider Circuit-Breaker Control Plane — manage circuit breaker state per provider connection.
@@ -6,10 +7,22 @@ import { HttpServer } from '../server.js';
 export function registerCircuitBreakerRoutes(server, ctx) {
   const db = ctx.db;
 
+  const ADMIN_TOKEN = process.env.ADMIN_API_TOKEN || '';
+
   function requireAuth(req) {
     const header = req.headers['authorization'] || '';
     const match = /^Bearer\s+(.+)$/i.exec(header);
-    return match ? match[1].trim() : '';
+    if (!match) return null;
+    const token = match[1].trim();
+    if (!ADMIN_TOKEN) return null;
+    if (!safeEqual(token, ADMIN_TOKEN)) return null;
+    return { role: 'admin' };
+  }
+
+  function requireAdmin(req) {
+    const user = requireAuth(req);
+    if (!user || user.role !== 'admin') return null;
+    return user;
   }
 
   // GET /api/v1/circuit-breaker — list all circuit breaker states

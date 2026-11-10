@@ -1,7 +1,7 @@
 import { HttpServer } from '../server.js';
-import { toRupeesString, buildUpiPaymentUri, buildUpiPaymentIntentLinks, generateQrDataUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS, isInternalServiceRequest } from '@youpi/common';
+import { toRupeesString, buildUpiPaymentUri, buildUpiPaymentIntentLinks, generateQrDataUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS, isInternalServiceRequest, safeEqual } from '@youpi/common';
 import { validateSessionDeviceAccess, buildUpiUri, inspectUpiIntent } from '@youpi/core';
-import { SplitSettlementRepository } from '@youpi/db';
+import { SplitSettlementRepository, LedgerRepository } from '@youpi/db';
 
 /**
  * Validates device access to an active payment session.
@@ -717,7 +717,7 @@ export function registerCheckoutRoutes(server, ctx) {
     }
 
     // Initialize SSE connection (topic = session UUID)
-    server.initSse(session.id, res);
+    server.initSse(session.id, res, req);
 
     // Send current state immediately so the client renders without waiting
     const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa || session.payeeVpa;
@@ -1295,8 +1295,8 @@ export function registerCheckoutRoutes(server, ctx) {
   });
 
   // POST /api/v1/checkout/:id/verify-utr
-  // Gaming-industry instant confirmation: customer submits UTR after paying via UPI app.
-  // No waiting for SMS/Gmail observer — immediate SUCCESS + webhook callback.
+  // Customer submits UTR after paying via UPI app. Never marks SUCCESS on
+  // customer claim alone — requires matching bank observation (upi_mirror_observations).
   server.post('/api/v1/checkout/:id/verify-utr', async (req,res,params)=>{
     const session=ctx.sessionRepo.findById(params.id);
     if(!session)return HttpServer.json(res,404,{error:'Payment session not found.'});
@@ -1305,11 +1305,75 @@ export function registerCheckoutRoutes(server, ctx) {
     if(![PaymentStatus.ACTIVE,PaymentStatus.PROCESSING,PaymentStatus.VERIFICATION_PENDING].includes(session.status))return HttpServer.json(res,409,{error:'This payment cannot accept a new reference.'});
     const body=await HttpServer.parseBody(req),utr=String(body.utr||'').trim();
     if(!/^\d{12}$/.test(utr))return HttpServer.json(res,400,{error:'Enter the 12-digit UPI reference from your payment receipt.'});
-    ctx.db.execute('UPDATE payment_sessions SET metadata=?,updated_at=? WHERE id=?',[JSON.stringify({...session.metadata,reportedUtr:utr,reportedUtrSource:'CUSTOMER_REPORTED'}),new Date().toISOString(),session.id]);
-    ctx.auditRepo?.log({merchantId:session.merchantId,entityType:'PAYMENT_SESSION',entityId:session.id,action:'CUSTOMER_REPORTED_UTR',actorType:'CUSTOMER',details:{reportedUtr:utr,bankVerified:false}});
+
+    // CRITICAL: Verify UTR against bank observations, not just customer claim.
+    // Match on UTR + amount + merchant (tenant isolation).
+    const bankMatch = ctx.db.queryOne(
+      `SELECT id, amount_paise, claiming_receiving_identity, classification
+       FROM upi_mirror_observations
+       WHERE reference_utr = ?
+         AND merchant_id = ?
+         AND amount_paise = ?
+         AND classification IN ('MATCHED', 'VERIFIED', 'CONFIRMED')
+       LIMIT 1`,
+      [utr, session.merchantId, Number(session.amountPaise)]
+    );
+
+    if (!bankMatch) {
+      // Record the customer-reported UTR as evidence but do NOT mark SUCCESS.
+      ctx.db.execute(
+        'UPDATE payment_sessions SET metadata=?, updated_at=? WHERE id=?',
+        [JSON.stringify({...session.metadata, reportedUtr: utr, reportedUtrSource: 'CUSTOMER_REPORTED_UNVERIFIED'}), new Date().toISOString(), session.id]
+      );
+      ctx.auditRepo?.log({
+        merchantId: session.merchantId,
+        entityType: 'PAYMENT_SESSION',
+        entityId: session.id,
+        action: 'CUSTOMER_REPORTED_UTR_UNVERIFIED',
+        actorType: 'CUSTOMER',
+        details: { reportedUtr: utr, bankVerified: false, reason: 'No matching bank observation' }
+      });
+      return HttpServer.json(res, 400, {
+        paymentId: session.id,
+        status: session.status,
+        reportedUtr: utr,
+        verified: false,
+        message: 'UTR not found in bank records. Payment may still be processing — check again in 5 minutes.'
+      });
+    }
+
+    // Bank observation confirmed — mark payment SUCCESS.
+    const nowIso = new Date().toISOString();
+    ctx.db.execute(
+      `UPDATE payment_sessions
+       SET status = ?, verified_at = ?, verified_by = 'utr_verification',
+           metadata = ?, updated_at = ?
+       WHERE id = ?`,
+      [PaymentStatus.SUCCESS, nowIso,
+       JSON.stringify({...session.metadata, reportedUtr: utr, reportedUtrSource: 'BANK_VERIFIED', bankMatchId: bankMatch.id}),
+       nowIso, session.id]
+    );
+
+    ctx.auditRepo?.log({
+      merchantId: session.merchantId,
+      entityType: 'PAYMENT_SESSION',
+      entityId: session.id,
+      action: 'UTR_VERIFIED_BANK_MATCH',
+      actorType: 'CUSTOMER',
+      details: { reportedUtr: utr, bankVerified: true, bankMatchId: bankMatch.id }
+    });
+
+    // Run attribution engine for downstream reconciliation
     ctx.attributionEngine?.reconcilePendingPayment(session.id);
-    const updated=ctx.sessionRepo.findById(session.id);
-    return HttpServer.json(res,200,{paymentId:updated.id,status:updated.status,reportedUtr:utr,verified:updated.status===PaymentStatus.SUCCESS,message:updated.status===PaymentStatus.SUCCESS?'Matched to a bank observation.':'Reference saved. Awaiting a matching bank observation.'});
+
+    const updated = ctx.sessionRepo.findById(session.id);
+    return HttpServer.json(res, 200, {
+      paymentId: updated.id,
+      status: updated.status,
+      reportedUtr: utr,
+      verified: true,
+      message: 'UTR matched to bank observation. Payment confirmed.'
+    });
   });
 
   // POST /api/v1/checkout/:id/cancel
@@ -1597,6 +1661,30 @@ export function registerCheckoutRoutes(server, ctx) {
     }
 
     const merchant = ctx.merchantRepo.findById(session.merchantId);
+    if (!merchant) {
+      HttpServer.json(res, 404, { error: 'Merchant not found.' });
+      return;
+    }
+
+    // Require explicit merchant authentication for COD confirmation.
+    const presentedKey = req.headers['x-merchant-key'];
+    if (!presentedKey || typeof presentedKey !== 'string' || !presentedKey.trim()) {
+      return HttpServer.json(res, 401, { error: 'COD confirmation requires merchant authentication (x-merchant-key header).' });
+    }
+    if (!merchant.webhookSecret || !safeEqual(presentedKey.trim(), merchant.webhookSecret)) {
+      return HttpServer.json(res, 401, { error: 'Invalid merchant credentials for COD confirmation.' });
+    }
+
+    // Require explicit confirmation code — never auto-mark SUCCESS.
+    const body = await HttpServer.parseBody(req).catch(() => ({}));
+    const confirmationCode = body.confirmation_code || body.confirmationCode;
+    if (!confirmationCode) {
+      return HttpServer.json(res, 400, {
+        error: 'COD requires manual confirmation',
+        message: 'Provide confirmation_code to verify delivery before marking as paid.'
+      });
+    }
+
     const branding = merchant?.branding || {};
     const sellingMode = branding.sellingMode || (branding.enabledPaymentMethods?.some(m => m === 'CASH_COUNTER' || m === 'CARD_COUNTER') ? 'OFFLINE' : 'ONLINE');
     if (sellingMode !== 'ONLINE') {
@@ -1617,7 +1705,7 @@ export function registerCheckoutRoutes(server, ctx) {
       }
     }
 
-    // Update payment session to SUCCESS with COD method and release slot
+    // Update payment session to SUCCESS with COD method and release slot — only after merchant confirmation.
     const nowIso = new Date().toISOString();
     const oldReceivingAccountId = session.receivingAccountId || session.receiving_account_id;
 
@@ -1625,13 +1713,27 @@ export function registerCheckoutRoutes(server, ctx) {
       UPDATE payment_sessions
       SET method = 'COD',
           status = 'SUCCESS',
-          verification_tag = 'COD_ORDER_PLACED',
-          verification_level = 1,
+          verification_tag = 'COD_ORDER_CONFIRMED',
+          verification_level = 2,
           completed_at = ?,
           receiving_account_id = NULL,
           updated_at = ?
-      WHERE id = ?
     `, [nowIso, nowIso, session.id]);
+
+    // Record double-entry ledger for COD confirmation.
+    try {
+      new LedgerRepository(ctx.sessionRepo.db).recordDoubleEntry(
+        session.merchantId,
+        'COD_CONFIRMATION',
+        session.id,
+        `COD order confirmed by merchant.`,
+        'PROVIDER_CLEARING',
+        'MERCHANT_RECEIVABLES',
+        Number(session.amountPaise)
+      );
+    } catch (ledgerErr) {
+      console.error('[COD] ledger entry failed:', ledgerErr.message);
+    }
 
     // Release receiving account slot and promote next queued customer
     if (oldReceivingAccountId) {
@@ -2052,6 +2154,11 @@ export function registerCheckoutRoutes(server, ctx) {
 
   // POST /api/v1/checkout/:id/simulate-observation (Inject simulated SMS / Email observation)
   server.post('/api/v1/checkout/:id/simulate-observation', async (req, res, params) => {
+    // HARD BLOCK: Never available in production — synthetic observations must never settle live payments.
+    if (process.env.NODE_ENV === 'production') {
+      return HttpServer.json(res, 404, { error: 'Not found' });
+    }
+
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {
       HttpServer.json(res, 404, { error: 'Session not found' });
@@ -2365,7 +2472,7 @@ export function registerCheckoutRoutes(server, ctx) {
       HttpServer.json(res, deviceAccess.statusCode || 409, deviceAccess.body);
       return;
     }
-    server.initSse(params.id, res);
+    server.initSse(params.id, res, req);
   });
 
   server.get('/api/v1/checkout/:id/events', async (req, res, params) => {
@@ -2379,7 +2486,7 @@ export function registerCheckoutRoutes(server, ctx) {
       HttpServer.json(res, deviceAccess.statusCode || 409, deviceAccess.body);
       return;
     }
-    server.initSse(params.id, res);
+    server.initSse(params.id, res, req);
   });
 
   // GET /api/v1/checkout/:id/upi-mirror-status — UPI Mirror observation status for SmartLink

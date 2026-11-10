@@ -521,7 +521,7 @@ export function registerPaymentRoutes(server, ctx) {
     }
 
     const topic = `payment_session_${session.id}`;
-    server.initSse(topic, res);
+    server.initSse(topic, res, req);
 
     if (isTerminalStatus(session.status)) {
       server.broadcastSse(topic, 'status_change', {

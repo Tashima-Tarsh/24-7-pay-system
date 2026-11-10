@@ -469,7 +469,7 @@ export function registerUpiIntentRoutes(server, ctx) {
       let evidenceLevel = PaymentEvidenceLevel.REPORTED;
 
       if (reportedStatus === 'SUCCESS') {
-        internalStatus = PaymentStatus.CLIENT_REPORTED_SUCCESS;
+        internalStatus = PaymentStatus.VERIFICATION_PENDING;
       } else if (reportedStatus === 'FAILED') {
         internalStatus = PaymentStatus.FAILED;
       } else if (reportedStatus === 'CANCELLED') {

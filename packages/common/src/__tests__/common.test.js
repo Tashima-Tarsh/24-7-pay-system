@@ -113,8 +113,8 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('pa'), 'store@upi');
       assert.equal(parsed.searchParams.get('pn'), 'Acme Store');
       assert.equal(parsed.searchParams.get('am'), '200.00');
-      assert.equal(parsed.searchParams.get('tn'), 'ORDER-99');
-      assert.equal(parsed.searchParams.get('tr'), 'ORDER-99');
+      assert.equal(parsed.searchParams.get('tn'), 'Order payment');
+      assert.equal(parsed.searchParams.get('tr'), 'ORDER99');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
       assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
     });
@@ -133,9 +133,9 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('pa'), '9876543210@axl');
       assert.equal(parsed.searchParams.get('pn'), 'Demo Store Merchant');
       assert.equal(parsed.searchParams.get('am'), '1.00');
-      assert.equal(parsed.searchParams.get('tn'), 'ORDER-123');
+      assert.equal(parsed.searchParams.get('tn'), 'Payment');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
-      assert.equal(parsed.searchParams.get('tr'), 'ORDER-123');
+      assert.equal(parsed.searchParams.get('tr'), 'ORDER123');
       assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
     });
 

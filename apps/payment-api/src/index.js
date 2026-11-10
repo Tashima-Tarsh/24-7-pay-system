@@ -122,6 +122,7 @@ import { registerCodeAttestationRoutes } from './routes/code-attestation.routes.
 import { registerReceivingAccountRoutes } from './routes/receiving-accounts.routes.js';
 import { registerProviderConnectionsRoutes } from './routes/provider-connections.routes.js';
 import { registerAcceptanceRulesRoutes } from './routes/acceptance-rules.routes.js';
+import { registerPaymentIntentRoutes } from './routes/payment-intent.routes.js';
 
 export function createPaymentApp(customDb = null, options = {}) {
   const db = customDb || getDatabase();
@@ -671,6 +672,7 @@ registerHyperswitchRoutes(server, context);
   registerReceivingAccountRoutes(server, context);
   registerProviderConnectionsRoutes(server, context);
   registerAcceptanceRulesRoutes(server, context);
+  registerPaymentIntentRoutes(server, context);
 
   // WebSocket client signals alone cannot prove bank credit. Keep this listener disabled
   // for real payments; isolated test fixtures may explicitly opt in.

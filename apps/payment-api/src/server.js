@@ -25,6 +25,26 @@ const BASE_SECURITY_HEADERS = Object.freeze({
 });
 
 /**
+ * Resolves the Access-Control-Allow-Origin value for a request origin.
+ * Wildcard CORS is disabled: only explicitly allowed origins are reflected.
+ */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+function resolveCorsOrigin(origin) {
+  if (!origin) return '*'; // no-origin requests (mobile apps, curl, Postman)
+  if (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+    return origin;
+  }
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return origin;
+  }
+  return 'null'; // not allowed — no origin is reflected
+}
+
+/**
  * Lightweight, high-performance HTTP router and server with native SSE and CORS.
  */
 export class HttpServer {
@@ -152,12 +172,12 @@ export class HttpServer {
    * @param {string} topic
    * @param {http.ServerResponse} res
    */
-  initSse(topic, res) {
+  initSse(topic, res, req) {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': resolveCorsOrigin(req?.headers?.origin),
       ...BASE_SECURITY_HEADERS
     });
 
@@ -190,13 +210,13 @@ export class HttpServer {
   /**
    * Helper to send JSON responses with standard headers.
    */
-  static json(res, statusCode, data) {
+  static json(res, statusCode, data, req) {
     const jsonStr = JSON.stringify(data, (key, value) =>
       typeof value === 'bigint' ? value.toString() : value
     );
     res.writeHead(statusCode, {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': resolveCorsOrigin(req?.headers?.origin),
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, Idempotency-Key, X-Device-Id, X-Timestamp, X-Signature',
       ...BASE_SECURITY_HEADERS
@@ -270,7 +290,7 @@ export class HttpServer {
       // Handle CORS preflight
       if (req.method === 'OPTIONS') {
         res.writeHead(204, {
-          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin': resolveCorsOrigin(req.headers.origin),
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization, Idempotency-Key, X-Device-Id, X-Timestamp, X-Signature',
           ...BASE_SECURITY_HEADERS
@@ -304,7 +324,7 @@ export class HttpServer {
         if (!rateLimit.allowed) {
           res.writeHead(429, {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': resolveCorsOrigin(req.headers.origin),
             'Retry-After': Math.ceil((rateLimit.resetAt - Date.now()) / 1000) || '1',
             ...BASE_SECURITY_HEADERS
           });
@@ -343,7 +363,7 @@ export class HttpServer {
               const duration = Date.now() - startTime;
               // Log the detail server-side; never echo stack/SQL text to an anonymous caller.
               log.error(`Route Error [${method} ${pathname}]:`, { err: err.message, ip: clientIp, method, path: pathname, durationMs: duration });
-              HttpServer.json(res, 500, { error: 'Internal Server Error' });
+              HttpServer.json(res, 500, { error: 'Internal Server Error' }, req);
             }
             return;
           }
@@ -527,12 +547,12 @@ export class PaymentGateway {
   /**
    * SSE endpoint for checkout pages - topic is the session UUID (id).
    */
-  initSse(orderId, res) {
+  initSse(orderId, res, req) {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
+      'Access-Control-Allow-Origin': resolveCorsOrigin(req?.headers?.origin),
     });
 
     res.write('event: connected\ndata: {"status":"connected"}\n\n');

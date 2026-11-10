@@ -52,7 +52,7 @@ export function registerMerchantConsoleRoutes(server, ctx) {
     HttpServer.json(res,200,{paymentId:params.id,status:'SUCCESS',confirmationSource:'MERCHANT',changed:result.changed});
   });
   server.get(root+'/stream',(req,res)=>{
-    server.initSse(`console_${merchant(req).id}`,res);
+    server.initSse(`console_${merchant(req).id}`,res,req);
     const expiry=setTimeout(()=>res.end(),300000);expiry.unref?.();res.on('close',()=>clearTimeout(expiry));
   });
   server.get(root+'/operations',(req,res)=>{

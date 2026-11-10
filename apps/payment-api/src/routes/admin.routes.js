@@ -1220,7 +1220,7 @@ export function registerAdminRoutes(server, ctx) {
 
   // GET /api/v1/admin/stream (SSE for Live Admin Counter & Queue Events)
   server.get('/api/v1/admin/stream', async (req, res) => {
-    server.initSse('admin_counter_events', res);
+    server.initSse('admin_counter_events', res, req);
   });
 
   // --- WHATSAPP BERRY PROTOCOL MERCHANT SESSION CONFIGURATION ---
