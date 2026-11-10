@@ -466,9 +466,10 @@ export function registerCheckoutRoutes(server, ctx) {
         payeeName = profile.payeeName;
       }
     } catch {}
-    if (snapshot?.isTestOverride && snapshot.upiId) {
+    if ((session.metadata?.platform || snapshot?.isTestOverride) && snapshot?.upiId) {
+      // Bind platform checkout to the destination captured at order creation.
       payeeVpa = snapshot.upiId;
-      payeeName = snapshot.payeeName || payeeName;
+      payeeName = snapshot.payeeName || payeeName || merchant?.businessName || 'Merchant';
     } else if (!payeeVpa) {
       payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
       payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
