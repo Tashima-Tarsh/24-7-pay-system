@@ -6,11 +6,17 @@ import {Card} from './components/ui/card';
 import {AuthRequired,createPaymentLink,getPaymentReadiness,type PaymentReadiness,type PaymentLinkResponse} from './api';
 
 type Props={canCreate:boolean;isPlatform:boolean;onCreated:()=>void;onConfigureUpi:()=>void;compact?:boolean};
-function checkoutHref(value:unknown):string|null{
- if(typeof value!=='string'||!value.trim())return null;
+function checkoutHref(result:PaymentLinkResponse|null):string|null{
+ if(!result)return null;
+ // An API-generated UPI payment is always served by this same public gateway.
+ // Its configured public hostname can differ from the hostname used in the browser.
+ // Use the server-issued payment ID instead of trusting a cross-origin checkout URL.
+ const id=result.paymentId;
+ if(typeof id==='string'&&/^[A-Za-z0-9-]{1,128}$/.test(id))return '/checkout/'+encodeURIComponent(id);
+ if(typeof result.checkoutUrl!=='string'||!result.checkoutUrl.trim())return null;
  try{
-  const url=new URL(value,window.location.origin);
-  if(url.origin!==window.location.origin||!['http:','https:'].includes(url.protocol))return null;
+  const url=new URL(result.checkoutUrl,window.location.origin);
+  if(url.origin!==window.location.origin||!url.pathname.startsWith('/checkout/'))return null;
   return url.pathname+url.search+url.hash;
  }catch{return null;}
 }
@@ -42,7 +48,7 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
  const reduce=useReducedMotion();
  // Readiness is advisory: a failed diagnostic must never disable a valid payment API request.
  const canSubmit=canCreate&&!isPlatform&&!loading;
- const href=checkoutHref(result?.checkoutUrl);
+ const href=checkoutHref(result);
  const total=Number(amount);
  const validAmount=/^\d{1,8}(?:\.\d{1,2})?$/.test(amount)&&Number.isFinite(total)&&total>0;
  const validOrder=/^[-A-Za-z0-9_]{1,120}$/.test(orderId);
@@ -92,7 +98,7 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
    {result&&<motion.div initial={reduce?false:{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:.3}} className="created-link-result" aria-live="polite">
     <div className="result-top"><div className="result-check"><Check size={20} weight="bold" aria-hidden="true"/></div><div><strong>Payment request created</strong><p>Order: {result.orderId||orderId} · Status: {result.status||'Pending confirmation'}</p></div></div>
     {href?<><div className="payment-link-display"><span>{new URL(href,window.location.origin).href}</span><button type="button" onClick={copy} className="copy-link-button" aria-label="Copy checkout link">{copied?<Check size={18}/>:<Copy size={18}/>}</button></div><div className="link-result-actions"><a className="checkout-open-button" href={href} target="_blank" rel="noopener noreferrer">Open real UPI checkout <ArrowSquareOut size={18}/></a><button className="soft-copy-button" type="button" onClick={copy}>{copied?'Copied ✓':'Copy payment link'}</button></div><p className="payment-link-help">The customer checkout opens supported UPI app intents and a payment QR when the backend has issued an active UPI session. App return is not credit confirmation.</p></>:
-    <p className="payment-form-error">The backend recorded your payment request but returned no checkout URL. Check the order in Transactions rather than generating a duplicate payment.</p>}
+    <p className="payment-form-error">The backend created your payment request but did not return a usable payment identifier or checkout URL. Check the order in Transactions rather than generating a duplicate payment.</p>}
    </motion.div>}
   </form>}
   <div className="link-studio-bottom"><div><span className="link-process-number">01</span><strong>Create</strong><small>Order + amount</small></div><div><span className="link-process-number">02</span><strong>Share</strong><small>QR or UPI intent</small></div><div><span className="link-process-number">03</span><strong>Confirm</strong><small>Authorized provider event</small></div></div>
