@@ -99,22 +99,46 @@ function render(data){
   const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';end';
   const iosUri=scheme=>scheme+query;
   const sources=[
-   ['upi-open',verifiedUpi,'upi://pay?'],
-   ['gpay-open',android?(safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
-   ['phonepe-open',android?(safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
-   ['paytm-open',android?(safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
-   ['bhim-open',android?androidIntent('in.org.npci.upiapp'):iosUri('bhim://upi/pay?'),android?'intent://pay?':'bhim://upi/pay?']
+    ['upi-open',verifiedUpi,'upi://pay?'],
+    ['gpay-open',android?(safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
+    ['phonepe-open',android?(safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
+    ['paytm-open',android?(safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
+    ['bhim-open',android?androidIntent('in.org.npci.upiapp'):iosUri('bhim://upi/pay?'),android?'intent://pay?':'bhim://upi/pay?']
   ];
   if(mobile){
-   $('app-actions').hidden=false;
-   for(const [id,url,prefix] of sources){
-    const el=$(id),allowed=safeUri(url,prefix);
-    if(allowed){el.href=allowed;el.hidden=false;}
-    else{el.hidden=true;el.removeAttribute('href');}
-   }
-   if(appHandoff){
-    display('app-handoff-note','UPI app opened or selected. Return here after payment; waiting for trusted confirmation. Do not pay twice.');
-   }
+    $('app-actions').hidden=false;
+    const intentById={};
+    for(const [id,url,prefix] of sources){
+      const el=$(id),allowed=safeUri(url,prefix);
+      if(allowed){
+        el.href=allowed;
+        intentById[id]=allowed;
+        el.hidden=false;
+      } else {
+        el.hidden=true;
+        el.removeAttribute('href');
+      }
+    }
+    // Explicit per-button click handlers guarantee a user-gesture navigation
+    // to the intent URI. Android Chrome does not always honor intent:// in
+    // plain <a href> on its own; an explicit location.href inside a click
+    // handler (triggered by the user's tap) works reliably.
+    for(const [id] of sources){
+      const el=$(id);
+      if(!el||!intentById[id])continue;
+      el.addEventListener('click',function(ev){
+        ev.preventDefault();
+        const uri=intentById[this.id];
+        if(uri){
+          appHandoff=true;
+          display('app-handoff-note','Complete the payment in your UPI app, then return here. Awaiting verified bank/provider confirmation; do not pay twice.');
+          location.href=uri;
+        }
+      },{passive:false});
+    }
+    if(appHandoff){
+      display('app-handoff-note','UPI app opened or selected. Return here after payment; waiting for trusted confirmation. Do not pay twice.');
+    }
   }
   if(data.timeRemainingSeconds>0){
     deadline=Date.now()+Math.min(86400,Number(data.timeRemainingSeconds))*1000;

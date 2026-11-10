@@ -550,15 +550,42 @@
           $('qr-image').removeAttribute('src');
         }
         const links=data.upiDeepLinks||{};
+        const intentById={};
         for(const [id,uri,prefix] of [
           ['open-upi',data.upiUri,'upi://pay?'],
           ['open-gpay',links.gpay,'intent://pay?'],
-          ['open-phonepe',links.phonepe,'phonepe://pay?'],
-          ['open-paytm',links.paytm,'paytmmp://pay?']
+          ['open-phonepe',links.phonepe,'intent://pay?'],
+          ['open-paytm',links.paytm,'intent://pay?']
         ]){
           const el=$(id),url=safeLink(uri,prefix);
-          if(payable && isMobile && url){el.href=url;el.classList.remove('hide');}
-          else {el.removeAttribute('href');el.classList.add('hide');}
+          if(payable && isMobile && url){
+            el.href=url;
+            intentById[id]=url;
+            el.classList.remove('hide');
+          } else {
+            el.removeAttribute('href');
+            el.classList.add('hide');
+          }
+        }
+        // Explicit per-button click handlers guarantee user-gesture navigation
+        // to the intent URI. Android Chrome does not always honor intent:// in
+        // plain <a href> on its own; an explicit location.href inside a click
+        // handler (triggered by the user's tap) works reliably.
+        for(const [id] of [
+          ['open-upi'],
+          ['open-gpay'],
+          ['open-phonepe'],
+          ['open-paytm']
+        ]){
+          const el=$(id[0]);
+          if(!el||!intentById[id[0]])continue;
+          el.addEventListener('click',function(ev){
+            ev.preventDefault();
+            const uri=intentById[this.id];
+            if(uri){
+              location.href=uri;
+            }
+          },{passive:false});
         }
         $('checkout-stage-message').textContent=payable
           ? 'Verify payee and amount in your UPI app; confirmation requires trusted payment evidence.'
