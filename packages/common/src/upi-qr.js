@@ -26,11 +26,17 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
 
   const params = new URLSearchParams();
   params.set('pa', vpa.trim());
-  params.set('pn', name.trim());
+  // Sanitize payee name: strip special chars, cap at 50 chars. URLSearchParams handles encoding.
+  const safeName = name.replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 50);
+  params.set('pn', safeName);
   if (merchantCode) params.set('mc', merchantCode.trim());
   // mode: 04 = fixed amount (user cannot edit), 02 = editable amount
   params.set('mode', mode === 'fixed' ? '04' : '02');
-  if (orderId) params.set('tr', orderId.trim());
+  if (orderId) {
+    const safeRef = String(orderId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);
+    params.set('tr', safeRef);
+    params.set('tid', safeRef);
+  }
   if (note) params.set('tn', note.trim());
   if (amount !== undefined && amount !== null) {
     params.set('am', Number(amount).toFixed(2));

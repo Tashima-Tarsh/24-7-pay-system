@@ -149,7 +149,7 @@ export function registerOrderCreateRoutes(server, ctx) {
       return HttpServer.json(res, 201, {
         order_id: orderId,
         token: token,
-        upi_uri: `upi://pay?pa=${encodeURIComponent(payee_vpa)}&pn=Merchant&am=${(actualAmountPaise / 100).toFixed(2)}&tn=Order${orderId}&cu=INR`,
+        upi_uri: `upi://pay?pa=${encodeURIComponent(payee_vpa)}&pn=Merchant&am=${(actualAmountPaise / 100).toFixed(2)}&cu=INR&tr=${String(orderId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35)}&tid=${String(orderId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35)}&tn=Order${orderId}&mc=5411`,
         expires_at: expiresAt,
         expires_in_ms: 5 * 60 * 1000,
         display_amount_paise: displayAmountPaise,

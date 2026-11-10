@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
     currency: 'INR',
     upi_note,
     status: 'open',
-    upi_uri: `upi://pay?pa=YOUR_VPA&pn=Merchant&am=${num.toFixed(2)}&tn=${upi_note}`,
+    upi_uri: `upi://pay?pa=YOUR_VPA&pn=Merchant&am=${num.toFixed(2)}&cu=INR&tr=${String(order_id).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35)}&tid=${String(order_id).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35)}&tn=${upi_note}&mc=5411`,
   });
 });
 

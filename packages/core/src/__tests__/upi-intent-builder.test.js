@@ -12,7 +12,7 @@ test('AC-1: unsigned builder emits pa, pn, am, cu, tr, tn, mc, mode=02 in order;
   const { uri } = buildUpiUri(baseProfile, 12345n, 'ORD-001', 'Coffee & cake');
   const query = uri.split('?')[1];
   const keys = query.split('&').map(p => p.split('=')[0]);
-  assert.deepEqual(keys, ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc', 'mode']);
+  assert.deepEqual(keys, ['pa', 'pn', 'am', 'cu', 'tr', 'tid', 'tn', 'mc', 'mode']);
   assert.equal(query.match(/am=123\.45/)[0], 'am=123.45');
   assert.equal(query.includes('cu=INR'), true);
   assert.equal(query.includes('mode=02'), true);

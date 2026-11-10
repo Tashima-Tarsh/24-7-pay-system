@@ -76,6 +76,7 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   }
   params.push('cu=INR');
   params.push(`tr=${encodeURIComponent(trRef(paymentId))}`);
+  params.push(`tid=${encodeURIComponent(trRef(paymentId))}`);
   params.push(`tn=${encodeURIComponent(tnNote(note))}`);
   if (checkoutUrl) {
     params.push(`url=${encodeURIComponent(String(checkoutUrl))}`);

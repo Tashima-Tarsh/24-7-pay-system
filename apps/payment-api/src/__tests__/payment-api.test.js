@@ -446,7 +446,7 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
     const state = await request("/api/v1/checkout/" + paymentId + "/state");
     assert.equal(state.status, 200);
     const uri = new URL(state.body.upiUri);
-    assert.deepEqual([...uri.searchParams.keys()].sort(), ['am', 'cu', 'mode', 'pa', 'pn', 'tn', 'tr']);
+    assert.deepEqual([...uri.searchParams.keys()].sort(), ['am', 'cu', 'mode', 'pa', 'pn', 'tid', 'tn', 'tr']);
     assert.equal(uri.searchParams.get('am'), '2.00');
     assert.equal(uri.searchParams.get('mc'), null, 'Do not invent merchant bank category');
     assert.equal(uri.searchParams.get('mode'), '04');
