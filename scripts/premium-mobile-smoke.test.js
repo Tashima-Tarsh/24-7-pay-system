@@ -53,6 +53,19 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   await page.getByRole('heading',{name:'Financial ledger'}).waitFor({timeout:15000});
   await page.getByRole('tab',{name:'API & providers'}).click();
   await page.getByRole('heading',{name:'API & provider operations'}).waitFor({timeout:15000});
+  // Scoped credential issuance/revocation runs only against this isolated test merchant.
+  await page.getByRole('textbox',{name:'Key label'}).fill('Browser QA key');
+  await page.getByRole('button',{name:'Issue API key'}).click();
+  const keySecret=page.getByRole('textbox',{name:'New API key secret'});
+  await keySecret.waitFor({timeout:15000});
+  assert.match(await keySecret.inputValue(),/^dp_test_/);
+  await page.getByRole('button',{name:'Dismiss secret'}).click();
+  const apiRow=page.getByRole('row',{name:/Browser QA key/});
+  await apiRow.getByRole('button',{name:'Revoke'}).waitFor({timeout:15000});
+  page.once('dialog',dialog=>dialog.accept());
+  await apiRow.getByRole('button',{name:'Revoke'}).click();
+  await apiRow.getByText('Revoked').waitFor({timeout:15000});
+
   await page.getByRole('tab',{name:'Risk controls'}).click();
   await page.getByRole('heading',{name:'Risk & payment controls'}).waitFor({timeout:15000});
   await page.getByRole('tab',{name:'Cases'}).click();
