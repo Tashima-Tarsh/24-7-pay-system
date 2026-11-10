@@ -22,7 +22,7 @@ export type PaymentReadiness={
 export function getPaymentReadiness(signal?:AbortSignal):Promise<PaymentReadiness>{
  return get<PaymentReadiness>('/payment-readiness',signal);
 }
-export type PaymentLinkResponse={orderId?:string;amount?:number|string;status?:string;checkoutUrl?:string};
+export type PaymentLinkResponse={paymentId?:string;orderId?:string;amount?:number|string;status?:string;checkoutUrl?:string};
 export type PaymentLinkRequest={orderId:string;amount:string;currency:'INR'};
 export async function createPaymentLink(input:PaymentLinkRequest,idempotencyKey:string):Promise<PaymentLinkResponse>{
  const token=sessionStorage.getItem(SESSION_KEY);
