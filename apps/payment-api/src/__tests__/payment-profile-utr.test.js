@@ -141,10 +141,10 @@ test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, 
     assert.ok(state.body.upiQr, 'upiQr present');
     const qr=await request(baseUrl,`/api/v1/checkout/${paymentId}/upi-qr`);
     assert.equal(qr.status,200,'active checkout must expose QR and app links');
-    assert.match(qr.body.upiQr,/^data:image\\/svg\\+xml;base64,/);
-    assert.match(qr.body.upiDeepLinks.gpay,/^intent:\\/\\/pay\\?/);
-    assert.match(qr.body.upiDeepLinks.phonepe,/package=com\\.phonepe\\.app/);
-    assert.match(qr.body.upiDeepLinks.paytm,/package=net\\.one97\\.paytm/);
+    assert.ok(qr.body.upiQr.startsWith('data:image/svg+xml;base64,'));
+    assert.ok(qr.body.upiDeepLinks.gpay.startsWith('intent://pay?'));
+    assert.ok(qr.body.upiDeepLinks.phonepe.includes('package=com.phonepe.app'));
+    assert.ok(qr.body.upiDeepLinks.paytm.includes('package=net.one97.paytm'));
     assert.equal(new URL(qr.body.upiUri).searchParams.get('am'),'100.00');
 
     const upiQuery = new URL(state.body.upiUri).searchParams;
