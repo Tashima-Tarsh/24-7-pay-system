@@ -498,14 +498,17 @@ export function registerCheckoutRoutes(server, ctx) {
     let upiUri = null;
     if (session.status === PaymentStatus.ACTIVE && payeeVpa) {
       try {
-        const built = buildUpiUri(
-          { payeeVpa, payeeName, mcc: '5411' },
-          session.amountPaise,
-          session.orderId,
-          `Payment ${session.orderId}`,
-          `/checkout/${session.id}`
-        );
-        upiUri = built.uri;
+        // Build one standards-oriented URI for the QR and every app button.
+        // Never double-encode the payee name, fabricate an MCC or use a relative
+        // URL parameter. PSP/bank authorization still determines acceptance.
+        upiUri = buildUpiPaymentUri({
+          vpa: payeeVpa,
+          name: payeeName || merchant?.businessName || 'Merchant',
+          amount: Number(toRupeesString(session.amountPaise)),
+          orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g, '').slice(0,35),
+          note: `Payment ${session.orderId}`,
+          mode: 'fixed'
+        });
       } catch {
         upiUri = null;
       }
