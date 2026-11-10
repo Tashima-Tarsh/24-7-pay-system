@@ -238,6 +238,16 @@ export function registerPlatformPayments(server,ctx,identity){
  const webhookPost=wrap(async(req,res)=>{const b=await HttpServer.parseBody(req);if(!b.url)throw error(400,'Supply a webhook URL.');const check=validateOutboundWebhookUrl(b.url);if(!check.valid||check.url.protocol!=='https:')throw error(400,check.error||'Webhook must use public HTTPS.');merchantRepo.update(tenant(req),{webhookUrl:b.url});identity.audit(req,'WEBHOOK_UPDATED',tenant(req),{});HttpServer.json(res,200,{url:b.url});});
  server.get('/v1/webhooks',webhookGet);server.post('/v1/webhooks',webhookPost);
  post('/webhook-secret/rotate','webhooks.manage',(req,res)=>{const secret=crypto.randomBytes(32).toString('hex');merchantRepo.update(tenant(req),{webhookSecret:secret});identity.audit(req,'WEBHOOK_SECRET_ROTATED',tenant(req),{});HttpServer.json(res,201,{secret});});
+ get('/notification-deliveries','operations.read',(req,res)=>{
+  const mid=tenant(req);
+  // Return status metadata only. Encrypted payload and recipient PII never leave the server.
+  const rows=db.query(`SELECT n.id,n.payment_id,n.channel,n.status,n.attempts,n.submitted_at,n.last_error
+    FROM notification_deliveries n
+    INNER JOIN payment_sessions s ON s.id=n.payment_id
+    WHERE s.merchant_id=?
+    ORDER BY n.next_attempt_at DESC LIMIT 100`,[mid]);
+  HttpServer.json(res,200,{items:rows});
+ });
  get('/webhook-deliveries','webhooks.manage',(req,res)=>{const mid=tenant(req);HttpServer.json(res,200,{deliveries:['webhook_deliveries','provider_webhook_deliveries'].flatMap(table=>db.query(`SELECT id,event_type,attempt_count,is_successful,response_status,next_retry_at FROM ${table} WHERE merchant_id=? ORDER BY created_at DESC LIMIT 100`,[mid]).map(r=>({...r,source:table})))});});
  post('/webhook-deliveries/:id/retry','webhooks.manage',async(req,res,p)=>{const b=await HttpServer.parseBody(req),table=b.source==='provider_webhook_deliveries'?'provider_webhook_deliveries':'webhook_deliveries';const row=db.queryOne(`SELECT * FROM ${table} WHERE id=? AND merchant_id=?`,[p.id,tenant(req)]);if(!row)throw error(404,'Delivery not found.');db.execute(`UPDATE ${table} SET attempt_count=0,next_retry_at=?,is_successful=0 WHERE id=?`,[now(),p.id]);identity.audit(req,'WEBHOOK_REDELIVERY_REQUESTED',p.id,{});const engine=table==='webhook_deliveries'?ctx.webhookEngine:ctx.providerWebhookEngine;engine?.retryPending(p.id).catch(()=>{});HttpServer.json(res,202,{queued:true});});
  // Reuse the financial reservation engine; API guard has already bound ownership and scope.
