@@ -1,8 +1,8 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useState,type FormEvent} from 'react';
 import {Bank,ShieldCheck,Key,ArrowClockwise,WarningCircle,CheckCircle} from '@phosphor-icons/react';
 import {Card,CardTitle} from './components/ui/card';
 import {Button} from './components/ui/button';
-import {get,money,date} from './api';
+import {get,money,date,issueMerchantApiKey,revokeMerchantApiKey} from './api';
 
 type Balance={currency:string;accounts:{code:string;balancePaise:string}[]};
 type ApiKeys={keys:{id:string;label:string;prefix:string;environment:string;revokedAt?:string|null;lastUsedAt?:string|null;scopes:string[]}[]};
@@ -15,6 +15,8 @@ type Props={area:'finance'|'integrations'|'controls'|'cases'|'notifications';per
 export function MerchantOperations({area,permissions}:Props){
  const has=(p:string)=>permissions.includes('*')||permissions.includes(p);
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0);
+ const [keyLabel,setKeyLabel]=useState('Merchant backend'),[keyEnvironment,setKeyEnvironment]=useState<'SANDBOX'|'PRODUCTION'>('SANDBOX');
+ const [keyBusy,setKeyBusy]=useState(false),[issuedSecret,setIssuedSecret]=useState(''),[keyNotice,setKeyNotice]=useState('');
  const [balance,setBalance]=useState<Balance|null>(null),[keys,setKeys]=useState<ApiKeys|null>(null);
  const [usage,setUsage]=useState<ApiUsage|null>(null),[connections,setConnections]=useState<Connection[]>([]),[rules,setRules]=useState<Rule[]>([]),[cases,setCases]=useState<CaseRecord[]>([]),[notifications,setNotifications]=useState<NotificationRecord[]>([]);
  useEffect(()=>{
@@ -35,6 +37,24 @@ export function MerchantOperations({area,permissions}:Props){
   });
   return()=>controller.abort();
  },[area,revision,permissions.join('|')]);
+ async function createKey(event:FormEvent<HTMLFormElement>){
+  event.preventDefault();if(keyBusy||!keyLabel.trim())return;
+  setKeyBusy(true);setError('');setKeyNotice('');setIssuedSecret('');
+  try{
+   const issued=await issueMerchantApiKey(keyLabel.trim(),keyEnvironment);
+   setIssuedSecret(issued.secret);
+   setKeyNotice('API key issued. Save the secret securely; it will not be shown again.');
+   setRevision(n=>n+1);
+  }catch(e){setError(e instanceof Error?e.message:'Unable to issue API key.');}
+  finally{setKeyBusy(false);}
+ }
+ async function revokeKey(id:string,label:string){
+  if(keyBusy||!window.confirm('Revoke '+label+'? Applications using this key will stop authenticating.'))return;
+  setKeyBusy(true);setError('');setKeyNotice('');setIssuedSecret('');
+  try{await revokeMerchantApiKey(id);setKeyNotice('API key revoked.');setRevision(n=>n+1);}
+  catch(e){setError(e instanceof Error?e.message:'Unable to revoke API key.');}
+  finally{setKeyBusy(false);}
+ }
  const heading=area==='finance'?'Financial ledger':area==='integrations'?'API & provider operations':area==='cases'?'Reconciliation & support cases':area==='notifications'?'Notification delivery centre':'Risk & payment controls';
  const permitted=area==='finance'?has('reports.read'):area==='integrations'?has('credentials.manage')||has('connections.manage'):area==='cases'||area==='notifications'?has('operations.read'):has('policy.manage');
  return <section className="operations-workspace" aria-label={heading}>
@@ -48,7 +68,11 @@ export function MerchantOperations({area,permissions}:Props){
    <Card className="operations-wide"><CardTitle>Account balances</CardTitle><div className="table-scroll" role="region" aria-label="Internal ledger balances" tabIndex={0}><table><thead><tr><th scope="col">Account</th><th scope="col">Balance</th></tr></thead><tbody>{(balance?.accounts||[]).map(a=><tr key={a.code}><td>{a.code.replaceAll('_',' ')}</td><td className="monospace">{money(a.balancePaise)}</td></tr>)}{!balance?.accounts?.length&&<tr><td colSpan={2}>No ledger accounts available.</td></tr>}</tbody></table></div></Card>
   </div>}
   {!loading&&permitted&&area==='integrations'&&<div className="operations-grid">
-   {has('credentials.manage')&&<Card className="operations-wide"><span className="micro">MERCHANT CREDENTIALS</span><CardTitle>API key inventory</CardTitle><p>Only key prefixes and metadata are displayed. Private secrets are never returned here.</p><div className="table-scroll" role="region" aria-label="API key inventory" tabIndex={0}><table><thead><tr><th>Key</th><th>Environment</th><th>Status</th><th>Last used</th></tr></thead><tbody>{(keys?.keys||[]).map(k=><tr key={k.id}><td><Key size={16} weight="duotone"/> {k.label} <span className="monospace">({k.prefix}…)</span></td><td>{k.environment}</td><td>{k.revokedAt?'Revoked':'Active'}</td><td>{date(k.lastUsedAt||undefined)}</td></tr>)}{!keys?.keys?.length&&<tr><td colSpan={4}>No API keys configured.</td></tr>}</tbody></table></div></Card>}
+   {has('credentials.manage')&&<Card className="operations-wide"><span className="micro">MERCHANT CREDENTIALS</span><CardTitle>API key management</CardTitle><p>Keys are restricted to payment creation and reading. Only prefixes and metadata are listed after issuance.</p>
+   {has('payments.create')&&has('payments.read')&&<form className="operations-key-form" onSubmit={e=>void createKey(e)}><label>Key label<input value={keyLabel} onChange={e=>setKeyLabel(e.target.value)} minLength={2} maxLength={80} required placeholder="Your backend integration"/></label><label>Environment<select value={keyEnvironment} onChange={e=>setKeyEnvironment(e.target.value as 'SANDBOX'|'PRODUCTION')}><option value="SANDBOX">Sandbox (recommended)</option><option value="PRODUCTION">Production</option></select></label><Button type="submit" disabled={keyBusy}>{keyBusy?'Issuing…':'Issue API key'}</Button></form>}
+   {keyNotice&&<p className="operations-success" role="status">{keyNotice}</p>}
+   {issuedSecret&&<div className="operations-secret" role="status"><strong>New key — displayed once</strong><input aria-label="New API key secret" readOnly value={issuedSecret} onFocus={e=>e.currentTarget.select()}/><div className="operations-secret-actions"><Button variant="outline" onClick={()=>{void navigator.clipboard.writeText(issuedSecret).catch(()=>setError('Copy was blocked by the browser. Select the key text instead.'));}}>Copy key</Button><Button variant="ghost" onClick={()=>setIssuedSecret('')}>Dismiss secret</Button></div></div>}
+   <div className="table-scroll" role="region" aria-label="API key inventory" tabIndex={0}><table><thead><tr><th>Key</th><th>Environment</th><th>Status</th><th>Last used</th><th>Actions</th></tr></thead><tbody>{(keys?.keys||[]).map(k=><tr key={k.id}><td><Key size={16} weight="duotone"/> {k.label} <span className="monospace">({k.prefix}…)</span></td><td>{k.environment}</td><td>{k.revokedAt?'Revoked':'Active'}</td><td>{date(k.lastUsedAt||undefined)}</td><td>{!k.revokedAt?<Button variant="outline" disabled={keyBusy} onClick={()=>void revokeKey(k.id,k.label)}>Revoke</Button>:'—'}</td></tr>)}{!keys?.keys?.length&&<tr><td colSpan={5}>No API keys configured.</td></tr>}</tbody></table></div></Card>}
    {has('connections.manage')&&<Card className="operations-wide"><span className="micro">PAYMENT RAILS</span><CardTitle>Provider connections</CardTitle><div className="table-scroll" role="region" aria-label="Provider connections" tabIndex={0}><table><thead><tr><th>Provider</th><th>Environment</th><th>State</th><th>Approval</th></tr></thead><tbody>{connections.map(c=><tr key={c.id}><td>{c.provider}</td><td>{c.environment}</td><td>{c.enabled?'Enabled':'Disabled'}</td><td>{c.approved?'Approved':'Not approved'}</td></tr>)}{!connections.length&&<tr><td colSpan={4}>No provider connections are configured. Direct UPI receiving accounts are managed separately.</td></tr>}</tbody></table></div></Card>}
    {has('credentials.manage')&&<Card className="operations-wide"><span className="micro">REQUEST OBSERVABILITY</span><CardTitle>Recent API requests</CardTitle><div className="table-scroll" role="region" aria-label="API request history" tabIndex={0}><table><thead><tr><th>Method</th><th>Route</th><th>HTTP</th><th>Latency</th><th>Time</th></tr></thead><tbody>{(usage?.requests||[]).slice(0,30).map(r=><tr key={r.id}><td>{r.method}</td><td className="monospace">{r.path}</td><td>{r.status}</td><td>{r.duration_ms} ms</td><td>{date(r.created_at)}</td></tr>)}{!usage?.requests?.length&&<tr><td colSpan={5}>No instrumented merchant API calls yet.</td></tr>}</tbody></table></div></Card>}
   </div>}
