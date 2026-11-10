@@ -110,7 +110,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('tn'), 'Order payment');
       assert.equal(parsed.searchParams.get('tr'), 'ORDER99');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tid', 'tn', 'cu']);
     });
   });
 

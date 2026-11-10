@@ -116,7 +116,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('tn'), 'Order payment');
       assert.equal(parsed.searchParams.get('tr'), 'ORDER99');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tid', 'tn', 'cu']);
     });
 
     test('includes the required Google Pay currency and unique transaction reference', () => {
@@ -136,7 +136,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('tn'), 'Payment');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
       assert.equal(parsed.searchParams.get('tr'), 'ORDER123');
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tid', 'tn', 'cu']);
     });
 
     test('includes the Google Pay transaction URL when the server provides one', () => {
@@ -177,7 +177,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(queryParams.get('tr'), 'ORDER123');
       assert.equal(queryParams.get('tn'), 'Payment');
       assert.equal(queryParams.get('mc'), '5411');
-      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc']);
+      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tid', 'tn', 'mc']);
     });
 
     test('validates 30 official UPI application provider registry', () => {

@@ -53,6 +53,7 @@ export function buildUpiUri(options: BuildUpiUriOptions): string {
   const trRaw = String(options.transactionRef || '').trim();
   const tr = trRaw.replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);
   if (tr) params.set('tr', tr);
+  if (tr) params.set('tid', tr); // Transaction ID — mandatory per NPCI; GPay enforces this
 
   // Transaction Note: max 30 chars per NPCI, strip emojis.
   const tnRaw = String(options.transactionNote || 'Payment').trim();
@@ -110,6 +111,7 @@ export function buildUpiIntentUri(options: BuildUpiIntentUriOptions): string {
   if (am) params.set('am', am);
   params.set('cu', 'INR'); // Mandatory for GPay
   params.set('tr', tr);
+  params.set('tid', tr); // Transaction ID — mandatory per NPCI; GPay enforces this
   params.set('tn', tn);
   params.set('mc', '5411'); // Safe, universally accepted Merchant Category Code (Grocery)
 
