@@ -31,7 +31,7 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   const registration=await fetch(base+'/api/platform/v1/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,businessName:'Mobile Smoke Merchant',contactName:'Test Owner',mobile:'9876543210'})});
   assert.equal(registration.status,201,'Registration: '+await registration.text());
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-  const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+  const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'});
   const page=await context.newPage();
   await page.goto(base+'/merchant',{waitUntil:'domcontentloaded'});
   await page.getByRole('textbox',{name:'Work email'}).fill(email);
