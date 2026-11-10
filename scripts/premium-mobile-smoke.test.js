@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {chromium} from '@playwright/test';
+import {generateQrDataUri,buildUpiPaymentIntentLinks} from '@youpi/common';
 
 async function freePort(){
  const s=net.createServer();s.listen(0,'127.0.0.1');await once(s,'listening');
@@ -89,6 +90,25 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   const openCheckout=page.getByRole('link',{name:/Open real UPI checkout/});
   await openCheckout.waitFor({timeout:15000});
   assert.equal(await openCheckout.getAttribute('href'),'/checkout/e2e-checkout-id-123');
+  const uri='upi://pay?pa=qaexample%40okbank&pn=Test+Merchant&am=1.00&cu=INR';
+  await page.route('**/api/v1/checkout/e2e-checkout-id-123/state',route=>route.fulfill({
+   status:200,contentType:'application/json',body:JSON.stringify({
+    paymentId:'e2e-checkout-id-123',orderId:'MOBILE_E2E_ORDER',amount:'1.00',status:'ACTIVE',
+    merchantName:'Test Merchant',payeeVpa:'qaexample@okbank',payeeName:'Test Merchant',
+    upiUri:uri,upiQr:generateQrDataUri(uri),upiDeepLinks:buildUpiPaymentIntentLinks(uri)
+   })
+  }));
+  await page.goto(base+'/checkout/e2e-checkout-id-123',{waitUntil:'domcontentloaded'});
+  await page.locator('#qr').waitFor({state:'visible',timeout:15000});
+  assert.match(await page.locator('#qr').getAttribute('src'),/^data:image\\/svg\\+xml;base64,/);
+  for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open']){
+   const button=page.locator('#'+id);
+   await button.waitFor({state:'visible'});
+   assert.ok(await button.getAttribute('href'),id+' must have a payment handoff URI');
+  }
+  assert.match(await page.locator('#gpay-open').getAttribute('href'),/package=com\\.google\\.android\\.apps\\.nbu\\.paisa\\.user/);
+  assert.match(await page.locator('#phonepe-open').getAttribute('href'),/package=com\\.phonepe\\.app/);
+
   await context.close();
  }finally{if(browser)await browser.close();child.kill();await closed;fs.rmSync(dir,{recursive:true,force:true});}
 });
