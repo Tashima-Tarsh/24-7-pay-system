@@ -720,7 +720,12 @@ export function registerCheckoutRoutes(server, ctx) {
     // Send current state immediately so the client renders without waiting
     const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa || session.payeeVpa;
     const upiUri = session.status === PaymentStatus.ACTIVE && payeeVpa
-      ? buildUpiUri({ payeeVpa, payeeName: session.metadata?.receivingAccountSnapshot?.payeeName || 'Merchant', mcc: '5411' }, session.amountPaise, session.orderId, `Payment ${session.orderId}`, `/checkout/${session.id}`).uri
+      ? buildUpiPaymentUri({
+          vpa:payeeVpa,name:session.metadata?.receivingAccountSnapshot?.payeeName||'Merchant',
+          amount:Number(toRupeesString(session.amountPaise)),
+          orderId:String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
+          note:`Payment ${session.orderId}`,mode:'fixed'
+        })
       : null;
 
     const currentState = {
@@ -830,8 +835,8 @@ export function registerCheckoutRoutes(server, ctx) {
         vpa: payeeVpa,
         name: payeeName,
         amount: Number(toRupeesString(session.amountPaise)),
-        orderId: session.orderId,
-        note: `Order ${session.orderId}`,
+        orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
+        note: `Payment ${session.orderId}`,
         mode: 'fixed'
       });
     } catch {
@@ -858,8 +863,8 @@ export function registerCheckoutRoutes(server, ctx) {
         vpa: payeeVpa,
         name: payeeName,
         amount: Number(toRupeesString(session.amountPaise)),
-        orderId: session.orderId,
-        note: `Order ${session.orderId}`,
+        orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
+        note: `Payment ${session.orderId}`,
         mode: 'fixed'
       });
     } catch {
