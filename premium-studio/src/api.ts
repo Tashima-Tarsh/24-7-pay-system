@@ -136,3 +136,30 @@ export async function retryWebhookDelivery(id:string,source:'webhook_deliveries'
  if(response.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Your session has expired.');}
  if(!response.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Callback retry request failed ('+response.status+').');
 }
+
+export async function issueMerchantApiKey(label:string,environment:'SANDBOX'|'PRODUCTION'):Promise<{secret:string;key:{id:string;label:string}}>{
+ const token=sessionStorage.getItem(SESSION_KEY);
+ if(!token)throw new AuthRequired('Sign in to issue API credentials.');
+ const res=await fetch('/api/platform/v1/api-keys',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  body:JSON.stringify({label,environment,scopes:['payments.create','payments.read'],rateLimit:100})
+ });
+ const payload:unknown=await res.json().catch(()=>null);
+ if(res.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Session expired.');}
+ if(!res.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Could not issue API key.');
+ if(!payload||typeof payload!=='object'||!('secret'in payload)||typeof payload.secret!=='string'||!('key'in payload))throw new Error('The server did not provide the newly issued key.');
+ return payload as {secret:string;key:{id:string;label:string}};
+}
+export async function revokeMerchantApiKey(id:string):Promise<void>{
+ if(!/^[a-f0-9-]{16,128}$/i.test(id))throw new Error('Invalid API key identifier.');
+ const token=sessionStorage.getItem(SESSION_KEY);
+ if(!token)throw new AuthRequired('Sign in to manage API credentials.');
+ const res=await fetch('/api/platform/v1/api-keys/'+encodeURIComponent(id)+'/revoke',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}'
+ });
+ const payload:unknown=await res.json().catch(()=>null);
+ if(res.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Session expired.');}
+ if(!res.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Could not revoke API key.');
+}
