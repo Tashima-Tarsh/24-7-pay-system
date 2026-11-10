@@ -151,26 +151,32 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(new URL(uri).searchParams.get('url'), 'https://dynamo-pay.onrender.com/checkout/payment-1');
     });
 
-    test('builds valid Android intent URI containing only canonical UPI parameters', () => {
+    test('builds valid Android intent URI for PhonePe with hardened UPI parameters', () => {
       const intentUri = buildUpiIntentUri({
         payeeVpa: '9876543210@axl',
         payeeName: 'Demo Store Merchant',
         amountPaise: 100n,
         transactionRef: 'ORDER-123',
         currency: 'INR',
-        packageName: 'com.phonepe.app'
+        targetApp: 'phonepe'
       });
 
       assert.ok(intentUri.startsWith('intent://pay?'));
       assert.ok(intentUri.includes('package=com.phonepe.app'));
       assert.ok(intentUri.includes('scheme=upi'));
-      assert.ok(intentUri.endsWith('#Intent;scheme=upi;package=com.phonepe.app;end'));
-      // Underlying query payload keeps the currency and unique reference required by PSPs.
+      assert.ok(intentUri.includes('S.browser_fallback_url='));
+      assert.ok(intentUri.endsWith(';end'));
+      // Hardened payload: currency, txn ref, note and MCC are always present.
       const queryPart = intentUri.split('#')[0].replace('intent://pay?', '');
       const queryParams = new URLSearchParams(queryPart);
+      assert.equal(queryParams.get('pa'), '9876543210@axl');
+      assert.equal(queryParams.get('pn'), 'Demo Store Merchant');
+      assert.equal(queryParams.get('am'), '1.00');
       assert.equal(queryParams.get('cu'), 'INR');
-      assert.equal(queryParams.get('tr'), 'ORDER-123');
-      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
+      assert.equal(queryParams.get('tr'), 'ORDER123');
+      assert.equal(queryParams.get('tn'), 'Payment');
+      assert.equal(queryParams.get('mc'), '5411');
+      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc']);
     });
 
     test('validates 30 official UPI application provider registry', () => {

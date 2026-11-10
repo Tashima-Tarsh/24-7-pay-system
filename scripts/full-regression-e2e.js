@@ -144,11 +144,11 @@ async function runFullRegression() {
       amountPaise: session1Reloaded.amountPaise,
       transactionRef: session1Reloaded.orderId,
       currency: 'INR',
-      packageName: gpay.packageName
+      targetApp: 'gpay'
     });
     assert.equal(
       intentP1,
-      'intent://pay?pa=9876543210%40axl&pn=Demo Store+Merchant&am=100.00&tn=REG-ORD-001#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end'
+      'intent://pay?pa=9876543210%40axl&pn=Demo%20Store%20Merchant&am=100.00&cu=INR&tr=REG-ORD-001&tn=Payment&mc=5411#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;S.browser_fallback_url=https%3A%2F%2Fyourdomain.com%2Fstatus%3Fref%3DREG-ORD-001;end'
     );
     console.log('  [✓] Payment 1 Intent URI:', intentP1);
 
