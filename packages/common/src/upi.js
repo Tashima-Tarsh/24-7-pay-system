@@ -132,6 +132,7 @@ export function buildUpiIntentUri(options) {
   params.set('tr', tr);
   params.set('tn', tn);
   params.set('mc', '5411'); // Safe, universally accepted Merchant Category Code (Grocery)
+  params.set('mode', '02'); // UPI payment mode (02 = editable amount, accepted by GPay/PhonePe)
 
   // Replace '+' with '%20' for maximum compatibility with older UPI app parsers
   const queryString = params.toString().replace(/\+/g, '%20');
@@ -148,8 +149,9 @@ export function buildUpiIntentUri(options) {
   const targetPackage = packages[options.targetApp || 'generic'];
 
   // 8. Construct Android Intent URI
-  // Format: intent://pay?{query}#Intent;scheme=upi;mode=02;package={package};S.browser_fallback_url={url};end
-  let intentUri = `intent://pay?${queryString}#Intent;scheme=upi;mode=02`;
+  // Format: intent://pay?{query}#Intent;scheme=upi;package={package};S.browser_fallback_url={url};end
+  // mode=02 is a UPI parameter (before #Intent), NOT an Intent extra (after #Intent)
+  let intentUri = `intent://pay?${queryString}#Intent;scheme=upi`;
 
   if (targetPackage) {
     intentUri += `;package=${targetPackage}`;

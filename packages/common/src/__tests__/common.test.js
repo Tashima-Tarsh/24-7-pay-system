@@ -158,7 +158,8 @@ describe('@youpi/common Unit Tests', () => {
         amountPaise: 100n,
         transactionRef: 'ORDER-123',
         currency: 'INR',
-        targetApp: 'phonepe'
+        targetApp: 'phonepe',
+        checkoutUrl: 'https://pay.example.com/checkout/ORDER-123'
       });
 
       assert.ok(intentUri.startsWith('intent://pay?'));
@@ -176,7 +177,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(queryParams.get('tr'), 'ORDER123');
       assert.equal(queryParams.get('tn'), 'Payment');
       assert.equal(queryParams.get('mc'), '5411');
-      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc']);
+      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc', 'mode']);
     });
 
     test('validates 30 official UPI application provider registry', () => {
