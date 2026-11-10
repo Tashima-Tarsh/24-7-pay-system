@@ -10,12 +10,16 @@ describe('Architectural Update: Selling Modes (Online vs Offline), COD Flow, & C
   let apiInstance;
   let baseUrl;
   let testDb;
+  let merchantKey;
 
   before(async () => {
+    // Fixed webhook secret so COD confirmation auth can present matching x-merchant-key
+    process.env.COIN_STORE_WEBHOOK_SECRET = 'test-webhook-secret-key-12345';
     testDb = new Database({ inMemory: true });
     apiInstance = await startPaymentApi(6195, testDb);
     baseUrl = `http://localhost:${apiInstance.port}`;
     seedActivePaymentProfile(testDb);
+    merchantKey = 'test-webhook-secret-key-12345';
   });
 
   after(async () => {
@@ -185,7 +189,8 @@ describe('Architectural Update: Selling Modes (Online vs Offline), COD Flow, & C
 
     // Customer A switches to COD and confirms Cash on Delivery order
     const confirmCodRes = await request(`/api/v1/checkout/${paymentIdA}/confirm-cod`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'x-merchant-key': merchantKey }
     });
 
     assert.equal(confirmCodRes.status, 200);
@@ -265,7 +270,8 @@ describe('Architectural Update: Selling Modes (Online vs Offline), COD Flow, & C
 
     // Attempting to confirm COD in OFFLINE mode must be rejected
     const invalidCodRes = await request(`/api/v1/checkout/${paymentId}/confirm-cod`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'x-merchant-key': merchantKey }
     });
     assert.equal(invalidCodRes.status, 400);
 

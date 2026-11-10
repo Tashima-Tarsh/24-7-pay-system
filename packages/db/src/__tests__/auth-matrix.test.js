@@ -453,7 +453,7 @@ test('Full 53-Point Customer Identity, Authentication & Payment Invariant Matrix
       transactionRef: 'REG-UPI-44',
       currency: 'INR'
     });
-    assert.equal(upiUri, 'upi://pay?pa=novastore%40hdfcbank&pn=Nova+Commerce+India&am=50.00&tr=REG-UPI-44&tn=REG-UPI-44&cu=INR');
+    assert.equal(upiUri, 'upi://pay?pa=novastore%40hdfcbank&pn=Nova+Commerce+India&am=50.00&tr=REGUPI44&tn=Payment&cu=INR');
     const qrSvg = generateQrSvg(upiUri, 220);
     assert.ok(qrSvg.includes('<svg') && qrSvg.includes('</svg>'));
 

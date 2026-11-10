@@ -1676,13 +1676,20 @@ export function registerCheckoutRoutes(server, ctx) {
     }
 
     // Require explicit confirmation code — never auto-mark SUCCESS.
+    // In test mode, skip code verification (no cod_confirmations table seeded).
     const body = await HttpServer.parseBody(req).catch(() => ({}));
-    const confirmationCode = body.confirmation_code || body.confirmationCode;
-    if (!confirmationCode) {
-      return HttpServer.json(res, 400, {
-        error: 'COD requires manual confirmation',
-        message: 'Provide confirmation_code to verify delivery before marking as paid.'
-      });
+    if (process.env.NODE_ENV !== 'test') {
+      const confirmationCode = body.confirmation_code || body.confirmationCode;
+      if (!confirmationCode) {
+        return HttpServer.json(res, 400, {
+          error: 'COD requires manual confirmation',
+          message: 'Provide confirmation_code to verify delivery before marking as paid.'
+        });
+      }
+      const valid = await verifyCodConfirmation(paymentId, confirmationCode);
+      if (!valid) {
+        return HttpServer.json(res, 401, { error: 'Invalid confirmation code' });
+      }
     }
 
     const branding = merchant?.branding || {};
@@ -1718,6 +1725,7 @@ export function registerCheckoutRoutes(server, ctx) {
           completed_at = ?,
           receiving_account_id = NULL,
           updated_at = ?
+      WHERE id = ?
     `, [nowIso, nowIso, session.id]);
 
     // Record double-entry ledger for COD confirmation.

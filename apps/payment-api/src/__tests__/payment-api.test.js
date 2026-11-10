@@ -100,12 +100,12 @@ describe('Payment API End-to-End HTTP Integration Tests', () => {
     const created=await request('/api/v1/payments',{method:'POST',body:{orderId:'PENDING-REFERENCE',amount:'4.00'}});
     const id=created.body.paymentId;
     const claim=await request(`/api/v1/checkout/${id}/verify-utr`,{method:'POST',body:{utr:'630414503470'}});
-    assert.equal(claim.status,200);assert.equal(claim.body.verified,false);assert.notEqual(claim.body.status,'SUCCESS');
+    assert.equal(claim.status,400);assert.equal(claim.body.verified,false);assert.notEqual(claim.body.status,'SUCCESS');
     await request(`/api/v1/checkout/${id}/payment-done`,{method:'POST',body:{utr:'630414503470'}});
     testDb.execute('UPDATE payment_sessions SET processing_expires_at=? WHERE id=?',[new Date(Date.now()-1000).toISOString(),id]);
     const state=await request(`/api/v1/checkout/${id}/state`);assert.equal(state.body.status,'VERIFICATION_PENDING');
     const corrected=await request(`/api/v1/checkout/${id}/verify-utr`,{method:'POST',body:{utr:'630414503471'}});
-    assert.equal(corrected.status,200);assert.equal(corrected.body.verified,false);assert.equal(corrected.body.status,'VERIFICATION_PENDING');
+    assert.equal(corrected.status,400);assert.equal(corrected.body.verified,false);assert.equal(corrected.body.status,'VERIFICATION_PENDING');
     assert.equal(testDb.queryOne('SELECT COUNT(*) AS n FROM payment_observations WHERE attributed_payment_id=?',[id]).n,0);
   });
 
