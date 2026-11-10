@@ -64,3 +64,50 @@ test('MFA recovery codes are hashed, one-time, rate-limited and revoke old sessi
   // Enrollment/confirm endpoints remain intact but are not required.
   console.log('  ⏭️  MFA enforcement test skipped — MFA disabled globally.');
 });
+test('inactive merchant identity cannot be taken over by self-registration',async()=>{
+ const db=new Database({inMemory:true});
+ const {runMigrations}=await import('../../../../packages/db/src/migrate.js');
+ runMigrations(db);initializePlatform(db);
+ const server=new HttpServer(),identity=registerPlatformIdentity(server,{db,merchantRepo:new MerchantRepository(db),platformDelivery:async()=>{}});
+ server.use(identity.guard);
+ const http=server.createServer();await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
+ const root='http://127.0.0.1:'+http.address().port+'/api/platform/v1';
+ const first={email:'inactive-merchant@example.test',password:'existing-secure-password-123',businessName:'Existing Business',contactName:'Existing Owner',mobile:'9876543210'};
+ try{
+  const created=await fetch(root+'/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(first)});
+  assert.equal(created.status,201);
+  const current=db.queryOne('SELECT id,merchant_id,password_hash FROM pp_users WHERE email=?',[first.email]);
+  db.execute('UPDATE pp_users SET active=0 WHERE id=?',[current.id]);
+  db.execute("UPDATE pp_merchants SET status='SUSPENDED' WHERE merchant_id=?",[current.merchant_id]);
+  const hijack=await fetch(root+'/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...first,password:'attacker-new-password-456'})});
+  assert.equal(hijack.status,409);
+  const after=db.queryOne('SELECT id,role,active,password_hash FROM pp_users WHERE email=?',[first.email]);
+  assert.equal(after.id,current.id);assert.equal(after.active,0);
+  assert.equal(after.password_hash,current.password_hash);
+  assert.equal(db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',[current.merchant_id]).status,'SUSPENDED');
+ }finally{await new Promise(resolve=>http.close(resolve));db.close();}
+});
+
+test('merchant onboarding cannot reactivate suspended or reviewed merchants',async()=>{
+ const db=new Database({inMemory:true});
+ const {runMigrations}=await import('../../../../packages/db/src/migrate.js');
+ runMigrations(db);initializePlatform(db);
+ const server=new HttpServer(),identity=registerPlatformIdentity(server,{db,merchantRepo:new MerchantRepository(db),platformDelivery:async()=>{}});
+ server.use(identity.guard);
+ const http=server.createServer();await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
+ const root='http://127.0.0.1:'+http.address().port+'/api/platform/v1';
+ const profile={email:'onboarding-merchant@example.test',password:'safe-merchant-password-123',businessName:'Safety Merchant',contactName:'Safety Owner',mobile:'9876543210'};
+ try{
+  assert.equal((await fetch(root+'/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(profile)})).status,201);
+  const login=await fetch(root+'/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:profile.email,password:profile.password})});
+  assert.equal(login.status,200);
+  const cookie=login.headers.get('set-cookie').split(';')[0],csrf=(await login.json()).csrfToken;
+  const merchantId=db.queryOne('SELECT merchant_id FROM pp_users WHERE email=?',[profile.email]).merchant_id;
+  for(const status of ['SUSPENDED','REJECTED','UNDER_REVIEW']){
+   db.execute('UPDATE pp_merchants SET status=? WHERE merchant_id=?',[status,merchantId]);
+   const submission=await fetch(root+'/onboarding',{method:'POST',headers:{'content-type':'application/json',cookie,'x-csrf-token':csrf},body:JSON.stringify({submit:true,category:'Retail',address:'Test business address'})});
+   assert.equal(submission.status,409,status);
+   assert.equal(db.queryOne('SELECT status FROM pp_merchants WHERE merchant_id=?',[merchantId]).status,status);
+  }
+ }finally{await new Promise(resolve=>http.close(resolve));db.close();}
+});
