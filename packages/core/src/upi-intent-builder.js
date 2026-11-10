@@ -40,12 +40,13 @@ function trRef(value) {
 }
 
 /**
- * Strip & % # + and truncate to 50 chars (transaction note).
+ * Strip truly dangerous chars (& % # +) and truncate to 50 chars (transaction note).
+ * Spaces are preserved so notes remain readable.
  * @param {string} value
  * @returns {string}
  */
 function tnNote(value) {
-  return String(value).replace(/[&%#+\s]/g, '').slice(0, 50);
+  return String(value).replace(/[&%#+]/g, '').slice(0, 50);
 }
 
 /**
@@ -66,8 +67,9 @@ function tnNote(value) {
 export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) {
   const params = [];
   params.push(`pa=${encodeURIComponent(String(profile.payeeVpa || ''))}`);
-  // pn is double-encoded so UPI apps decode it once to the display name.
-  params.push(`pn=${encodeURIComponent(encodeURIComponent(String(profile.payeeName || '')))}`);
+  // pn is single-encoded so UPI apps decode it once to the display name.
+  // Max 50 chars per NPCI.
+  params.push(`pn=${encodeURIComponent(String(profile.payeeName || '').trim().substring(0, 50))}`);
   // am is optional: omitted when no amount is provided (LinkPe-style amount-only links).
   if (amountPaise !== null && amountPaise !== undefined && amountPaise !== 0) {
     params.push(`am=${amountToRupees2dp(amountPaise)}`);
