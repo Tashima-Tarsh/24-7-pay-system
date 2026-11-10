@@ -122,3 +122,17 @@ export function setReceivingUpiActive(id:string,active:boolean):Promise<{account
 export function money(paise:string|number|undefined){const n=Number(paise||0)/100;return Number.isFinite(n)?new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(n):'—';}
 export function number(n:number|undefined){return new Intl.NumberFormat('en-IN').format(n||0);}
 export function date(raw?:string){if(!raw)return'—';const d=new Date(raw);return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});}
+
+export async function retryWebhookDelivery(id:string,source:'webhook_deliveries'|'provider_webhook_deliveries'):Promise<void>{
+ if(!/^[A-Za-z0-9_-]{1,128}$/.test(id))throw new Error('Invalid callback delivery identifier');
+ const token=sessionStorage.getItem(SESSION_KEY);
+ if(!token)throw new AuthRequired('Sign in to manage callback deliveries.');
+ const response=await fetch('/api/platform/v1/webhook-deliveries/'+encodeURIComponent(id)+'/retry',{
+  method:'POST',credentials:'omit',cache:'no-store',
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  body:JSON.stringify({source})
+ });
+ const payload:unknown=await response.json().catch(()=>null);
+ if(response.status===401){sessionStorage.removeItem(SESSION_KEY);throw new AuthRequired('Your session has expired.');}
+ if(!response.ok)throw new Error(payload&&typeof payload==='object'&&'error'in payload?String(payload.error):'Callback retry request failed ('+response.status+').');
+}
