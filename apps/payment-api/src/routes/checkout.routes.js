@@ -769,9 +769,9 @@ export function registerCheckoutRoutes(server, ctx) {
         payeeName = profile.payeeName;
       }
     } catch {}
-    if (snapshot?.isTestOverride && snapshot.upiId) {
+    if ((session.metadata?.platform || snapshot?.isTestOverride) && snapshot?.upiId) {
       payeeVpa = snapshot.upiId;
-      payeeName = snapshot.payeeName || payeeName;
+      payeeName = snapshot.payeeName || payeeName || merchant?.businessName || 'Merchant';
     } else if (!payeeVpa) {
       payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
       payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
@@ -780,14 +780,12 @@ export function registerCheckoutRoutes(server, ctx) {
     let request = null;
     if (payeeVpa) {
       try {
-        const built = buildUpiUri(
-          { payeeVpa, payeeName, mcc: '5411' },
-          session.amountPaise,
-          session.orderId,
-          `Payment ${session.orderId}`,
-          `/checkout/${session.id}`
-        );
-        const uri = new URL(built.uri);
+        const uri = new URL(buildUpiPaymentUri({
+          vpa: payeeVpa, name: payeeName || 'Merchant',
+          amount: Number(toRupeesString(session.amountPaise)),
+          orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
+          note: `Payment ${session.orderId}`,mode:'fixed'
+        }));
         request = {
           payeeVpa: uri.searchParams.get('pa'),
           payeeName: uri.searchParams.get('pn'),
