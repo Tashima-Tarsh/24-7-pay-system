@@ -37,7 +37,14 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
     params.set('tr', safeRef);
     params.set('tid', safeRef);
   }
-  if (note) params.set('tn', note.trim());
+  if (note) {
+    const safeNote = String(note)
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .trim()
+      .substring(0, 30);
+    if (safeNote) params.set('tn', safeNote);
+  }
   if (amount !== undefined && amount !== null) {
     params.set('am', Number(amount).toFixed(2));
   }
@@ -59,6 +66,10 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
 export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
   if (!upiUri || !upiUri.startsWith('upi://pay?')) throw new Error('Invalid UPI URI');
 
+  // Fallback URL is MANDATORY — use env var PUBLIC_CHECKOUT_URL as production fallback
+  // so UPI apps redirect to the public domain (not localhost) after payment.
+  const resolvedFallback = fallbackUrl || process.env.PUBLIC_CHECKOUT_URL || null;
+
   // Build query params, stripping mode (optional UPI param that may cause GPay/PhonePe rejection).
   // QR codes keep their mode; intent links don't need it.
   const queryParams = new URLSearchParams(upiUri.slice('upi://pay?'.length));
@@ -77,8 +88,8 @@ export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
 
   // S.browser_fallback_url is MANDATORY for GPay/PhonePe intent callbacks.
   // Without it, the app cannot redirect back to checkout after payment.
-  if (fallbackUrl) {
-    const encodedFallback = encodeURIComponent(fallbackUrl);
+  if (resolvedFallback) {
+    const encodedFallback = encodeURIComponent(resolvedFallback);
     for (const app of ['phonepe', 'gpay', 'paytm']) {
       links[app] = links[app].replace(';end', `;S.browser_fallback_url=${encodedFallback};end`);
     }

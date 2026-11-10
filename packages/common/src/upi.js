@@ -102,8 +102,8 @@ export function buildUpiIntentUri(options) {
     throw new Error('Invalid UPI VPA. Ensure format is: username@bank');
   }
 
-  // 2. Sanitize Payee Name (Max 50 chars. URLSearchParams handles single-encoding safely)
-  const pn = String(options.payeeName).trim().substring(0, 50);
+  // 2. Sanitize Payee Name (Max 50 chars. Strip special chars that crash UPI apps)
+  const pn = String(options.payeeName).replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 50);
 
   // 3. Format Amount (GPay STRICTLY requires exactly 2 decimal places, e.g., "50.00")
   let am;
@@ -118,10 +118,11 @@ export function buildUpiIntentUri(options) {
     throw new Error('Transaction Ref (tr) must be alphanumeric and non-empty');
   }
 
-  // 5. Sanitize Transaction Note (Max 30 chars per NPCI. Strip emojis to prevent app crashes)
+  // 5. Sanitize Transaction Note (Max 30 chars per NPCI. Strip emojis and special chars)
   const rawTn = String(options.transactionNote || 'Payment').trim();
   const tn = rawTn
     .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
     .substring(0, 30);
 
   // 6. Build Query String (URLSearchParams handles safe, single URL-encoding automatically)
@@ -151,17 +152,18 @@ export function buildUpiIntentUri(options) {
 
   // 8. Construct Android Intent URI
   // Format: intent://pay?{query}#Intent;scheme=upi;package={package};S.browser_fallback_url={url};end
+  // checkoutUrl is optional but strongly recommended. Falls back to PUBLIC_CHECKOUT_URL env var
+  // so UPI apps redirect to the public domain (not localhost) on production deployments.
+  const checkoutUrl = (options.checkoutUrl || process.env.PUBLIC_CHECKOUT_URL || 'http://localhost:7000').trim();
+
   let intentUri = `intent://pay?${queryString}#Intent;scheme=upi`;
 
   if (targetPackage) {
     intentUri += `;package=${targetPackage}`;
   }
 
-  const checkoutUrl = options.checkoutUrl?.trim();
-  if (checkoutUrl) {
-    const fallbackUrl = encodeURIComponent(checkoutUrl);
-    intentUri += `;S.browser_fallback_url=${fallbackUrl}`;
-  }
+  const fallbackUrl = encodeURIComponent(checkoutUrl);
+  intentUri += `;S.browser_fallback_url=${fallbackUrl}`;
 
   intentUri += ';end';
 

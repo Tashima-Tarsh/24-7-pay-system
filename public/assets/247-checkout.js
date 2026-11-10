@@ -3,7 +3,7 @@ const found=location.pathname.match(/^\/checkout\/([^/]+)\/?$/);
 const paymentId=found?decodeURIComponent(found[1]):new URLSearchParams(location.search).get('id');
 const android=/Android/i.test(navigator.userAgent);
 const mobile=android||/iPhone|iPad|iPod/i.test(navigator.userAgent);
-let current=null,events=null,polling=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=false;
+let current=null,events=null,polling=null,pollingStartTime=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=false;
 const terminalStates=new Set(['SUCCESS','FAILED','EXPIRED','CANCELLED','BLOCKED']);
 const safeUri=(url,prefix)=>typeof url==='string'&&url.startsWith(prefix)&&!(/[\s\u0000-\u001f]/.test(url))?url:null;
 const rupees=value=>{const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n):'—';};
@@ -12,7 +12,7 @@ function statusLine(title,description,kind=''){
  const box=document.querySelector('.status-box');box.className='status-box'+(kind?' '+kind:'');
  display('status-title',title);display('status-description',description);
 }
-function stop(){if(events){events.close();events=null;}if(polling){clearInterval(polling);polling=null;}if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}}
+function stop(){if(events){events.close();events=null;}if(polling){clearInterval(polling);polling=null;}pollingStartTime=null;if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}}
 function externalReturn(url){
  const a=$('merchant-return');a.hidden=true;a.removeAttribute('href');
  try{const u=new URL(url);if(u.protocol==='https:'&&!u.username&&!u.password){a.href=u.href;a.hidden=false;}}catch{}
@@ -194,7 +194,20 @@ window.addEventListener('focus',refreshAfterAppReturn);
 $('copy-vpa').addEventListener('click',async()=>{if(!current?.payeeVpa)return;try{await navigator.clipboard.writeText(current.payeeVpa);$('copy-vpa').textContent='Copied';setTimeout(()=>$('copy-vpa').textContent='Copy UPI ID',1800);}catch{$('copy-vpa').textContent='Select and copy';}});
 $('retry').addEventListener('click',refresh);
 if(!paymentId){$('loading').hidden=true;$('checkout-content').hidden=false;hidePayment();statusLine('Payment link missing','Please use the payment link shared by your merchant.','failed');}
-else{void refresh();connect();polling=setInterval(()=>{updateTimer();void refresh();},3000);}
+else{
+  pollingStartTime=Date.now();
+  void refresh();connect();
+  polling=setInterval(()=>{
+    // Stop polling after 5 minutes — payment likely abandoned or expired
+    if(Date.now()-pollingStartTime>5*60*1000){
+      clearInterval(polling);polling=null;
+      statusLine('Payment session timed out','No response from the payment system for 5 minutes. Please ask your merchant for a fresh payment link.','warning');
+      hidePayment();$('retry-area').hidden=false;display('retry-message','Session timed out. Request a new payment link from your merchant.');
+      return;
+    }
+    updateTimer();void refresh();
+  },3000);
+}
 
 /**
  * Consumes the Stripe-node compatible create-payment-intent API.
