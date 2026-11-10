@@ -754,8 +754,9 @@ export function startServer(port = null, customDb = null) {
   const app = createPaymentApp(customDb);
 
   return new Promise(resolve => {
-    // Loopback by default; reach this service via the local Cloudflare Tunnel, not 0.0.0.0.
-    const bindHost = process.env.YOUPI_BIND_HOST || '127.0.0.1';
+    // Bind to all interfaces so Android phones on the same WiFi can reach
+    // the checkout page via the PC's LAN IP (e.g. 192.168.1.x:7000).
+    const bindHost = process.env.YOUPI_BIND_HOST || '0.0.0.0';
     const backlog = Number(process.env.SERVER_BACKLOG || 4096);
     const instance = app.rawServer.listen({ port: finalPort, host: bindHost, backlog }, () => {
       console.log(`[Payment API] Server listening on port ${finalPort} (backlog ${backlog})`);
