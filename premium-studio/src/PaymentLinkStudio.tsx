@@ -5,6 +5,7 @@ import {Button} from './components/ui/button';
 import {Card} from './components/ui/card';
 import {AuthRequired,createPaymentLink,getPaymentReadiness,type PaymentReadiness,type PaymentLinkResponse} from './api';
 
+type CheckoutPreview={status?:string;upiQr?:string;upiUri?:string;upiDeepLinks?:{gpay?:string;phonepe?:string;paytm?:string};payeeVpa?:string;payeeName?:string};
 type Props={canCreate:boolean;isPlatform:boolean;onCreated:()=>void;onConfigureUpi:()=>void;compact?:boolean};
 function checkoutHref(result:PaymentLinkResponse|null):string|null{
  if(!result)return null;
@@ -27,6 +28,7 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
  const [amount,setAmount]=useState('');
  const [loading,setLoading]=useState(false);
  const [result,setResult]=useState<PaymentLinkResponse|null>(null);
+ const [checkoutPreview,setCheckoutPreview]=useState<CheckoutPreview|null>(null);
  const [failure,setFailure]=useState('');
  const [copied,setCopied]=useState(false);
  const [attemptKey,setAttemptKey]=useState<string|null>(null);
@@ -45,6 +47,21 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
   }).finally(()=>{if(!controller.signal.aborted)setReadinessBusy(false)});
   return()=>controller.abort();
  },[canCreate,isPlatform,readinessVersion]);
+ useEffect(()=>{
+  const id=result?.paymentId;
+  if(!id||!/^[A-Za-z0-9-]{1,128}$/.test(id))return;
+  const controller=new AbortController();
+  const load=async()=>{
+   try{
+    const response=await fetch('/api/v1/checkout/'+encodeURIComponent(id)+'/state',{signal:controller.signal,cache:'no-store',credentials:'omit'});
+    if(!response.ok)return;
+    const preview=await response.json() as CheckoutPreview;
+    if(!controller.signal.aborted)setCheckoutPreview(preview);
+   }catch{}
+  };
+  void load();
+  return()=>controller.abort();
+ },[result?.paymentId]);
  const reduce=useReducedMotion();
  // Readiness is advisory: a failed diagnostic must never disable a valid payment API request.
  const canSubmit=canCreate&&!isPlatform&&!loading;
@@ -56,7 +73,7 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
   event.preventDefault();
   if(!canSubmit)return;
   if(!validOrder||!validAmount){setFailure('Enter a valid order reference and an amount greater than ₹0, with up to two decimal places.');return;}
-  setLoading(true);setFailure('');setResult(null);setCopied(false);
+  setLoading(true);setFailure('');setResult(null);setCheckoutPreview(null);setCopied(false);
   // Maintain one idempotency key across explicit retry attempts for an unchanged request.
   const key=attemptKey||crypto.randomUUID();
   if(!attemptKey)setAttemptKey(key);
@@ -68,7 +85,7 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
    setFailure(error instanceof AuthRequired?'Your session expired. Sign in again in the merchant workspace.':error instanceof Error?error.message:'Payment request could not be created.');
   }finally{setLoading(false);}
  }
- function updateOrder(value:string){setOrderId(value);setAttemptKey(null);setResult(null);setFailure('');}
+ function updateOrder(value:string){setOrderId(value);setAttemptKey(null);setResult(null);setCheckoutPreview(null);setFailure('');}
  function updateAmount(value:string){setAmount(value);setAttemptKey(null);setResult(null);setFailure('');}
  async function copy(){
   if(!href)return;
@@ -97,7 +114,9 @@ export function PaymentLinkStudio({canCreate,isPlatform,onCreated,onConfigureUpi
    {failure&&<div className="payment-form-error" role="alert"><WarningCircle size={18} aria-hidden="true"/>{failure}</div>}
    {result&&<motion.div initial={reduce?false:{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:.3}} className="created-link-result" aria-live="polite">
     <div className="result-top"><div className="result-check"><Check size={20} weight="bold" aria-hidden="true"/></div><div><strong>Payment request created</strong><p>Order: {result.orderId||orderId} · Status: {result.status||'Pending confirmation'}</p></div></div>
-    {href?<><div className="payment-link-display"><span>{new URL(href,window.location.origin).href}</span><button type="button" onClick={copy} className="copy-link-button" aria-label="Copy checkout link">{copied?<Check size={18}/>:<Copy size={18}/>}</button></div><div className="link-result-actions"><a className="checkout-open-button" href={href} target="_blank" rel="noopener noreferrer">Open real UPI checkout <ArrowSquareOut size={18}/></a><button className="soft-copy-button" type="button" onClick={copy}>{copied?'Copied ✓':'Copy payment link'}</button></div><p className="payment-link-help">The customer checkout opens supported UPI app intents and a payment QR when the backend has issued an active UPI session. App return is not credit confirmation.</p></>:
+    {href?<><div className="payment-link-display"><span>{new URL(href,window.location.origin).href}</span><button type="button" onClick={copy} className="copy-link-button" aria-label="Copy checkout link">{copied?<Check size={18}/>:<Copy size={18}/>}</button></div><div className="link-result-actions"><a className="checkout-open-button" href={href}>Open real UPI checkout <ArrowSquareOut size={18}/></a><button className="soft-copy-button" type="button" onClick={copy}>{copied?'Copied ✓':'Copy payment link'}</button></div>{checkoutPreview&&['ACTIVE','INTENT_ISSUED'].includes(checkoutPreview.status||'')&&checkoutPreview.upiQr?.startsWith('data:image/svg+xml;base64,')&&<div className="payment-preview"><div className="payment-preview-qr"><img src={checkoutPreview.upiQr} alt="Scannable UPI payment QR code" width={196} height={196}/></div><div><strong>Scan to pay</strong><p>{checkoutPreview.payeeName||'Merchant'} · {checkoutPreview.payeeVpa||'Receiving account'}</p><p>Use a second device to scan, or open the checkout to pay using an app installed on this phone.</p></div></div>}
+    {checkoutPreview?.status==='QUEUED'&&<p className="payment-link-help" role="status">Your payment request is queued. The QR and UPI app buttons appear once the receiving account is ready; the checkout link can be shared now.</p>}
+    <p className="payment-link-help">The customer checkout opens supported UPI app intents and a payment QR when the backend has issued an active UPI session. App return is not credit confirmation.</p></>:
     <p className="payment-form-error">The backend created your payment request but did not return a usable payment identifier or checkout URL. Check the order in Transactions rather than generating a duplicate payment.</p>}
    </motion.div>}
   </form>}
