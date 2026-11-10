@@ -290,3 +290,15 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 @media(prefers-reduced-motion:reduce){.premium-control,.sidebar-tab{transition:none!important}}
 
 .trend-card{min-width:0}.trend-chart{min-width:0;overflow:hidden;margin-top:8px}.trend-chart svg{display:block;width:100%;height:auto;max-height:285px}
+
+/* API credentials: compact operational layout, no secret persisted on refresh. */
+.operations-key-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:18px 0}
+.operations-key-form label{display:grid;gap:7px;min-width:min(220px,100%);font-size:12px;font-weight:700;color:#315d42}
+.operations-key-form input,.operations-key-form select,.operations-secret input{font:500 14px/1.45 "DM Sans",system-ui,sans-serif;background:rgba(255,255,255,.83);border:1px solid rgba(79,125,91,.29);border-radius:12px;min-height:44px;padding:9px 12px;color:#17432e;max-width:100%;outline-offset:3px}
+.operations-key-form input:focus-visible,.operations-key-form select:focus-visible,.operations-secret input:focus-visible{outline:2px solid #30834c}
+.operations-secret{display:grid;gap:10px;margin:12px 0 16px;padding:14px;border-radius:14px;border:1px solid #82b591;background:#f1f9ef;min-width:0}
+.operations-secret strong{color:#205638;font-size:13px}
+.operations-secret input{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;width:100%;overflow:hidden;text-overflow:ellipsis}
+.operations-secret-actions{display:flex;flex-wrap:wrap;gap:9px}
+.operations-success{border:1px solid #aad0b3;color:#245d40;background:rgba(232,249,231,.9);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5}
+@media(max-width:600px){.operations-key-form{display:grid;grid-template-columns:minmax(0,1fr)}.operations-key-form label,.operations-key-form button{width:100%;min-width:0}}
