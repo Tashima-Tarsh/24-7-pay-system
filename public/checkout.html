@@ -551,21 +551,26 @@
         }
         const links=data.upiDeepLinks||{};
         const intentById={};
+        const fallbackUrl=encodeURIComponent(location.origin+location.pathname);
+        const pkgForId=id=>{return { 'open-gpay':'com.google.android.apps.nbu.paisa.user','open-phonepe':'com.phonepe.app','open-paytm':'net.one97.paytm','open-upi':'' }[id]||'';};
+        const makeIntent=(rawUri,pkg)=>{
+          const q=rawUri.startsWith('upi://') ? rawUri.slice('upi://pay?'.length) : (rawUri||'').slice('intent://pay?'.length);
+          return `intent://pay?${q}#Intent;scheme=upi;package=${pkg};S.browser_fallback_url=${fallbackUrl};end`;
+        };
         for(const [id,uri,prefix] of [
           ['open-upi',data.upiUri,'upi://pay?'],
           ['open-gpay',links.gpay,'intent://pay?'],
           ['open-phonepe',links.phonepe,'intent://pay?'],
           ['open-paytm',links.paytm,'intent://pay?']
         ]){
-          const el=$(id),url=safeLink(uri,prefix);
-          if(payable && isMobile && url){
-            el.href=url;
-            intentById[id]=url;
-            el.classList.remove('hide');
-          } else {
-            el.removeAttribute('href');
-            el.classList.add('hide');
+          const el=$(id);
+          let url=null;
+          if(payable && isMobile){
+            if(uri.startsWith('upi://pay?')) url=makeIntent(uri,pkgForId(id));
+            else if(uri.startsWith('intent://')) url=uri; // backend already includes fallback URL
           }
+          if(url){el.href=url;intentById[id]=url;el.classList.remove('hide');}
+          else{el.removeAttribute('href');el.classList.add('hide');}
         }
         // Explicit per-button click handlers guarantee user-gesture navigation
         // to the intent URI. Android Chrome does not always honor intent:// in

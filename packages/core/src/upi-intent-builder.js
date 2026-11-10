@@ -108,25 +108,35 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
 
 /**
  * Wrap a canonical upi://pay URI into an Android package-specific intent URI.
- * @param {string} uri
- * @param {string} pkg
+ * @param {string} uri - upi://pay URI
+ * @param {string} pkg - Android package name (e.g. com.google.android.apps.nbu.paisa.user)
+ * @param {string} [fallbackUrl] - S.browser_fallback_url (MANDATORY for GPay/PhonePe callbacks)
  * @returns {string}
  */
-export function buildPackageIntent(uri, pkg) {
+export function buildPackageIntent(uri, pkg, fallbackUrl = null) {
   const query = uri.split('?')[1] || '';
-  return `intent://pay?${query}#Intent;scheme=upi;package=${pkg};end`;
+  let intentUri = `intent://pay?${query}#Intent;scheme=upi;package=${pkg}`;
+
+  // S.browser_fallback_url is MANDATORY for GPay/PhonePe to return to checkout after payment.
+  if (fallbackUrl) {
+    intentUri += `;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)}`;
+  }
+
+  intentUri += ';end';
+  return intentUri;
 }
 
 /**
  * Build all four package-targeted intent URIs from a canonical UPI URI.
- * @param {string} uri
+ * @param {string} uri - upi://pay URI
+ * @param {string} [fallbackUrl] - S.browser_fallback_url (MANDATORY for GPay/PhonePe callbacks)
  * @returns {{ gpay: string, phonepe: string, paytm: string, bhim: string }}
  */
-export function buildPackageIntents(uri) {
+export function buildPackageIntents(uri, fallbackUrl = null) {
   return {
-    gpay: buildPackageIntent(uri, UPI_PACKAGES.gpay),
-    phonepe: buildPackageIntent(uri, UPI_PACKAGES.phonepe),
-    paytm: buildPackageIntent(uri, UPI_PACKAGES.paytm),
-    bhim: buildPackageIntent(uri, UPI_PACKAGES.bhim)
+    gpay: buildPackageIntent(uri, UPI_PACKAGES.gpay, fallbackUrl),
+    phonepe: buildPackageIntent(uri, UPI_PACKAGES.phonepe, fallbackUrl),
+    paytm: buildPackageIntent(uri, UPI_PACKAGES.paytm, fallbackUrl),
+    bhim: buildPackageIntent(uri, UPI_PACKAGES.bhim, fallbackUrl)
   };
 }

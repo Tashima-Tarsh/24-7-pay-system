@@ -45,19 +45,39 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
  * These links open the payment directly in the respective UPI app.
  *
  * @param {string} upiUri - Full upi://pay URI from buildUpiPaymentUri()
+ * @param {string} [fallbackUrl] - HTTPS URL where the UPI app redirects after payment.
+ *                                 Without this, GPay/PhonePe cannot return to checkout
+ *                                 and the intent is rejected or shows "server error".
  * @returns {Object} Map of app name → deep link URL
  */
-export function buildUpiPaymentIntentLinks(upiUri) {
+export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
   if (!upiUri || !upiUri.startsWith('upi://pay?')) throw new Error('Invalid UPI URI');
-  const query = upiUri.slice('upi://pay?'.length);
+  let query = upiUri.slice('upi://pay?'.length);
 
-  return {
-    phonepe: `intent://pay?${query}#Intent;scheme=upi;package=com.phonepe.app;end`,
-    gpay: `intent://pay?${query}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`,
-    paytm: `intent://pay?${query}#Intent;scheme=upi;package=net.one97.paytm;end`,
-    bhim: `upi://pay?${query}`,
+  // For intent links, use mode=02 (editable) instead of mode=04 (fixed).
+  // GPay/PhonePe reject fixed-amount intents with "server error" or "limit".
+  query = query.replace(/mode=04/g, 'mode=02');
+
+  const intentBase = `intent://pay?${query}#Intent;scheme=upi;`;
+
+  const links = {
+    phonepe: `${intentBase}package=com.phonepe.app;end`,
+    gpay: `${intentBase}package=com.google.android.apps.nbu.paisa.user;end`,
+    paytm: `${intentBase}package=net.one97.paytm;end`,
+    bhim: upiUri, // BHIM uses upi:// directly
     upi: upiUri // Generic fallback
   };
+
+  // S.browser_fallback_url is MANDATORY for GPay/PhonePe intent callbacks.
+  // Without it, the app cannot redirect back to checkout after payment.
+  if (fallbackUrl) {
+    const encodedFallback = encodeURIComponent(fallbackUrl);
+    for (const app of ['phonepe', 'gpay', 'paytm']) {
+      links[app] = links[app].replace(';end', `;S.browser_fallback_url=${encodedFallback};end`);
+    }
+  }
+
+  return links;
 }
 
 /**

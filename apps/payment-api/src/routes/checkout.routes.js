@@ -683,7 +683,7 @@ export function registerCheckoutRoutes(server, ctx) {
         expectedReference: session.orderId
       }) : { ok: false, errors: ['INTENT_NOT_ACTIVE'], proofOfPayment: false },
       upiQr: upiUri ? generateQrDataUri(upiUri) : null,
-      upiDeepLinks: upiUri ? buildUpiPaymentIntentLinks(upiUri) : null,
+      upiDeepLinks: upiUri ? buildUpiPaymentIntentLinks(upiUri, ctx.checkoutBaseUrl + '/checkout/' + session.id) : null,
       payeeVpa,
       payeeName,
       copyVpa: payeeVpa,
@@ -845,7 +845,7 @@ export function registerCheckoutRoutes(server, ctx) {
     HttpServer.json(res, 200, {
       upiUri,
       upiQr: generateQrDataUri(upiUri),
-      upiDeepLinks: buildUpiPaymentIntentLinks(upiUri)
+      upiDeepLinks: buildUpiPaymentIntentLinks(upiUri, ctx.checkoutBaseUrl + '/checkout/' + session.id)
     });
   });
 
@@ -872,7 +872,7 @@ export function registerCheckoutRoutes(server, ctx) {
     }
     HttpServer.json(res, 200, {
       upiUri,
-      upiDeepLinks: buildUpiPaymentIntentLinks(upiUri)
+      upiDeepLinks: buildUpiPaymentIntentLinks(upiUri, ctx.checkoutBaseUrl + '/checkout/' + session.id)
     });
   });
 

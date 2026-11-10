@@ -289,7 +289,7 @@ export function registerUpiIntentRoutes(server, ctx) {
       );
       const upiUri = built.uri;
 
-      const upiIntent = buildPackageIntents(upiUri);
+      const upiIntent = buildPackageIntents(upiUri, checkoutUrl);
       const upiQr = upiUri ? generateQrDataUri(upiUri) : null;
       const copyVpa = payeeVpa;
 

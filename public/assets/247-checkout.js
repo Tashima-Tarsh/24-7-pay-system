@@ -96,7 +96,9 @@ function render(data){
   }
   const links=data.upiDeepLinks||{};
   const query=verifiedUpi.slice('upi://pay?'.length);
-  const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';end';
+  // Fallback URL: GPay/PhonePe redirect here after payment so checkout can poll status.
+  const fallbackUrl=encodeURIComponent(location.origin+location.pathname);
+  const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';S.browser_fallback_url='+fallbackUrl+';end';
   const iosUri=scheme=>scheme+query;
   const sources=[
     ['upi-open',verifiedUpi,'upi://pay?'],
