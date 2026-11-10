@@ -822,6 +822,7 @@ export function registerCheckoutRoutes(server, ctx) {
   server.get('/api/v1/checkout/:id/upi-qr', async (req, res, params) => {
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) return HttpServer.json(res, 404, { error: 'Checkout session not found' });
+    if (session.status !== PaymentStatus.ACTIVE || session.metadata?.externalCollection) return HttpServer.json(res, 409, { error: 'UPI instructions are not available for this payment state.' });
     const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa;
     const payeeName = session.metadata?.receivingAccountSnapshot?.payeeName || session.metadata?.payeeName || 'Merchant';
     if (!payeeVpa) return HttpServer.json(res, 400, { error: 'No VPA configured for this session' });
@@ -830,7 +831,7 @@ export function registerCheckoutRoutes(server, ctx) {
       upiUri = buildUpiPaymentUri({
         vpa: payeeVpa,
         name: payeeName,
-        amount: session.amountPaise / 100,
+        amount: Number(toRupeesString(session.amountPaise)),
         orderId: session.orderId,
         note: `Order ${session.orderId}`,
         mode: 'fixed'
@@ -849,6 +850,7 @@ export function registerCheckoutRoutes(server, ctx) {
   server.get('/api/v1/checkout/:id/upi-links', async (req, res, params) => {
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) return HttpServer.json(res, 404, { error: 'Checkout session not found' });
+    if (session.status !== PaymentStatus.ACTIVE || session.metadata?.externalCollection) return HttpServer.json(res, 409, { error: 'UPI instructions are not available for this payment state.' });
     const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa;
     const payeeName = session.metadata?.receivingAccountSnapshot?.payeeName || session.metadata?.payeeName || 'Merchant';
     if (!payeeVpa) return HttpServer.json(res, 400, { error: 'No VPA configured for this session' });
@@ -857,7 +859,7 @@ export function registerCheckoutRoutes(server, ctx) {
       upiUri = buildUpiPaymentUri({
         vpa: payeeVpa,
         name: payeeName,
-        amount: session.amountPaise / 100,
+        amount: Number(toRupeesString(session.amountPaise)),
         orderId: session.orderId,
         note: `Order ${session.orderId}`,
         mode: 'fixed'
