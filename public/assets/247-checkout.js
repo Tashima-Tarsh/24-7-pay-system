@@ -3,7 +3,7 @@ const found=location.pathname.match(/^\/checkout\/([^/]+)\/?$/);
 const paymentId=found?decodeURIComponent(found[1]):new URLSearchParams(location.search).get('id');
 const android=/Android/i.test(navigator.userAgent);
 const mobile=android||/iPhone|iPad|iPod/i.test(navigator.userAgent);
-let current=null,events=null,polling=null,loading=false,terminal=false,deadline=0,retryTimer=null;
+let current=null,events=null,polling=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=false;
 const terminalStates=new Set(['SUCCESS','FAILED','EXPIRED','CANCELLED','BLOCKED']);
 const safeUri=(url,prefix)=>typeof url==='string'&&url.startsWith(prefix)&&!(/[\s\u0000-\u001f]/.test(url))?url:null;
 const rupees=value=>{const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n):'—';};
@@ -19,7 +19,7 @@ function externalReturn(url){
 }
 function hidePayment(){
  $('payment-instructions').hidden=true;$('qr').hidden=true;$('qr').removeAttribute('src');
- for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open'])$(id).removeAttribute('href');
+ for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open','bhim-open'])$(id).removeAttribute('href');
  $('app-actions').hidden=true;$('timer').hidden=true;
 }
 function sessionDescription(data){
@@ -63,7 +63,7 @@ function render(data){
   const support=String(data.supportEmails[0]);
   if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(support))display('support','Questions? Contact '+support);
  }
- if(terminal){showResult({...data,status},title,description,kind);stop();return;}
+ if(terminal){appHandoff=false;showResult({...data,status},title,description,kind);stop();return;}
  const verifiedUpi=safeUri(data.upiUri,'upi://pay?');
  const uriPayee=verifiedUpi?new URL(verifiedUpi).searchParams.get('pa'):null;
  const payeeVpa=typeof data.payeeVpa==='string'&&data.payeeVpa?data.payeeVpa:uriPayee;
@@ -97,13 +97,25 @@ function render(data){
   const links=data.upiDeepLinks||{};
   const query=verifiedUpi.slice('upi://pay?'.length);
   const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';end';
+  const iosUri=scheme=>scheme+query;
   const sources=[
    ['upi-open',verifiedUpi,'upi://pay?'],
-   ['gpay-open',safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user'),'intent://pay?'],
-   ['phonepe-open',safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app'),'intent://pay?'],
-   ['paytm-open',safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm'),'intent://pay?']
+   ['gpay-open',android?(safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
+   ['phonepe-open',android?(safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
+   ['paytm-open',android?(safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
+   ['bhim-open',android?androidIntent('in.org.npci.upiapp'):iosUri('bhim://upi/pay?'),android?'intent://pay?':'bhim://upi/pay?']
   ];
-  if(mobile){$('app-actions').hidden=false;for(const [id,url,prefix]of sources){const allowed=(!android&&id!=='upi-open')?null:safeUri(url,prefix),el=$(id);if(allowed){el.href=allowed;el.hidden=false;}else{el.hidden=true;el.removeAttribute('href');}}}
+  if(mobile){
+   $('app-actions').hidden=false;
+   for(const [id,url,prefix] of sources){
+    const el=$(id),allowed=safeUri(url,prefix);
+    if(allowed){el.href=allowed;el.hidden=false;}
+    else{el.hidden=true;el.removeAttribute('href');}
+   }
+   if(appHandoff){
+    display('app-handoff-note','UPI app opened or selected. Return here after payment; waiting for trusted confirmation. Do not pay twice.');
+   }
+  }
   if(data.timeRemainingSeconds>0){
     deadline=Date.now()+Math.min(86400,Number(data.timeRemainingSeconds))*1000;
     $('timer').hidden=false;updateTimer();
@@ -138,7 +150,20 @@ function connect(){
   events.onerror=()=>{if(events){events.close();events=null;}if(!terminal)retryTimer=setTimeout(connect,6000);};
  }catch{retryTimer=setTimeout(connect,6000);}
 }
+// App-button clicks launch an external app; they never authorize settlement.
+$('app-actions').addEventListener('click',event=>{
+ const target=event.target instanceof Element?event.target.closest('a[href]'):null;
+ if(!target||!$('app-actions').contains(target)||!current||terminal)return;
+ appHandoff=true;
+ display('app-handoff-note','Complete the payment in your UPI app, then return here. Awaiting verified bank/provider confirmation; do not pay twice.');
+});
+function refreshAfterAppReturn(){
+ if(appHandoff&&!terminal&&document.visibilityState==='visible')void refresh();
+}
+document.addEventListener('visibilitychange',refreshAfterAppReturn);
+window.addEventListener('pageshow',refreshAfterAppReturn);
+window.addEventListener('focus',refreshAfterAppReturn);
 $('copy-vpa').addEventListener('click',async()=>{if(!current?.payeeVpa)return;try{await navigator.clipboard.writeText(current.payeeVpa);$('copy-vpa').textContent='Copied';setTimeout(()=>$('copy-vpa').textContent='Copy UPI ID',1800);}catch{$('copy-vpa').textContent='Select and copy';}});
 $('retry').addEventListener('click',refresh);
 if(!paymentId){$('loading').hidden=true;$('checkout-content').hidden=false;hidePayment();statusLine('Payment link missing','Please use the payment link shared by your merchant.','failed');}
-else{void refresh();connect();polling=setInterval(()=>{updateTimer();void refresh();},10000);}
+else{void refresh();connect();polling=setInterval(()=>{updateTimer();void refresh();},3000);}
