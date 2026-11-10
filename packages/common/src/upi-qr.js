@@ -52,9 +52,9 @@ export function buildUpiPaymentIntentLinks(upiUri) {
   const query = upiUri.slice('upi://pay?'.length);
 
   return {
-    phonepe: `phonepe://pay?${query}`,
+    phonepe: `intent://pay?${query}#Intent;scheme=upi;package=com.phonepe.app;end`,
     gpay: `intent://pay?${query}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`,
-    paytm: `paytmmp://pay?${query}`,
+    paytm: `intent://pay?${query}#Intent;scheme=upi;package=net.one97.paytm;end`,
     bhim: `upi://pay?${query}`,
     upi: upiUri // Generic fallback
   };
