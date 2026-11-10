@@ -302,3 +302,11 @@ html{scroll-behavior:smooth}body{background:#f6f7f3}::selection{background:#c9f6
 .operations-secret-actions{display:flex;flex-wrap:wrap;gap:9px}
 .operations-success{border:1px solid #aad0b3;color:#245d40;background:rgba(232,249,231,.9);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5}
 @media(max-width:600px){.operations-key-form{display:grid;grid-template-columns:minmax(0,1fr)}.operations-key-form label,.operations-key-form button{width:100%;min-width:0}}
+
+/* Payment-link result: actual backend QR preview, compact at phone widths. */
+.payment-preview{display:flex;align-items:center;gap:17px;margin:16px 0;padding:16px;border-radius:18px;border:1px solid rgba(50,133,82,.23);background:linear-gradient(120deg,rgba(244,252,243,.96),rgba(229,247,233,.80));min-width:0;overflow-wrap:anywhere}
+.payment-preview-qr{background:#fff;border:1px solid rgba(26,82,42,.12);border-radius:12px;padding:9px;flex:0 0 196px;box-shadow:0 8px 24px rgba(24,87,54,.075)}
+.payment-preview-qr img{display:block;width:100%;height:auto;aspect-ratio:1}
+.payment-preview strong{font-weight:780;color:#14543a;font-size:19px}
+.payment-preview p{font-size:13px;color:#507260;line-height:1.55;margin:6px 0;overflow-wrap:anywhere}
+@media(max-width:540px){.payment-preview{flex-direction:column;align-items:flex-start;padding:14px}.payment-preview-qr{flex-basis:auto;max-width:100%;width:200px}.payment-preview strong{font-size:17px}}
