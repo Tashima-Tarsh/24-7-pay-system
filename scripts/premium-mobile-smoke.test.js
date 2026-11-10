@@ -109,6 +109,35 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   assert.ok((await page.locator('#gpay-open').getAttribute('href')).includes('package=com.google.android.apps.nbu.paisa.user'));
   assert.ok((await page.locator('#phonepe-open').getAttribute('href')).includes('package=com.phonepe.app'));
 
+
+  // End-to-end checkout rendering from a real isolated payment session, not a mocked response.
+  const authResponse=await fetch(base+'/api/platform/v1/login',{method:'POST',headers:{'content-type':'application/json','x-247-auth-mode':'bearer'},body:JSON.stringify({email,password})});
+  assert.equal(authResponse.status,200,'Isolated merchant login failed');
+  const auth=await authResponse.json();
+  const scopedHeaders={'content-type':'application/json',authorization:'Bearer '+auth.sessionToken};
+  const receiver=await fetch(base+'/api/platform/v1/receiving-accounts',{method:'POST',headers:scopedHeaders,body:JSON.stringify({upiId:'smoke-test@okbank',payeeName:'Mobile Smoke Merchant',confirmVpaOwnership:true})});
+  assert.equal(receiver.status,201,'Could not configure test receiving UPI account: '+await receiver.text());
+  const payment=await fetch(base+'/api/platform/v1/payments',{method:'POST',headers:{...scopedHeaders,'idempotency-key':'checkout-render-test-01'},body:JSON.stringify({orderId:'CHECKOUT_SMOKE_01',amount:'2.00',currency:'INR'})});
+  assert.equal(payment.status,201,'Real isolated payment request failed: '+await payment.text());
+  const created=await payment.json();
+  assert.ok(created.paymentId,'Payment creation must return a payment identifier');
+  const state=await fetch(base+'/api/v1/checkout/'+encodeURIComponent(created.paymentId)+'/state');
+  assert.equal(state.status,200);
+  const checkoutState=await state.json();
+  assert.equal(checkoutState.payeeVpa,'smoke-test@okbank','Checkout must use the session receiving account');
+  if(checkoutState.status==='ACTIVE'){
+   assert.match(checkoutState.upiUri||'',/^upi:\/\/pay\?/);
+   assert.match(checkoutState.upiQr||'',/^data:image\/svg\+xml;base64,/);
+   const checkout=await context.newPage();
+   await checkout.goto(base+'/checkout/'+encodeURIComponent(created.paymentId),{waitUntil:'domcontentloaded'});
+   await checkout.locator('#qr:not([hidden])').waitFor({timeout:15000});
+   assert.match(await checkout.locator('#upi-open').getAttribute('href')||'',/^upi:\/\/pay\?/);
+   assert.match(await checkout.locator('#gpay-open').getAttribute('href')||'',/^intent:\/\/pay\?/);
+   assert.match(await checkout.locator('#phonepe-open').getAttribute('href')||'',/^intent:\/\/pay\?/);
+   await checkout.close();
+  }else{
+   assert.equal(checkoutState.status,'QUEUED','Only a queued order may withhold payment instructions');
+  }
   await context.close();
  }finally{if(browser)await browser.close();child.kill();await closed;fs.rmSync(dir,{recursive:true,force:true});}
 });
