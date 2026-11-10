@@ -55,6 +55,21 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   await page.getByRole('heading',{name:'API & provider operations'}).waitFor({timeout:15000});
   await page.getByRole('tab',{name:'Risk controls'}).click();
   await page.getByRole('heading',{name:'Risk & payment controls'}).waitFor({timeout:15000});
+  // A public-hostname mismatch must never hide a valid order's checkout link.
+  // Intercept only the creation request: no real payment is created by this test.
+  await page.route('**/api/platform/v1/payments',async route=>{
+   if(route.request().method()!=='POST')return route.continue();
+   return route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({
+    paymentId:'e2e-checkout-id-123',orderId:'MOBILE_E2E_ORDER',amount:'1.00',status:'ACTIVE',
+    checkoutUrl:'https://different-configured-host.example/checkout/e2e-checkout-id-123'
+   })});
+  });
+  await page.getByRole('tab',{name:'Payment links'}).click();
+  await page.getByRole('textbox',{name:'Amount (INR)'}).fill('1');
+  await page.getByRole('button',{name:'Create payment link'}).last().click();
+  const openCheckout=page.getByRole('link',{name:/Open real UPI checkout/});
+  await openCheckout.waitFor({timeout:15000});
+  assert.equal(await openCheckout.getAttribute('href'),'/checkout/e2e-checkout-id-123');
   await context.close();
  }finally{if(browser)await browser.close();child.kill();await closed;fs.rmSync(dir,{recursive:true,force:true});}
 });
