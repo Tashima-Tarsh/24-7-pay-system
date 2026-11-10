@@ -92,6 +92,78 @@ export function verifyHmac(data, secret, expectedSignature) {
 }
 
 /**
+ * Verifies a Svix-style webhook payload with timestamp-based replay protection.
+ * Expected headers: X-Gateway-Delivery-Id, X-Gateway-Timestamp, X-Gateway-Signature.
+ * Signature = HMAC-SHA256(secret, deliveryId + "." + timestamp + "." + rawBody).
+ * @param {string} rawBody - Raw request body string
+ * @param {string} secret - Merchant webhook secret
+ * @param {Object} headers - { 'x-gateway-delivery-id': string, 'x-gateway-timestamp': string, 'x-gateway-signature': string }
+ * @param {Object} [opts] - { toleranceSeconds?: number, seenIds?: Set<string> }
+ * @returns {{ valid: boolean, reason?: string, deliveryId?: string, timestamp?: number }}
+ */
+export function verifyWebhookPayload(rawBody, secret, headers, opts = {}) {
+  const toleranceSeconds = opts.toleranceSeconds !== undefined ? opts.toleranceSeconds : 300; // 5 minutes
+  const now = Math.floor(Date.now() / 1000);
+
+  const deliveryId = headers['x-gateway-delivery-id'] || headers['X-Gateway-Delivery-Id'];
+  const timestampStr = headers['x-gateway-timestamp'] || headers['X-Gateway-Timestamp'];
+  const signature = headers['x-gateway-signature'] || headers['X-Gateway-Signature'];
+
+  if (!deliveryId || !timestampStr || !signature) {
+    return { valid: false, reason: 'Missing required webhook headers' };
+  }
+
+  const timestamp = Number(timestampStr);
+  if (!Number.isFinite(timestamp)) {
+    return { valid: false, reason: 'Invalid timestamp' };
+  }
+
+  // Replay protection: reject timestamps outside tolerance window
+  const ageSeconds = Math.abs(now - timestamp);
+  if (ageSeconds > toleranceSeconds) {
+    return { valid: false, reason: 'Timestamp outside tolerance window' };
+  }
+
+  // Idempotency: reject duplicate delivery IDs
+  if (opts.seenIds && opts.seenIds.has(deliveryId)) {
+    return { valid: false, reason: 'Duplicate delivery ID' };
+  }
+
+  // Signature verification: Svix-style signed content = id.timestamp.body
+  const signedContent = `${deliveryId}.${timestampStr}.${rawBody}`;
+  if (!verifyHmac(signedContent, secret, signature)) {
+    return { valid: false, reason: 'Invalid signature' };
+  }
+
+  if (opts.seenIds) {
+    opts.seenIds.add(deliveryId);
+  }
+
+  return { valid: true, deliveryId, timestamp };
+}
+
+/**
+ * Generates Svix-style webhook signature headers for outbound delivery.
+ * Signature = HMAC-SHA256(secret, rawBody) for backward compatibility.
+ * Headers include X-Gateway-Delivery-Id, X-Gateway-Timestamp, X-Gateway-Signature.
+ * @param {string} rawBody - Raw request body string
+ * @param {string} secret - Merchant webhook secret
+ * @param {string} [deliveryId] - Unique delivery ID (auto-generated if omitted)
+ * @param {number} [timestamp] - Unix timestamp (auto-generated if omitted)
+ * @returns {{ 'x-gateway-delivery-id': string, 'x-gateway-timestamp': string, 'x-gateway-signature': string }}
+ */
+export function signWebhookPayload(rawBody, secret, deliveryId = null, timestamp = null) {
+  const id = deliveryId || crypto.randomUUID();
+  const ts = timestamp !== null && timestamp !== undefined ? timestamp : Math.floor(Date.now() / 1000);
+  const signature = generateHmac(rawBody, secret);
+  return {
+    'x-gateway-delivery-id': id,
+    'x-gateway-timestamp': String(ts),
+    'x-gateway-signature': 'sha256=' + signature
+  };
+}
+
+/**
  * Generates a cryptographically secure random hex string.
  * @param {number} [bytes=32]
  * @returns {string}

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { generateHmac, toRupeesString, validateOutboundWebhookUrl, fetchPublic } from '@youpi/common';
+import { generateHmac, signWebhookPayload, toRupeesString, validateOutboundWebhookUrl, fetchPublic } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome } from './state-machine.js';
 
 export class WebhookEngine {
@@ -139,7 +139,8 @@ export class WebhookEngine {
       try{
         let success=false,status=null,body=null;
         try{
-          const response=await this.transport(checked.url.toString(),{method:'POST',headers:{'Content-Type':'application/json','X-Gateway-Event':item.event_type,'X-Gateway-Signature':'sha256='+generateHmac(item.payload,merchant.webhookSecret),'X-Gateway-Delivery-Id':item.id,'X-Gateway-Timestamp':String(Date.now())},body:item.payload,redirect:'manual',signal:controller.signal,maxResponseBytes:65536});
+          const sig = signWebhookPayload(item.payload, merchant.webhookSecret || '', item.id);
+          const response=await this.transport(checked.url.toString(),{method:'POST',headers:{'Content-Type':'application/json','X-Gateway-Event':item.event_type,'X-Gateway-Signature':sig['x-gateway-signature'],'X-Gateway-Delivery-Id':sig['x-gateway-delivery-id'],'X-Gateway-Timestamp':sig['x-gateway-timestamp']},body:item.payload,redirect:'manual',signal:controller.signal,maxResponseBytes:65536});
           status=response.status;body=(await response.text()).substring(0,1000);success=response.ok;
         }catch(error){body=error.message;}
         if(this.stopped)return null;

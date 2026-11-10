@@ -195,3 +195,28 @@ $('copy-vpa').addEventListener('click',async()=>{if(!current?.payeeVpa)return;tr
 $('retry').addEventListener('click',refresh);
 if(!paymentId){$('loading').hidden=true;$('checkout-content').hidden=false;hidePayment();statusLine('Payment link missing','Please use the payment link shared by your merchant.','failed');}
 else{void refresh();connect();polling=setInterval(()=>{updateTimer();void refresh();},3000);}
+
+/**
+ * Consumes the Stripe-node compatible create-payment-intent API.
+ * Returns { intent_android, deep_link_universal } for frontend triggering.
+ * Usage:
+ *   const data = await createPaymentIntent({ amount: 10.00, orderId: 'ORD123', returnUrl: 'https://site.com/return?order=ORD123' });
+ *   if (data.success) {
+ *     const isAndroid = /Android/i.test(navigator.userAgent);
+ *     window.location.href = isAndroid ? data.intent_android : data.deep_link_universal;
+ *   }
+ */
+async function createPaymentIntent({ amount, orderId, returnUrl, merchantId, merchantKey } = {}) {
+  const res = await fetch('/api/v1/create-payment-intent', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(merchantId ? { 'x-merchant-id': merchantId } : {}),
+      ...(merchantKey ? { 'x-merchant-key': merchantKey } : {})
+    },
+    body: JSON.stringify({ amount, orderId, returnUrl })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) throw new Error(data.error || 'Payment intent creation failed');
+  return data;
+}

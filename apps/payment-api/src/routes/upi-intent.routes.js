@@ -3,6 +3,7 @@ import {
   toPaise,
   toRupeesString,
   buildUpiPaymentUri,
+  buildUpiIntentUri,
   PaymentStatus,
   PaymentMethod,
   generateHmac,
@@ -394,6 +395,272 @@ export function registerUpiIntentRoutes(server, ctx) {
       });
     } catch (err) {
       console.error('[upi-intent] create error:', err);
+      return HttpServer.json(res, 500, { error: 'Internal Server Error', detail: err.message });
+    }
+  });
+
+  // POST /api/v1/create-payment-intent
+  // Stripe-node compatible response: returns both intent_android (for Android Chrome)
+  // and deep_link_universal (for iOS/desktop/native apps).
+  server.post('/api/v1/create-payment-intent', async (req, res) => {
+    try {
+      const body = await HttpServer.parseBody(req);
+      const idempotencyKey = req.headers['idempotency-key'] || body.idempotencyKey || generateId('idem');
+
+      const merchantId = req.headers['x-merchant-id'] || body.merchantId;
+      let merchant;
+      if (merchantId) {
+        merchant = merchantRepo.findById(merchantId);
+      } else {
+        merchant = merchantRepo.getDefault ? merchantRepo.getDefault() : (merchantRepo.findAll && merchantRepo.findAll()[0]) || defaultMerchant;
+      }
+
+      if (!merchant) {
+        return HttpServer.json(res, 400, { error: 'Merchant not found or not configured.' });
+      }
+
+      const presentedKey = req.headers['x-merchant-key'];
+      if (!presentedKey || !merchant.webhookSecret || !safeEqual(String(presentedKey), merchant.webhookSecret)) {
+        if (!isAdminRequest(req) && !isInternalRequest(req)) {
+          return HttpServer.json(res, 401, { error: 'Merchant authentication required.', code: 'AUTH_REQUIRED' });
+        }
+      }
+
+      const { amount, currency = 'INR', orderId, customerId, customer, returnUrl, merchantVpa, metadata = {} } = body;
+
+      if (!amount) {
+        return HttpServer.json(res, 400, { error: 'Missing required field: amount.' });
+      }
+
+      let amountPaise;
+      try {
+        amountPaise = toPaise(amount);
+      } catch (err) {
+        return HttpServer.json(res, 400, { error: err.message });
+      }
+      if (amountPaise <= 0n || amountPaise > 9007199254740991n) {
+        return HttpServer.json(res, 400, { error: 'amount must be a positive integer in paise.' });
+      }
+
+      const finalCurrency = 'INR';
+      const finalAmountPaise = amountPaise;
+
+      let receivingVpa = merchantVpa || null;
+      let receivingAccountId = null;
+      if (!receivingVpa) {
+        try {
+          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
+          if (acct && acct.upiId) {
+            receivingVpa = acct.upiId;
+            receivingAccountId = acct.id;
+          }
+        } catch {}
+      }
+      if (receivingVpa && !receivingAccountId) {
+        try {
+          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
+          if (acct && acct.upiId === receivingVpa) receivingAccountId = acct.id;
+        } catch {}
+      }
+      if (!receivingVpa || !isValidVpa(receivingVpa)) {
+        return HttpServer.json(res, 400, { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' });
+      }
+
+      // Idempotency: if a payment with this idempotency key already exists, return it.
+      if (idempotencyKey) {
+        try {
+          const existing = ctx.sessionRepo.findByIdempotencyKey ? ctx.sessionRepo.findByIdempotencyKey(idempotencyKey) : null;
+          if (existing) {
+            const existingUri = (existing.metadata && existing.metadata.upiUri) || null;
+            return HttpServer.json(res, 200, {
+              success: true,
+              order_id: existing.orderId,
+              amount: toRupeesString(existing.amountPaise),
+              payee_vpa: (existing.metadata && existing.metadata.payeeVpa) || receivingVpa,
+              intent_android: (existing.metadata && existing.metadata.intentAndroid) || null,
+              deep_link_universal: existingUri || null
+            });
+          }
+        } catch {}
+      }
+
+      // Generate identifiers.
+      const paymentId = generateId('pay');
+      const generatedOrderId = orderId || `ORD_${crypto.randomUUID().toString().replace(/-/g, '').slice(0, 14)}`;
+
+      // Resolve receiving VPA and profile.
+      let profile = null;
+      try {
+        profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id) || null;
+      } catch {}
+      const payeeVpa = profile ? profile.payeeVpa : receivingVpa;
+      const payeeName = profile ? profile.payeeName : (merchant.businessName || merchant.name || 'Merchant');
+
+      const checkoutUrl = returnUrl || `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${paymentId}`;
+
+      // Build the deep_link_universal (upi://) — works on iOS, desktop, native apps.
+      const built = buildUpiUri(
+        {
+          payeeVpa,
+          payeeName,
+          mcc: profile ? profile.mcc : '5411',
+          orgid: profile ? profile.orgid : undefined,
+          intentSignKeyPem: profile ? profile.intentSignKeyPem : undefined
+        },
+        finalAmountPaise,
+        generatedOrderId,
+        `24/7 Pay ${generatedOrderId}`,
+        checkoutUrl
+      );
+      const deepLinkUniversal = built.uri;
+
+      // Build the intent_android (intent://) — forces Android OS to handle return URL.
+      const intentAndroid = buildUpiIntentUri({
+        payeeVpa,
+        payeeName,
+        amountPaise: finalAmountPaise,
+        transactionRef: generatedOrderId,
+        transactionNote: `24/7 Pay ${generatedOrderId}`,
+        targetApp: 'generic', // Let Android OS show the chooser
+        checkoutUrl
+      });
+
+      const sessionMetadata = {
+        ...metadata,
+        paymentId,
+        orderId: generatedOrderId,
+        payeeVpa,
+        upiUri: deepLinkUniversal,
+        intentAndroid,
+        deepLinkUniversal,
+        receivingVpa,
+        merchantId: merchant.id,
+        sourcePlatform: 'CREATE_PAYMENT_INTENT',
+        createdVia: 'create_payment_intent_api',
+        signed: built.signed
+      };
+
+      let session;
+      try {
+        session = sessionRepo.create({
+          id: paymentId,
+          merchantId: merchant.id,
+          customerId: customerId || null,
+          receivingAccountId,
+          orderId: generatedOrderId,
+          amountPaise: finalAmountPaise,
+          baseAmountPaise: finalAmountPaise,
+          currency: finalCurrency,
+          method: PaymentMethod.UPI,
+          status: PaymentStatus.INITIATED,
+          returnUrl: returnUrl || null,
+          idempotencyKey,
+          deviceId: null,
+          metadata: sessionMetadata
+        });
+      } catch (createErr) {
+        if (createErr.code === 'ERR_SQLITE_ERROR' && createErr.message.includes('UNIQUE constraint failed: payment_sessions.merchant_id, payment_sessions.order_id')) {
+          const existing = sessionRepo.findByOrderId(merchant.id, generatedOrderId);
+          if (existing) {
+            session = existing;
+          } else {
+            console.error('[create-payment-intent] create error:', createErr);
+            return HttpServer.json(res, 500, { error: 'Internal Server Error', detail: createErr.message });
+          }
+        } else {
+          console.error('[create-payment-intent] create error:', createErr);
+          return HttpServer.json(res, 500, { error: 'Internal Server Error', detail: createErr.message });
+        }
+      }
+
+      // Persist creation event.
+      try {
+        persistAndPublishEvent(paymentId, {
+          id: generateId('evt'),
+          type: 'payment.created',
+          source: 'SERVER',
+          status: PaymentStatus.INITIATED,
+          amountPaise: finalAmountPaise,
+          currency: finalCurrency,
+          reference: generatedOrderId,
+          reportedStatus: PaymentStatus.INITIATED,
+          evidenceLevel: PaymentEvidenceLevel.REPORTED,
+          observedAt: nowIso(),
+          processedAt: nowIso(),
+          correlationId: generateId('corr'),
+          rawPayload: { orderId: generatedOrderId, paymentId, upiUri: deepLinkUniversal, receivingVpa },
+          merchantId: merchant.id
+        });
+      } catch (err) {
+        console.error('[create-payment-intent] creation event publish warning:', err.message);
+      }
+
+      try {
+        if (webhookEngine && typeof webhookEngine.dispatch === 'function') {
+          webhookEngine.dispatch('payment.created', session).catch(() => {});
+        }
+      } catch {}
+
+      const expiryMs = 30 * 60 * 1000;
+      const expiresAt = new Date(Date.now() + expiryMs);
+
+      return HttpServer.json(res, 201, {
+        success: true,
+        order_id: session.orderId,
+        amount: toRupeesString(session.amountPaise),
+        payee_vpa: payeeVpa,
+        intent_android: intentAndroid,
+        deep_link_universal: deepLinkUniversal,
+        payment_id: session.id,
+        currency: session.currency,
+        status: session.status,
+        merchant_id: session.merchantId,
+        checkout_url: `${(ctx.checkoutBaseUrl || 'http://localhost:7000')}/checkout/${session.id}`,
+        expires_at: expiresAt.toISOString(),
+        idempotency_key: idempotencyKey
+      });
+    } catch (err) {
+      console.error('[create-payment-intent] error:', err);
+      return HttpServer.json(res, 500, { error: 'Internal Server Error', detail: err.message });
+    }
+  });
+
+  // GET /api/v1/payments/:id/verify
+  // Razorpay-style payment verification triplet: payment_id, order_id, signature.
+  // Signature = HMAC-SHA256(secret, payment_id + "." + order_id + "." + amount).
+  server.get('/api/v1/payments/:id/verify', async (req, res, params) => {
+    const paymentId = params.id;
+    try {
+      const session = sessionRepo.findById(paymentId);
+      if (!session) {
+        return HttpServer.json(res, 404, { error: 'Payment not found.' });
+      }
+
+      // Ownership check.
+      const merchant = resolveMerchantAndAuth(req);
+      if (merchant && session.merchantId !== merchant.id) {
+        return HttpServer.json(res, 403, { error: 'Ownership mismatch.', code: 'OWNERSHIP_MISMATCH' });
+      }
+
+      const merchantForSigning = merchant || defaultMerchant;
+      const signingSecret = merchantForSigning?.webhookSecret || '';
+
+      // Verification triplet: payment_id, order_id, amount.
+      const signedContent = `${paymentId}.${session.orderId}.${toRupeesString(session.amountPaise)}`;
+      const signature = generateHmac(signedContent, signingSecret);
+
+      return HttpServer.json(res, 200, {
+        payment_id: session.id,
+        order_id: session.orderId,
+        amount: toRupeesString(session.amountPaise),
+        amount_paise: session.amountPaise.toString(),
+        currency: session.currency,
+        status: session.status,
+        signature,
+        verified_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('[payment-verify] error:', err);
       return HttpServer.json(res, 500, { error: 'Internal Server Error', detail: err.message });
     }
   });
