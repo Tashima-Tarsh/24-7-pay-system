@@ -52,11 +52,12 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
  */
 export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
   if (!upiUri || !upiUri.startsWith('upi://pay?')) throw new Error('Invalid UPI URI');
-  let query = upiUri.slice('upi://pay?'.length);
 
-  // For intent links, use mode=02 (editable) instead of mode=04 (fixed).
-  // GPay/PhonePe reject fixed-amount intents with "server error" or "limit".
-  query = query.replace(/mode=04/g, 'mode=02');
+  // Build query params, stripping mode (optional UPI param that may cause GPay/PhonePe rejection).
+  // QR codes keep their mode; intent links don't need it.
+  const queryParams = new URLSearchParams(upiUri.slice('upi://pay?'.length));
+  queryParams.delete('mode');
+  const query = queryParams.toString();
 
   const intentBase = `intent://pay?${query}#Intent;scheme=upi;`;
 

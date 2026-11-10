@@ -177,7 +177,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(queryParams.get('tr'), 'ORDER123');
       assert.equal(queryParams.get('tn'), 'Payment');
       assert.equal(queryParams.get('mc'), '5411');
-      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc', 'mode']);
+      assert.deepEqual([...queryParams.keys()], ['pa', 'pn', 'am', 'cu', 'tr', 'tn', 'mc']);
     });
 
     test('validates 30 official UPI application provider registry', () => {
