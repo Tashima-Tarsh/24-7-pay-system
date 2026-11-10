@@ -632,14 +632,16 @@ export function registerCheckoutRoutes(server, ctx) {
     if (session.status === PaymentStatus.ACTIVE) {
       if (payeeVpa && !upiUri && !session.metadata?.externalCollection) {
         try {
-          const built = buildUpiUri(
-            { payeeVpa, payeeName, mcc: '5411' },
-            session.amountPaise,
-            session.orderId,
-            `Payment ${session.orderId}`,
-            `/checkout/${session.id}`
-          );
-          upiUri = built.uri;
+          // Use the same payee, amount and reference as the primary checkout
+          // branch. The legacy builder double-encodes pn and invents an MCC.
+          upiUri = buildUpiPaymentUri({
+            vpa:payeeVpa,
+            name:payeeName||merchant?.businessName||'Merchant',
+            amount:Number(toRupeesString(session.amountPaise)),
+            orderId:String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
+            note:`Payment ${session.orderId}`,
+            mode:'fixed'
+          });
         } catch {}
       }
       if (session.expiresAt) {
