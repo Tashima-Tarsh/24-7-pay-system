@@ -55,6 +55,12 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   await page.getByRole('heading',{name:'API & provider operations'}).waitFor({timeout:15000});
   await page.getByRole('tab',{name:'Risk controls'}).click();
   await page.getByRole('heading',{name:'Risk & payment controls'}).waitFor({timeout:15000});
+  await page.getByRole('tab',{name:'Cases'}).click();
+  await page.getByRole('heading',{name:'Reconciliation & support cases'}).waitFor({timeout:15000});
+  await page.getByRole('region',{name:'Reconciliation and support cases'}).waitFor({timeout:15000});
+  await page.getByRole('tab',{name:'Notifications'}).click();
+  await page.getByRole('heading',{name:'Notification delivery centre'}).waitFor({timeout:15000});
+  await page.getByRole('region',{name:'Outgoing notification status'}).waitFor({timeout:15000});
   // A public-hostname mismatch must never hide a valid order's checkout link.
   // Intercept only the creation request: no real payment is created by this test.
   await page.route('**/api/platform/v1/payments',async route=>{
