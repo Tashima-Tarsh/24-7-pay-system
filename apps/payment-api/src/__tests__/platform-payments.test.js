@@ -69,6 +69,17 @@ test('scoped keys enforce tenant, revocation, suspension, idempotency and persis
  assert.equal(consolePayment.status,201);
  assert.equal(db.queryOne('SELECT merchant_id FROM payment_sessions WHERE id=?',[consolePayment.body.paymentId]).merchant_id,a.id);
  assert.equal((await call('/api/platform/v1/payments',{orderId:'console-order',amount:'201.00'},consoleHeaders)).body.paymentId,consolePayment.body.paymentId);
+ // Notification metadata must never disclose another merchant's delivery.
+ const otherPayment=await call('/api/platform/v1/payments',{orderId:'merchant-b-notification',amount:'3.00'},{'x-test-new-owner':'yes','idempotency-key':'merchant-b-notification'});
+ assert.equal(otherPayment.status,201);
+ db.execute('CREATE TABLE IF NOT EXISTS notification_deliveries(id TEXT PRIMARY KEY,payment_id TEXT,channel TEXT,status TEXT,attempts INTEGER,next_attempt_at BIGINT,submitted_at TEXT,last_error TEXT)');
+ db.execute('INSERT INTO notification_deliveries(id,payment_id,channel,status,attempts,next_attempt_at) VALUES(?,?,?,?,?,?)',['notification-a',consolePayment.body.paymentId,'email','SUBMITTED',1,Date.now()]);
+ db.execute('INSERT INTO notification_deliveries(id,payment_id,channel,status,attempts,next_attempt_at) VALUES(?,?,?,?,?,?)',['notification-b',otherPayment.body.paymentId,'sms','FAILED',2,Date.now()]);
+ const ownNotifications=await call('/api/platform/v1/notification-deliveries',undefined,{'x-test-owner':'yes'});
+ assert.equal(ownNotifications.status,200);assert.deepEqual(ownNotifications.body.items.map(x=>x.id),['notification-a']);
+ assert.ok(!JSON.stringify(ownNotifications.body).includes('notification-b'));
+ const otherNotifications=await call('/api/platform/v1/notification-deliveries',undefined,{'x-test-new-owner':'yes'});
+ assert.equal(otherNotifications.status,200);assert.deepEqual(otherNotifications.body.items.map(x=>x.id),['notification-b']);
  const authorize=identity.authorize;identity.authorize=()=>false;
  assert.equal((await call('/api/platform/v1/payments',{orderId:'denied-order',amount:'201.00'},consoleHeaders)).status,403);identity.authorize=authorize;
  assert.equal((await call('/v1/balance',undefined,auth)).status,403);
