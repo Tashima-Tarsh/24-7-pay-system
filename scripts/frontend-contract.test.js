@@ -60,3 +60,13 @@ test('dedicated checkout uses native intent anchors and warns about QR-gallery l
   assert.match(source,/gallery may be limited to ₹2,000/);
   assert.match(source,/appHandoff=true/);
 });
+
+
+test('browser merchant SDK never invents port 7000 for hosted checkout', () => {
+  for (const path of ['packages/merchant-sdk/src/youpi.js', 'packages/merchant-sdk/src/youpi-checkout.js']) {
+    const source = fs.readFileSync(path, 'utf8');
+    assert.match(source, /scriptUrl \? scriptUrl\.origin : window\.location\.origin/);
+    assert.match(source, /scriptConfig\.portalUrl \|\| window\.location\.origin/);
+    assert.doesNotMatch(source, /window\.location\.hostname\s*\+\s*['"]:7000['"]/);
+  }
+});
