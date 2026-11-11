@@ -222,7 +222,7 @@ describe('E2E: UPI Real-Time Payment Flow (QR → Payment → SSE Callback)', ()
       bankReferenceNumber: 'UTR-E2E-003',
       senderVpa: 'customer@okaxis',
       observedAt: new Date(),
-      rawPayload: { sms: 'Rs 299.47 credited to 9082843142@slc from customer@okaxis UTR:UTR-E2E-003' },
+      rawPayload: { sms: 'Rs 299.47 credited to fixture-payee@upi from customer@okaxis UTR:UTR-E2E-003' },
       fingerprintHash: 'fp-e2e-003'
     });
 
