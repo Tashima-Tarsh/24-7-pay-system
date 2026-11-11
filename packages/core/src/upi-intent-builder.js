@@ -81,9 +81,12 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   }
   params.push('cu=INR');
   params.push(`tr=${encodeURIComponent(trRef(paymentId))}`);
-  params.push(`tid=${encodeURIComponent(trRef(paymentId))}`);
+  // Only merchant-configured transactions carry the extra merchant reference.
+  if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
+    params.push(`tid=${encodeURIComponent(trRef(paymentId))}`);
+  }
   params.push(`tn=${encodeURIComponent(tnNote(note))}`);
-  if (checkoutUrl) {
+  if (checkoutUrl && profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
     params.push(`url=${encodeURIComponent(String(checkoutUrl))}`);
   }
   // Never invent a merchant category code. `mc` declares a PSP-registered merchant;
@@ -91,7 +94,7 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
     params.push(`mc=${encodeURIComponent(String(profile.mcc))}`);
   }
-  params.push('mode=02');
+  if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) params.push('mode=02');
   if (profile.orgid) {
     params.push(`orgid=${encodeURIComponent(String(profile.orgid))}`);
   }
@@ -155,7 +158,7 @@ function toP2pQuery(query) {
  *
  * @param {string} uri - upi://pay URI
  * @param {string} pkg - Android package name (e.g. com.google.android.apps.nbu.paisa.user)
- * @param {string} [fallbackUrl] - S.browser_fallback_url (MANDATORY for GPay/PhonePe callbacks)
+ * @param {string} [fallbackUrl] - Chrome fallback for unhandled app launch; NOT a payment callback
  * @returns {string}
  */
 export function buildPackageIntent(uri, pkg, fallbackUrl = null) {
@@ -163,7 +166,7 @@ export function buildPackageIntent(uri, pkg, fallbackUrl = null) {
   const query = /(?:^|&)sign=/.test(rawQuery) ? rawQuery : toP2pQuery(rawQuery);
   let intentUri = `intent://pay?${query}#Intent;scheme=upi;package=${pkg}`;
 
-  // S.browser_fallback_url is MANDATORY for GPay/PhonePe to return to checkout after payment.
+  // Chrome browser fallback does not carry a transaction result.
   if (fallbackUrl) {
     intentUri += `;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)}`;
   }
