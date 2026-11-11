@@ -202,12 +202,52 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // QR endpoint: /checkout/<id>/qr.svg returns the session's UPI QR code
+  // QR endpoint: /checkout/<id>/qr.svg returns the session's UPI QR code as SVG image
   const qrMatch = pathname.match(/^\/checkout\/([^/]+)\/qr\.svg$/);
   if (qrMatch) {
     const paymentId = qrMatch[1];
-    // Proxy to payment API for QR generation
-    streamPipe(req, res, API_HOST, API_PORT, `/api/v1/checkout/${encodeURIComponent(paymentId)}/upi-qr`);
+    try {
+      const options = {
+        hostname: API_HOST,
+        port: API_PORT,
+        path: `/api/v1/checkout/${encodeURIComponent(paymentId)}/upi-qr`,
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        rejectUnauthorized: false,
+      };
+      const upstreamReq = http.request(options, (upstreamRes) => {
+        let data = '';
+        upstreamRes.on('data', (chunk) => { data += chunk; });
+        upstreamRes.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            const qrDataUri = parsed && parsed.upiQr;
+            if (!qrDataUri || !qrDataUri.startsWith('data:image/svg+xml;base64,')) {
+              res.writeHead(upstreamRes.statusCode || 500, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+              res.end(data);
+              return;
+            }
+            const base64 = qrDataUri.split(',')[1];
+            const svgBuffer = Buffer.from(base64, 'base64');
+            res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' });
+            res.end(svgBuffer);
+          } catch {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'qr_parse_error' }));
+          }
+        });
+      });
+      upstreamReq.on('error', (err) => {
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'upstream_error', detail: err.message }));
+        }
+      });
+      upstreamReq.end();
+    } catch {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'qr_endpoint_error' }));
+    }
     return;
   }
 

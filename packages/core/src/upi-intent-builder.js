@@ -83,8 +83,6 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   }
   if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
     params.push(`mc=${encodeURIComponent(String(profile.mcc))}`);
-  } else {
-    params.push('mc=5411');
   }
   params.push('mode=02');
   if (profile.orgid) {

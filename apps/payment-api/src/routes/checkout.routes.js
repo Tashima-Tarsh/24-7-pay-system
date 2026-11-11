@@ -632,14 +632,15 @@ export function registerCheckoutRoutes(server, ctx) {
     if (session.status === PaymentStatus.ACTIVE) {
       if (payeeVpa && !upiUri && !session.metadata?.externalCollection) {
         try {
-          // Use the same payee, amount and reference as the primary checkout
-          // branch. The legacy builder double-encodes pn and invents an MCC.
+          // Use the stored unique UPI reference (not the merchant order ID) to avoid
+          // collisions like ORD-123 and ORD123 both sanitizing to ORD123.
+          const upiReference = session.metadata?.upiReference || String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35);
           upiUri = buildUpiPaymentUri({
             vpa:payeeVpa,
             name:payeeName||merchant?.businessName||'Merchant',
             amount:Number(toRupeesString(session.amountPaise)),
-            orderId:String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
-            note:`Payment ${session.orderId}`,
+            orderId: upiReference,
+            note:`Payment ${upiReference}`,
             mode:'fixed'
           });
         } catch {}

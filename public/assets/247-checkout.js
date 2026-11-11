@@ -207,9 +207,9 @@ else{
     // Keep polling so the original order can still resolve; show a status note instead
     // of asking the user for a fresh link while the transfer may still settle.
     if(Date.now()-pollingStartTime>5*60*1000){
-      statusLine('Still awaiting confirmation','No confirmed payment result after 5 minutes. Your original order is still open; refresh to check its status.','warning');
-      $('retry-area').hidden=false;display('retry-message','Still awaiting confirmation. Refresh to check the order status.');
-      return;
+      statusLine('Still awaiting confirmation','No confirmed payment result after 5 minutes. Your original order is still open; keep this page open or refresh to check its status.','warning');
+      $('retry-area').hidden=false;display('retry-message','Still awaiting confirmation. Your payment may still settle — refresh to check.');
+      // Do NOT return: keep polling so late confirmations are still detected.
     }
     updateTimer();void refresh();
   },3000);
