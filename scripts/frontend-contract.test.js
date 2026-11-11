@@ -70,3 +70,19 @@ test('browser merchant SDK never invents port 7000 for hosted checkout', () => {
     assert.doesNotMatch(source, /window\.location\.hostname\s*\+\s*['"]:7000['"]/);
   }
 });
+
+
+test('Render-served checkout keeps a stable return URL and refreshes on browser return without declaring success',()=>{
+  const server=fs.readFileSync('server.mjs','utf8');
+  const html=fs.readFileSync('public/checkout-next.html','utf8');
+  const js=fs.readFileSync('public/assets/247-checkout.js','utf8');
+  assert.match(server, /readFile\(path\.join\(PUBLIC_DIR, 'checkout-next\.html'\)\)/);
+  assert.match(html, /id="checkout-return-link"/);
+  assert.match(html, /id="check-after-upi"/);
+  assert.match(js, /checkoutReturnUrl=paymentId\?new URL\('\/checkout\/'\+encodeURIComponent\(paymentId\),location\.origin\)\.href/);
+  assert.match(js, /sessionStorage\.setItem\(handoffStorageKey,'1'\)/);
+  assert.match(js, /document\.addEventListener\('visibilitychange',refreshAfterAppReturn\)/);
+  assert.match(js, /window\.addEventListener\('pageshow',refreshAfterAppReturn\)/);
+  assert.doesNotMatch(js, /location\.href=uri/);
+  assert.doesNotMatch(js, /\/payment-done['"]/);
+});
