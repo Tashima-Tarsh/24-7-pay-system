@@ -57,8 +57,8 @@ test('dedicated checkout uses native intent anchors and warns about QR-gallery l
   const source=fs.readFileSync('public/assets/247-checkout.js','utf8');
   assert.match(source,/el\.href=allowed/);
   assert.doesNotMatch(source,/location\.href=uri/);
-  assert.match(source,/gallery may be limited to ₹2,000/);
-  assert.match(source,/appHandoff=true/);
+  assert.match(fs.readFileSync('public/checkout-next.html','utf8'),/gallery can have additional limits/);
+  assert.match(source,/setHandoff\(true\)/);
 });
 
 
