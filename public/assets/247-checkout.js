@@ -126,18 +126,30 @@ function render(data){
     if(value)intentParams.set(key,value);
   }
   const query=intentParams.toString().replace(/\+/g,'%20');
-  // Fallback URL: GPay/PhonePe redirect here after payment so checkout can poll status.
+  // Chrome fallback URL applies to an unsuccessful app launch, not payment completion.
   // Use /checkout/<paymentId> so the fallback always lands on the current order,
   // even when the page was loaded via /checkout?id=... query form.
   const checkoutPath='/checkout/'+encodeURIComponent(paymentId);
   const fallbackUrl=encodeURIComponent(new URL(checkoutPath,location.origin).href);
   const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';S.browser_fallback_url='+fallbackUrl+';end';
   const iosUri=scheme=>scheme+query;
+  // Never trust independently-built deep links that disagree with this order's
+  // canonical P2P query. A stale backend route may still send merchant fields.
+  const consistentAndroidLink=(candidate,pkg)=>{
+    const candidateUri=safeUri(candidate,'intent://pay?');
+    if(!candidateUri)return androidIntent(pkg);
+    const marker='#Intent;';
+    const end=candidateUri.indexOf(marker);
+    if(end<0)return androidIntent(pkg);
+    const candidateQuery=candidateUri.slice('intent://pay?'.length,end);
+    const target='package='+pkg+';';
+    return candidateQuery===query&&candidateUri.includes(target)?candidateUri:androidIntent(pkg);
+  };
   const sources=[
     ['upi-open','upi://pay?'+query,'upi://pay?'],
-    ['gpay-open',android?(safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
-    ['phonepe-open',android?(safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
-    ['paytm-open',android?(safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
+    ['gpay-open',android?(consistentAndroidLink(links.gpay,'com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
+    ['phonepe-open',android?(consistentAndroidLink(links.phonepe,'com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
+    ['paytm-open',android?(consistentAndroidLink(links.paytm,'net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
     ['bhim-open',android?androidIntent('in.org.npci.upiapp'):iosUri('bhim://upi/pay?'),android?'intent://pay?':'bhim://upi/pay?']
   ];
   if(mobile){
