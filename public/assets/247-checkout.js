@@ -3,7 +3,12 @@ const found=location.pathname.match(/^\/checkout\/([^/]+)\/?$/);
 const paymentId=found?decodeURIComponent(found[1]):new URLSearchParams(location.search).get('id');
 const android=/Android/i.test(navigator.userAgent);
 const mobile=android||/iPhone|iPad|iPod/i.test(navigator.userAgent);
-let current=null,events=null,polling=null,pollingStartTime=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=false;
+const checkoutReturnUrl=paymentId?new URL('/checkout/'+encodeURIComponent(paymentId),location.origin).href:null;
+const handoffStorageKey=paymentId?'upi-checkout-handoff:'+paymentId:null;
+function getSavedHandoff(){try{return Boolean(handoffStorageKey&&sessionStorage.getItem(handoffStorageKey)==='1');}catch{return false;}}
+let current=null,events=null,polling=null,pollingStartTime=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=getSavedHandoff();
+function setHandoff(value){appHandoff=Boolean(value);try{if(handoffStorageKey){if(value)sessionStorage.setItem(handoffStorageKey,'1');else sessionStorage.removeItem(handoffStorageKey);}}catch{}}
+function showReturnControls(){const c=$('checkout-return-controls');if(c)c.hidden=!appHandoff;const link=$('checkout-return-link');if(link&&checkoutReturnUrl)link.href=checkoutReturnUrl;}
 const terminalStates=new Set(['SUCCESS','FAILED','EXPIRED','CANCELLED','BLOCKED']);
 const safeUri=(url,prefix)=>typeof url==='string'&&url.startsWith(prefix)&&!(/[\s\u0000-\u001f]/.test(url))?url:null;
 const rupees=value=>{const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n):'—';};
@@ -82,7 +87,7 @@ function render(data){
   const support=String(data.supportEmails[0]);
   if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(support))display('support','Questions? Contact '+support);
  }
- if(terminal){appHandoff=false;showResult({...data,status},title,description,kind);stop();return;}
+ if(terminal){setHandoff(false);showResult({...data,status},title,description,kind);stop();return;}
  const verifiedUpi=safeUri(data.upiUri,'upi://pay?');
  const uriPayee=verifiedUpi?new URL(verifiedUpi).searchParams.get('pa'):null;
  const payeeVpa=typeof data.payeeVpa==='string'&&data.payeeVpa?data.payeeVpa:uriPayee;
@@ -167,8 +172,9 @@ function render(data){
     // Keep native <a href="intent://..."> navigation on a synchronous user tap.
     // Chrome documents link gestures as the supported app-launch route.
     // The delegated handler below records the attempt only; it never settles an order.
+    showReturnControls();
     if(appHandoff){
-      display('app-handoff-note','UPI app opened or selected. Return here after payment; waiting for trusted confirmation. Do not pay twice.');
+      display('app-handoff-note','You are back on your checkout URL. Your server is checking for confirmation. Opening the payment app or returning here is not proof of payment.');
     }
   }
   if(data.timeRemainingSeconds>0){
@@ -209,15 +215,23 @@ function connect(){
 $('app-actions').addEventListener('click',event=>{
  const target=event.target instanceof Element?event.target.closest('a[href]'):null;
  if(!target||!$('app-actions').contains(target)||!current||terminal)return;
- appHandoff=true;
- display('app-handoff-note','If the selected app does not open, use Any UPI App or copy the payee UPI ID. QR images imported from a phone gallery may be limited to ₹2,000; live camera scan is a different flow. Do not pay twice.');
+ setHandoff(true);
+ showReturnControls();
+ display('app-handoff-note','After completing or cancelling in the UPI app, use Android Back or Recent Apps to return here. Then check your status. Your checkout URL stays the same.');
 });
 function refreshAfterAppReturn(){
- if(appHandoff&&!terminal&&document.visibilityState==='visible')void refresh();
+ if((appHandoff||getSavedHandoff())&&!terminal&&document.visibilityState==='visible'){
+  setHandoff(true);
+  showReturnControls();
+  statusLine('Welcome back to checkout','Checking the latest status from your backend; app return alone does not confirm payment.');
+  void refresh();
+ }
 }
 document.addEventListener('visibilitychange',refreshAfterAppReturn);
 window.addEventListener('pageshow',refreshAfterAppReturn);
 window.addEventListener('focus',refreshAfterAppReturn);
+$('check-after-upi').addEventListener('click',()=>{if(!terminal)void refresh();});
+$('checkout-return-link').addEventListener('click',()=>{setHandoff(true);});
 $('copy-vpa').addEventListener('click',async()=>{if(!current?.payeeVpa)return;try{await navigator.clipboard.writeText(current.payeeVpa);$('copy-vpa').textContent='Copied';setTimeout(()=>$('copy-vpa').textContent='Copy UPI ID',1800);}catch{$('copy-vpa').textContent='Select and copy';}});
 $('save-qr').addEventListener('click',saveQr);
 $('retry').addEventListener('click',refresh);
