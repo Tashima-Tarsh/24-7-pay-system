@@ -14,8 +14,12 @@ test('production payment boundaries, observer isolation and refund reservations'
  merchants.update(merchant.id,{webhookUrl:null});
  const profileAccount=ctx.accountRepo.findActiveForMerchant(merchant.id);
  ctx.ppMerchantPaymentProfileRepo.upsert(merchant.id,{payeeVpa:profileAccount.upiId,payeeName:profileAccount.payeeName,payeeEmail:'billing@test.example',mcc:'5411',orgid:null,intentSignKeyPem:null,supportPhone:null,isActive:true});
- const previous=process.env.NODE_ENV;process.env.NODE_ENV='production';
- t.after(async()=>{process.env.NODE_ENV=previous;app.destroy();app.rawServer.closeAllConnections();await new Promise(r=>app.rawServer.close(r));db.close();});
+ const previous=process.env.NODE_ENV,previousPublicCheckout=process.env.PUBLIC_CHECKOUT_URL;
+ process.env.NODE_ENV='production';
+ // This isolated test runs a local HTTP server, but must supply a valid public
+ // checkout origin for production-mode payment creation. Never weaken the guard.
+ process.env.PUBLIC_CHECKOUT_URL='https://checkout.example.test';
+ t.after(async()=>{process.env.NODE_ENV=previous;if(previousPublicCheckout===undefined)delete process.env.PUBLIC_CHECKOUT_URL;else process.env.PUBLIC_CHECKOUT_URL=previousPublicCheckout;app.destroy();app.rawServer.closeAllConnections();await new Promise(r=>app.rawServer.close(r));db.close();});
  const post=(path,body,headers={})=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
  await t.test('legacy card/netbanking cannot generate production success; settlement never invents a bank credit',async()=>{
   const session=ctx.sessionRepo.create({merchantId:merchant.id,orderId:'NO-FAKE-SUCCESS',amountPaise:400,status:'QUEUED'});
