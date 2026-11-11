@@ -1,7 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import {enforcePaymentControls} from '../payment-controls.js';
 import { HttpServer, resolveClientIp } from '../server.js';
-import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, maskPhone, maskEmail, generateCustomerId, isValidVpa } from '@youpi/common';
+import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, maskPhone, maskEmail, generateCustomerId, isValidVpa, isRetiredReceivingVpa } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome, PaiseOffsetAllocator } from '@youpi/core';
 import { isAdminRequest } from '../auth-guard.js';
 
@@ -40,7 +40,7 @@ async function enforcePaymentLimiter(req, res) {
 
 function testReceivingVpa(merchantId) {
   const vpa = String(process.env.DYNAMO_TEST_RECEIVING_VPA || '').trim().toLowerCase();
-  return merchantId === DEFAULT_MERCHANT_ID && isValidVpa(vpa) ? vpa : null;
+  return merchantId === DEFAULT_MERCHANT_ID && isValidVpa(vpa) && !isRetiredReceivingVpa(vpa) ? vpa : null;
 }
 
 /**
