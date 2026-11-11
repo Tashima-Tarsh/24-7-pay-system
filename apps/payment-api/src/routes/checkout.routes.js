@@ -404,8 +404,8 @@ export function registerCheckoutRoutes(server, ctx) {
       if (!receivingAccount && snapshot?.id) {
         receivingAccount = ctx.accountRepo.findById(snapshot.id);
       }
-      const payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
-      const payeeName = receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
+      const payeeVpa = snapshot?.upiId || receivingAccount?.upiId || null;
+      const payeeName = snapshot?.payeeName || receivingAccount?.payeeName || merchant?.businessName || 'Merchant Store';
 
       HttpServer.json(res, 200, {
         id: session.id,
@@ -454,24 +454,24 @@ export function registerCheckoutRoutes(server, ctx) {
       receivingAccount = ctx.accountRepo.findActiveForMerchant(session.merchantId);
     }
 
-    // Payer-visible payee details come from the merchant's active payment profile
-    // (the "connection"); fall back to the receiving account snapshot otherwise.
-    let payeeVpa = null, payeeName = null;
+    // The receiving VPA assigned when this payment session was created is authoritative.
+    // Do not silently substitute a different merchant-profile VPA after account rotation.
+    // This must be identical in the checkout display, QR payload and GPay/PhonePe links.
+    const assignedVpa = snapshot?.upiId || receivingAccount?.upiId || null;
+    const assignedName = snapshot?.payeeName || receivingAccount?.payeeName || merchant?.businessName || 'Merchant Store';
+    let payeeVpa = assignedVpa;
+    let payeeName = assignedName;
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
-      if (profile) {
-        payeeVpa = profile.payeeVpa;
-        payeeName = profile.payeeName;
+      if (profile && (!assignedVpa ||
+          String(profile.payeeVpa || '').trim().toLowerCase() === String(assignedVpa).trim().toLowerCase())) {
+        payeeVpa = assignedVpa || profile.payeeVpa;
+        // A profile is a valid source of display name only for the same payee VPA.
+        if (!snapshot?.isTestOverride && !session.metadata?.platform) {
+          payeeName = profile.payeeName || assignedName;
+        }
       }
     } catch {}
-    if ((session.metadata?.platform || snapshot?.isTestOverride) && snapshot?.upiId) {
-      // Bind platform checkout to the destination captured at order creation.
-      payeeVpa = snapshot.upiId;
-      payeeName = snapshot.payeeName || payeeName || merchant?.businessName || 'Merchant';
-    } else if (!payeeVpa) {
-      payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
-      payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
-    }
     // The payment session's assigned receiving account is authoritative.
     // Never replace or suppress it using deployment-specific merchant IDs or VPAs.
     // An account switch affects new orders only; earlier checkout links retain
