@@ -476,9 +476,11 @@ export function registerCheckoutRoutes(server, ctx) {
     // Never replace or suppress it using deployment-specific merchant IDs or VPAs.
     // An account switch affects new orders only; earlier checkout links retain
     // the receivingAccountSnapshot recorded when their session was created.
-    const isMerchantEnabled = receivingAccount
-      ? Boolean(receivingAccount.isMerchantEnabled)
-      : (snapshot?.isMerchantEnabled !== undefined ? Boolean(snapshot.isMerchantEnabled) : true);
+    // Preserve the account type captured when this order was issued. An operator
+    // changing the receiver type must affect new checkouts, not existing links.
+    const isMerchantEnabled = snapshot?.isMerchantEnabled !== undefined
+      ? Boolean(snapshot.isMerchantEnabled)
+      : (receivingAccount ? Boolean(receivingAccount.isMerchantEnabled) : true);
     const upiMode = isMerchantEnabled ? 'MERCHANT' : 'NON_MERCHANT';
 
     let timeRemainingSeconds = 0;

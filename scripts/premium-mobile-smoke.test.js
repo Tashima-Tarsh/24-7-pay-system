@@ -91,10 +91,12 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   await openCheckout.waitFor({timeout:15000});
   assert.equal(await openCheckout.getAttribute('href'),'/checkout/e2e-checkout-id-123');
   const uri='upi://pay?pa=qaexample%40okbank&pn=Test+Merchant&am=1.00&cu=INR';
+  let activeMode='MERCHANT';
   await page.route('**/api/v1/checkout/e2e-checkout-id-123/state',route=>route.fulfill({
    status:200,contentType:'application/json',body:JSON.stringify({
     paymentId:'e2e-checkout-id-123',orderId:'MOBILE_E2E_ORDER',amount:'1.00',status:'ACTIVE',
     merchantName:'Test Merchant',payeeVpa:'qaexample@okbank',payeeName:'Test Merchant',
+    upiMode:activeMode,isMerchantEnabled:activeMode==='MERCHANT',
     upiUri:uri,upiQr:generateQrDataUri(uri),upiDeepLinks:buildUpiPaymentIntentLinks(uri)
    })
   }));
@@ -115,8 +117,22 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
    button.addEventListener('click',event=>event.preventDefault(),{capture:true,once:true});
    button.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
   });
-  await page.getByText(/Awaiting verified bank\/provider confirmation/).waitFor({timeout:15000});
+  await page.getByText(/After completing or cancelling in the UPI app/).waitFor({timeout:15000});
   assert.match(await page.locator('#status-title').innerText(),/Ready when you are/);
+  // Personal VPA: tapping the displayed QR is a native UPI gesture, without
+  // forcing a Google Pay/PhonePe package. Merchant buttons are not shown.
+  activeMode='NON_MERCHANT';
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.locator('#qr-open-upi[href^="upi://pay?"]').waitFor({state:'visible',timeout:15000});
+  assert.equal(new URL(await page.locator('#qr-open-upi').getAttribute('href')).searchParams.get('pa'),'qaexample@okbank');
+  assert.equal(await page.locator('#branded-app-grid').isHidden(),true);
+  assert.equal(await page.locator('#upi-open').isVisible(),true);
+  await page.evaluate(()=>{
+    const qr=document.querySelector('#qr-open-upi');
+    qr.addEventListener('click',event=>event.preventDefault(),{capture:true,once:true});
+    qr.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+  });
+  await page.getByText(/Return to checkout after the UPI app/).waitFor({timeout:15000});
 
   const ios=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,
    userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'});

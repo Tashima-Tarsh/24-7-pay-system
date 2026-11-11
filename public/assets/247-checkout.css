@@ -14,3 +14,8 @@
 /* Same-phone P2P fallback: save the proven QR payload and select it from the UPI app gallery. */
 #save-qr{border:1px solid #3f5878;border-radius:10px;background:#122139;color:#dce9fb;padding:9px 14px;font-weight:700}
 #save-qr:hover{border-color:#70e6f5;color:#fff}.qr-panel>p{margin-bottom:10px}.qr-save-hint{font-size:12px!important;color:#9fb1cd!important}
+
+/* A personal receiving QR is a native UPI link on mobile; the QR remains scannable on desktop. */
+.qr-tap-target[href]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
+.qr-tap-target[href]:hover{transform:scale(1.015);box-shadow:0 0 0 3px #70e6f57a}
+.qr-tap-target[href]:focus-visible{outline:3px solid #70e6f5;outline-offset:4px}

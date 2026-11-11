@@ -26,6 +26,9 @@ function hidePayment(){
   $('payment-instructions').hidden=true;$('qr').hidden=true;$('qr').removeAttribute('src');
   for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open','bhim-open']){const el=$(id);if(el){el.removeAttribute('href');el.onclick=null;}}
   $('app-actions').hidden=true;$('timer').hidden=true;
+  const qrTap=$('qr-open-upi');
+  if(qrTap){qrTap.removeAttribute('href');qrTap.setAttribute('aria-disabled','true');qrTap.removeAttribute('tabindex');}
+  $('branded-app-grid').hidden=false;
 }
 async function saveQr(){
   const image=$('qr');
@@ -92,6 +95,8 @@ function render(data){
  const uriPayee=verifiedUpi?new URL(verifiedUpi).searchParams.get('pa'):null;
  const payeeVpa=typeof data.payeeVpa==='string'&&data.payeeVpa?data.payeeVpa:uriPayee;
  const payable=(status==='ACTIVE'||status==='INTENT_ISSUED')&&Boolean(verifiedUpi)&&Boolean(payeeVpa);
+ // Account type is explicitly saved by the merchant; never infer it from the @bank suffix.
+ const personalUpi=data.upiMode==='NON_MERCHANT'||data.isMerchantEnabled===false;
  if(!payable&&(status==='ACTIVE'||status==='INTENT_ISSUED')){
   statusLine('UPI details unavailable','The receiving UPI ID is not ready for this order. Ask your merchant to verify the assigned account.','warning');
   $('retry-area').hidden=false;
@@ -131,6 +136,21 @@ function render(data){
     if(value)intentParams.set(key,value);
   }
   const query=intentParams.toString().replace(/\+/g,'%20');
+  const genericUpi='upi://pay?'+query;
+  // On a personal-VPA checkout the QR is also a tappable native UPI link.
+  // Native user gestures allow Android to open the default installed handler or app chooser.
+  const qrTap=$('qr-open-upi');
+  qrTap.removeAttribute('href');
+  qrTap.setAttribute('aria-disabled','true');
+  qrTap.removeAttribute('tabindex');
+  if(personalUpi&&mobile){
+    qrTap.href=genericUpi;
+    qrTap.setAttribute('tabindex','0');
+    qrTap.removeAttribute('aria-disabled');
+  }
+  $('qr-mode-instructions').textContent=personalUpi
+    ? (mobile?'Tap the QR to open a UPI app, or scan it from another phone.':'Scan this QR using any UPI app on your phone.')
+    : 'Scan with a UPI app or use a payment-app button below. Check payee and amount.';
   // Chrome fallback URL applies to an unsuccessful app launch, not payment completion.
   // Use /checkout/<paymentId> so the fallback always lands on the current order,
   // even when the page was loaded via /checkout?id=... query form.
@@ -151,7 +171,7 @@ function render(data){
     return candidateQuery===query&&candidateUri.includes(target)?candidateUri:androidIntent(pkg);
   };
   const sources=[
-    ['upi-open','upi://pay?'+query,'upi://pay?'],
+    ['upi-open',genericUpi,'upi://pay?'],
     ['gpay-open',android?(consistentAndroidLink(links.gpay,'com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
     ['phonepe-open',android?(consistentAndroidLink(links.phonepe,'com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
     ['paytm-open',android?(consistentAndroidLink(links.paytm,'net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
@@ -159,6 +179,8 @@ function render(data){
   ];
   if(mobile){
     $('app-actions').hidden=false;
+    // Personal VPA: QR + generic app chooser. Merchant-type VPA: explicit PSP buttons.
+    $('branded-app-grid').hidden=personalUpi;
     for(const [id,url,prefix] of sources){
       const el=$(id),allowed=safeUri(url,prefix);
       if(allowed){
@@ -212,6 +234,11 @@ function connect(){
  }catch{retryTimer=setTimeout(connect,6000);}
 }
 // App-button clicks launch an external app; they never authorize settlement.
+$('qr-open-upi').addEventListener('click',()=>{
+ if(!mobile||!current||terminal||!$('qr-open-upi').hasAttribute('href'))return;
+ setHandoff(true);showReturnControls();
+ display('app-handoff-note','Return to checkout after the UPI app. Your payment status will refresh automatically.');
+});
 $('app-actions').addEventListener('click',event=>{
  const target=event.target instanceof Element?event.target.closest('a[href]'):null;
  if(!target||!$('app-actions').contains(target)||!current||terminal)return;

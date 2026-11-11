@@ -69,7 +69,7 @@ test('Platform and merchant receive distinct premium studio navigation and merch
  assert.match(app,/canCreate=Boolean\(!data\.user\?\.platform/);
  assert.match(app,/canManageVpa=Boolean\(!data\.user\?\.platform/);
  assert.match(upi,/get<\{accounts:ReceivingAccount\[\]\}>\('\/receiving-accounts'/);
- assert.match(upi,/addReceivingUpi\(vpa,name,confirmOwnership\)/);
+ assert.match(upi,/addReceivingUpi\(vpa,name,confirmOwnership,accountType\)/);
  assert.match(upi,/setReceivingUpiActive\(account\.id,next\)/);
  assert.match(upi,/window\.confirm/);
  assert.match(upi,/merchant OWNER or ADMIN/);
@@ -114,7 +114,11 @@ test('First merchant-owned UPI ID can be enabled once with explicit acknowledgem
  assert.match(payments,/const firstReceivingAccount=accountRepo\.findByMerchantId\(mid\)\.length===0/);
  assert.match(payments,/b\.confirmVpaOwnership===true/);
  assert.match(payments,/isActive:initialActivation/);
+ assert.match(payments,/accountType/);
+ assert.match(payments,/isMerchantEnabled/);
  assert.match(upi,/confirmOwnership/);
+ assert.match(upi,/setReceivingUpiType/);
+ assert.match(upi,/accountType/);
  assert.match(upi,/setReceivingUpiActive/);
  assert.doesNotMatch(payments,/autoMarkPaid|forceSettlementSuccess/);
 });

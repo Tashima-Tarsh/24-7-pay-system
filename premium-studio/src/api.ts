@@ -112,8 +112,13 @@ async function writeMerchantAccount<T>(path:string,input:unknown):Promise<T>{
  );
  return payload as T;
 }
-export function addReceivingUpi(upiId:string,payeeName:string,confirmVpaOwnership:boolean):Promise<{account:ReceivingAccount}>{
- return writeMerchantAccount('/receiving-accounts',{upiId,payeeName,confirmVpaOwnership});
+export type UpiAccountType='PERSONAL'|'MERCHANT';
+export function addReceivingUpi(upiId:string,payeeName:string,confirmVpaOwnership:boolean,accountType:UpiAccountType='MERCHANT'):Promise<{account:ReceivingAccount}>{
+ return writeMerchantAccount('/receiving-accounts',{upiId,payeeName,confirmVpaOwnership,accountType});
+}
+export function setReceivingUpiType(id:string,accountType:UpiAccountType):Promise<{account:ReceivingAccount}>{
+ if(!/^[A-Za-z0-9-]{1,128}$/.test(id))throw new Error('Invalid account identifier');
+ return writeMerchantAccount('/receiving-accounts/'+encodeURIComponent(id)+'/type',{accountType});
 }
 export function setReceivingUpiActive(id:string,active:boolean):Promise<{account:ReceivingAccount}>{
  if(!/^[A-Za-z0-9-]{1,128}$/.test(id))throw new Error('Invalid account identifier');
