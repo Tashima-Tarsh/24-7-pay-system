@@ -152,7 +152,7 @@ test('AC-4/AC-5/AC-6/AC-13: payment-done UTR validation, conflict, no-deviceId, 
     assert.equal(upiQuery.get('cu'), 'INR');
     assert.equal(upiQuery.get('mc'), null, 'Unknown merchant MCC must not be fabricated');
     assert.equal(upiQuery.get('pn'),'Test Merchant');
-    assert.equal(upiQuery.get('mode'),'04');
+    assert.equal(upiQuery.get('mode'),null,'P2P checkout must not declare merchant mode');
     assert.equal(new URL(qr.body.upiUri).searchParams.get('tr'),upiQuery.get('tr'),'Fallback QR must use the same reference');
 
     // AC-4: 11-digit UTR -> 400 INVALID_UTR
