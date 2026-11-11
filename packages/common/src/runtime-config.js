@@ -102,7 +102,12 @@ export function deriveCloudflareRoutes(config = {}) {
 export function resolveRuntimeUrls(options = {}) {
   let mode = options.envMode;
   if (!mode) {
-    if (process.env.YOUPI_MODE) {
+    // Render's HTTPS gateway takes priority over stale YOUPI_MODE=localhost
+    // left in a deployed environment. Explicit caller envMode still wins.
+    if (process.env.NODE_ENV === 'production' && !process.env.CLOUDFLARE_DOMAIN &&
+        (process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL)) {
+      mode = 'hosted';
+    } else if (process.env.YOUPI_MODE) {
       mode = process.env.YOUPI_MODE;
     } else if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       mode = 'localhost';
