@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import {encrypt, resolveSecret} from '@youpi/common';
+import {encrypt, resolveSecret, isRetiredReceivingVpa} from '@youpi/common';
 
 export class ReceivingAccountRepository {
   /**
@@ -16,6 +16,7 @@ export class ReceivingAccountRepository {
    * Enforces that maximum ONE VPA may be active per merchant.
    */
   create(data) {
+    if(isRetiredReceivingVpa(data.upiId))throw new Error('This receiving UPI ID is retired and cannot be activated.');
     const bankFields=['bankName','accountHolderName','accountNumber','ifsc'];
     const hasBank=bankFields.some(k=>data[k]!==undefined&&data[k]!=='');
     if(hasBank){
@@ -99,6 +100,8 @@ export class ReceivingAccountRepository {
    * Backend invariant: At most ONE VPA active per merchant.
    */
   activateAccount(merchantId, accountId) {
+    const target=this.findById(accountId);
+    if(target && isRetiredReceivingVpa(target.upiId))throw new Error('This receiving UPI ID is retired and cannot be activated.');
     return this.db.transaction(() => {
       const now = new Date().toISOString();
 
@@ -144,6 +147,7 @@ export class ReceivingAccountRepository {
 
       const now = new Date().toISOString();
       const upiId = data.upiId !== undefined ? data.upiId.trim() : existing.upiId;
+      if(isRetiredReceivingVpa(upiId) && (data.isActive===true || data.upiId!==undefined))throw new Error('This receiving UPI ID is retired.');
       const payeeName = data.payeeName !== undefined ? data.payeeName.trim() : existing.payeeName;
       const isMerchantEnabled = data.isMerchantEnabled !== undefined ? Boolean(data.isMerchantEnabled) : existing.isMerchantEnabled;
 
@@ -221,6 +225,7 @@ export class ReceivingAccountRepository {
    */
   upsertActiveForMerchant(merchantId, upiId, payeeName = null, isMerchantEnabled = true) {
     const cleanUpi = upiId.trim();
+    if(isRetiredReceivingVpa(cleanUpi))throw new Error('This receiving UPI ID is retired.');
     const existing = this.findActiveForMerchant(merchantId);
     const now = new Date().toISOString();
 

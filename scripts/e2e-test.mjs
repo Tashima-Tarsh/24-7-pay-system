@@ -42,7 +42,7 @@ async function run() {
   const orderId = 'E2E_' + Date.now();
   r = await req('POST', '/api/v1/payments/intents', JSON.stringify({
     amount: 250, currency: 'INR', orderId: orderId,
-    merchantVpa: '9082843142@slc',
+    merchantVpa: 'fixture-payee@upi',
     returnUrl: BASE + '/checkout/success',
     expiryMinutes: 30,
     metadata: { test: 'e2e-flow' }

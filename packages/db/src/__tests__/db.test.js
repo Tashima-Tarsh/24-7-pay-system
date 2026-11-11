@@ -49,9 +49,23 @@ describe('@youpi/db Unit & Integration Tests', () => {
     assert.ok(testMerchant);
     assert.equal(testMerchant.slug, 'demo-store');
     assert.ok(testAccount);
-    assert.equal(testAccount.upiId, '9082843142@slc');
+    assert.equal(testAccount.upiId, 'fixture-payee@upi');
     assert.equal(testAccount.isActive, true);
     assert.equal(testAccount.isSlotBusy, false);
+  });
+
+  test('retired legacy receiver cannot be created or reactivated, and restart deactivates persisted copies', () => {
+    const legacy = '9082843142@slc';
+    assert.throws(() => accountRepo.create({merchantId: testMerchant.id, upiId: legacy, payeeName: 'Old Receiver'}), /retired/i);
+    assert.throws(() => accountRepo.upsertActiveForMerchant(testMerchant.id, legacy, 'Old Receiver'), /retired/i);
+    accountRepo.deactivateAccount(testMerchant.id, testAccount.id);
+    db.execute('INSERT INTO payment_receiving_accounts (id,merchant_id,upi_id,payee_name,is_active) VALUES (?,?,?,?,1)', [
+      'legacy-receiver-test', testMerchant.id, legacy, 'Old Receiver'
+    ]);
+    assert.throws(() => accountRepo.activateAccount(testMerchant.id, 'legacy-receiver-test'), /retired/i);
+    runMigrations(db);
+    assert.equal(accountRepo.findById('legacy-receiver-test').isActive,false);
+    assert.equal(accountRepo.findActiveForMerchant(testMerchant.id),null);
   });
 
   test('customer registration and password verification', () => {

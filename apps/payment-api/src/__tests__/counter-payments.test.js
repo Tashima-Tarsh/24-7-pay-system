@@ -19,7 +19,7 @@ describe('Phase 15: Counter Payments (Cash & Card at Counter)', () => {
     // PART 1: demo merchant needs an active payment profile to accept payments.
     const ppRepo = new PpMerchantPaymentProfileRepository(testDb);
     ppRepo.upsert('00000000-0000-0000-0000-000000000001', {
-      payeeVpa: '9082843142@slc',
+      payeeVpa: 'fixture-payee@upi',
       payeeName: 'Sanbook Pay Store',
       payeeEmail: 'billing@sanbookpay.com',
       mcc: '5411',

@@ -34,6 +34,7 @@ export class Database {
    * @param {{ dbPath?: string, inMemory?: boolean, autoMigrate?: boolean }} [options={}]
    */
   constructor(options = {}) {
+    this.isInMemory = Boolean(options.inMemory);
     if(process.env.DATABASE_URL&&!options.inMemory&&!options.dbPath){
       const postgres=new PostgresDatabase(process.env.DATABASE_URL);
       if(options.autoMigrate!==false)ensureDatabaseInitialized(postgres);

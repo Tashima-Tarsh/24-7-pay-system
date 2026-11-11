@@ -112,12 +112,12 @@
   <div class="card hidden" id="step6">
     <div class="badge">Step 6 · Evidence Capture (SMS + Gmail)</div>
     <h2>Submit Payment Evidence</h2>
-    <p style="color:#64748b;font-size:12px;margin-bottom:10px">Customer pays to 9082843142@slc. Your Android SMS observer + Gmail both capture it. Any TWO sources confirm → wallet credited.</p>
+    <p style="color:#64748b;font-size:12px;margin-bottom:10px">Development fixture only: no live receiving account is configured. Your Android SMS observer + Gmail both capture it. Any TWO sources confirm → wallet credited.</p>
     <label>Payment ID</label><input type="text" id="evPaymentId" readonly style="background:#f8fafc;">
     <label>UTR</label><input type="text" id="evUtr" value="UTR123456789">
     <label>Amount Paise</label><input type="number" id="evAmount" value="10000">
     <label>Sender VPA</label><input type="text" id="evSenderVpa" value="customer@upi">
-    <label>Payee VPA</label><input type="text" id="evPayeeVpa" value="9082843142@slc">
+    <label>Payee VPA</label><input type="text" id="evPayeeVpa" value="fixture-payee@upi">
     <label>Device ID</label><input type="text" id="evDeviceId" readonly style="background:#f8fafc;">
     <div class="row">
       <button onclick="submitSms()">Submit SMS Evidence</button>
@@ -231,7 +231,7 @@ async function createPayment() {
       orderId: document.getElementById('payOrderId').value,
       customerId: document.getElementById('payCustomerId').value,
       returnUrl: document.getElementById('payReturnUrl').value,
-      merchantVpa: '9082843142@slc'
+      merchantVpa: 'fixture-payee@upi'
     })
   });
   if (r.ok) {
@@ -250,7 +250,7 @@ async function submitSms() {
       paymentId, amountPaise: Number(document.getElementById('evAmount').value),
       utr: document.getElementById('evUtr').value, senderVpa: document.getElementById('evSenderVpa').value,
       payeeVpa: document.getElementById('evPayeeVpa').value, deviceId,
-      rawSms: 'Rs ' + document.getElementById('payAmount').value + ' credited to 9082843142@slc UTR ' + document.getElementById('evUtr').value,
+      rawSms: 'Rs ' + document.getElementById('payAmount').value + ' credited to fixture-payee@upi UTR ' + document.getElementById('evUtr').value,
       observedAt: new Date().toISOString()
     })
   });

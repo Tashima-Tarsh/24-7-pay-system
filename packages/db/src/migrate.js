@@ -435,15 +435,28 @@ export function runMigrations(targetDb) {
     }
   }
 
-  // Seed default UPI receiving account if none
+  // Retire the legacy bundled payee on every startup. Preserve its row and
+  // historical payments for audit/foreign-key integrity, but disable it as a
+  // destination for new payments and disable its stale merchant profile.
+  // The revocation is idempotent on existing PostgreSQL and SQLite databases.
+  const retired = '9082843142@slc';
+  const timestamp = new Date().toISOString();
+  db.transaction(() => {
+    db.execute('UPDATE payment_receiving_accounts SET is_active=0,updated_at=? WHERE lower(upi_id)=? AND is_active=1', [timestamp, retired]);
+    db.execute('UPDATE pp_merchant_payment_profile SET is_active=0,updated_at=? WHERE lower(payee_vpa)=? AND is_active=1', [timestamp, retired]);
+    db.execute('UPDATE merchant_upi_connections SET connection_state=?,updated_at=? WHERE lower(vpa)=? AND connection_state<>?', ['RETIRED', timestamp, retired, 'RETIRED']);
+  });
+
+  // Only isolated in-memory tests may have a synthetic receiver. A real
+  // deployment must explicitly configure an owned account before taking payments.
   const accountRepo = new ReceivingAccountRepository(db);
   const accounts = accountRepo.findByMerchantId(defaultMerchant.id);
-  if (accounts.length === 0) {
+  if (db.isInMemory && accounts.length === 0) {
     accountRepo.create({
       id: '00000000-0000-0000-0000-000000000002',
       merchantId: defaultMerchant.id,
-      upiId: '9082843142@slc',
-      payeeName: 'Dynamo Pay',
+      upiId: 'fixture-payee@upi',
+      payeeName: 'Test Receiver',
       isActive: true
     });
   }

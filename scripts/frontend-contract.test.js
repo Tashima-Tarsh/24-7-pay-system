@@ -57,7 +57,7 @@ test('dedicated checkout uses native intent anchors and warns about QR-gallery l
   const source=fs.readFileSync('public/assets/247-checkout.js','utf8');
   assert.match(source,/el\.href=allowed/);
   assert.doesNotMatch(source,/location\.href=uri/);
-  assert.match(fs.readFileSync('public/checkout-next.html','utf8'),/gallery can have additional limits/);
+  assert.match(fs.readFileSync('public/checkout-next.html','utf8'),/On another device, scan this QR/);
   assert.match(source,/setHandoff\(true\)/);
 });
 
@@ -92,11 +92,26 @@ test('personal checkout has tappable generic UPI QR, merchant checkout has brand
  const js=fs.readFileSync('public/assets/247-checkout.js','utf8');
  assert.match(html,/id="qr-open-upi"/);
  assert.match(html,/id="branded-app-grid"/);
+ assert.match(html,/id="qr-panel"/);
  assert.match(html,/id="qr-mode-instructions"/);
  assert.match(js,/data\.upiMode==='NON_MERCHANT'/);
  assert.match(js,/personalUpi&&mobile/);
  assert.match(js,/qrTap\.href=genericUpi/);
- assert.match(js,/\$\('branded-app-grid'\)\.hidden=personalUpi/);
+ assert.match(js,/\$\('app-actions'\)\.hidden=false/);
+ assert.match(js,/if\(mobile && merchantUpi\)/);
+ assert.match(js,/\$\('qr-panel'\)\.hidden=merchantUpi&&mobile/);
  assert.match(js,/\['upi-open',genericUpi,'upi:\/\/pay\?'\]/);
  assert.doesNotMatch(js,/qrTap\.onclick\s*=.*location/);
+});
+
+test('legacy receiving VPA is rejected by common guard and database boot retires it',()=>{
+ const upi=fs.readFileSync('packages/common/src/upi.js','utf8');
+ const migration=fs.readFileSync('packages/db/src/migrate.js','utf8');
+ const repo=fs.readFileSync('packages/db/src/repositories/receiving-account.repository.js','utf8');
+ assert.match(upi,/isRetiredReceivingVpa/);
+ assert.match(migration,/UPDATE payment_receiving_accounts SET is_active=0/);
+ assert.match(migration,/UPDATE pp_merchant_payment_profile SET is_active=0/);
+ assert.match(migration,/if \(db.isInMemory && accounts.length === 0\)/);
+ assert.match(repo,/isRetiredReceivingVpa\(data\.upiId\)/);
+ assert.match(repo,/isRetiredReceivingVpa\(target\.upiId\)/);
 });
