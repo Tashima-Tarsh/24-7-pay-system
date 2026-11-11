@@ -108,11 +108,41 @@ export function resolveRuntimeUrls(options = {}) {
       mode = 'localhost';
     } else if (process.env.CLOUDFLARE_DOMAIN) {
       mode = 'production';
+    } else if (process.env.NODE_ENV === 'production' || process.env.RENDER === 'true') {
+      // Render's single public HTTPS origin serves checkout and /api/*.
+      // Never infer localhost on a hosted production instance.
+      mode = 'hosted';
     } else {
       mode = 'localhost';
     }
   }
   mode = String(mode).toLowerCase();
+
+  if (mode === 'hosted') {
+    const configured = options.publicOrigin ||
+      process.env.BASE_CHECKOUT_URL ||
+      process.env.PUBLIC_CHECKOUT_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      process.env.DYNAMO_PUBLIC_URL;
+    if (!configured) {
+      throw new Error('Production Configuration Incomplete: A public HTTPS checkout origin is required on Render.');
+    }
+    const url = new URL(configured);
+    if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' ||
+        url.search || url.hash || /^(localhost|127\\.0\\.0\\.1|\\[::1\\])$/i.test(url.hostname)) {
+      throw new Error('Invalid hosted checkout origin: expected a public HTTPS origin.');
+    }
+    const origin = url.origin;
+    return {
+      mode: 'hosted', isProduction: true, domain: url.hostname, prefix: '',
+      routes: [], checkoutUrl: origin, checkoutHostname: url.hostname,
+      apiUrl: origin, apiHostname: url.hostname,
+      adminUrl: origin, adminHostname: url.hostname,
+      gmailUrl: origin, gmailHostname: url.hostname,
+      storeUrl: origin, storeHostname: url.hostname
+    };
+  }
+
   const domain = (options.domain || options.domainTld || process.env.CLOUDFLARE_DOMAIN || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const prefix = (options.prefix || options.domainPrefix || process.env.DEPLOYMENT_PREFIX || 'pay').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '') || 'pay';
 
