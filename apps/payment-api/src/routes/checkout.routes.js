@@ -1,5 +1,5 @@
 import { HttpServer } from '../server.js';
-import { toRupeesString, buildUpiPaymentUri, buildUpiPaymentIntentLinks, generateQrDataUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS, isInternalServiceRequest, safeEqual } from '@youpi/common';
+import { toRupeesString, buildUpiPaymentUri, buildUpiPaymentIntentLinks, generateQrDataUri, PaymentStatus, PaymentMethod, UPI_PROVIDERS, isInternalServiceRequest, safeEqual, isRetiredReceivingVpa } from '@youpi/common';
 import { validateSessionDeviceAccess, buildUpiUri, inspectUpiIntent } from '@youpi/core';
 import { SplitSettlementRepository, LedgerRepository } from '@youpi/db';
 
@@ -459,13 +459,13 @@ export function registerCheckoutRoutes(server, ctx) {
     // This must be identical in the checkout display, QR payload and GPay/PhonePe links.
     const assignedVpa = snapshot?.upiId || receivingAccount?.upiId || null;
     const assignedName = snapshot?.payeeName || receivingAccount?.payeeName || merchant?.businessName || 'Merchant Store';
-    let payeeVpa = assignedVpa;
+    let payeeVpa = isRetiredReceivingVpa(assignedVpa) ? null : assignedVpa;
     let payeeName = assignedName;
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
       if (profile && (!assignedVpa ||
           String(profile.payeeVpa || '').trim().toLowerCase() === String(assignedVpa).trim().toLowerCase())) {
-        payeeVpa = assignedVpa || profile.payeeVpa;
+        payeeVpa = isRetiredReceivingVpa(assignedVpa || profile.payeeVpa) ? null : (assignedVpa || profile.payeeVpa);
         // A profile is a valid source of display name only for the same payee VPA.
         if (!snapshot?.isTestOverride && !session.metadata?.platform) {
           payeeName = profile.payeeName || assignedName;
@@ -835,6 +835,7 @@ export function registerCheckoutRoutes(server, ctx) {
     if (session.status !== PaymentStatus.ACTIVE || session.metadata?.externalCollection) return HttpServer.json(res, 409, { error: 'UPI instructions are not available for this payment state.' });
     const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa;
     const payeeName = session.metadata?.receivingAccountSnapshot?.payeeName || session.metadata?.payeeName || 'Merchant';
+    if (isRetiredReceivingVpa(payeeVpa)) return HttpServer.json(res, 409, { error: 'The assigned receiving account was retired; this checkout can no longer collect payment.', code: 'RECEIVING_VPA_RETIRED' });
     if (!payeeVpa) return HttpServer.json(res, 400, { error: 'No VPA configured for this session' });
     let upiUri;
     try {
@@ -863,6 +864,7 @@ export function registerCheckoutRoutes(server, ctx) {
     if (session.status !== PaymentStatus.ACTIVE || session.metadata?.externalCollection) return HttpServer.json(res, 409, { error: 'UPI instructions are not available for this payment state.' });
     const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa;
     const payeeName = session.metadata?.receivingAccountSnapshot?.payeeName || session.metadata?.payeeName || 'Merchant';
+    if (isRetiredReceivingVpa(payeeVpa)) return HttpServer.json(res, 409, { error: 'The assigned receiving account was retired; this checkout can no longer collect payment.', code: 'RECEIVING_VPA_RETIRED' });
     if (!payeeVpa) return HttpServer.json(res, 400, { error: 'No VPA configured for this session' });
     let upiUri;
     try {
