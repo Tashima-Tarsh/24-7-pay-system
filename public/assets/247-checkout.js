@@ -6,7 +6,7 @@ const mobile=android||/iPhone|iPad|iPod/i.test(navigator.userAgent);
 const checkoutReturnUrl=paymentId?new URL('/checkout/'+encodeURIComponent(paymentId),location.origin).href:null;
 const handoffStorageKey=paymentId?'upi-checkout-handoff:'+paymentId:null;
 function getSavedHandoff(){try{return Boolean(handoffStorageKey&&sessionStorage.getItem(handoffStorageKey)==='1');}catch{return false;}}
-let current=null,events=null,polling=null,pollingStartTime=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=getSavedHandoff();
+let current=null,events=null,polling=null,pollingStartTime=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=getSavedHandoff(),reconnectAttempts=0;
 function setHandoff(value){appHandoff=Boolean(value);try{if(handoffStorageKey){if(value)sessionStorage.setItem(handoffStorageKey,'1');else sessionStorage.removeItem(handoffStorageKey);}}catch{}}
 function showReturnControls(){const c=$('checkout-return-controls');if(c)c.hidden=!appHandoff;const link=$('checkout-return-link');if(link&&checkoutReturnUrl)link.href=checkoutReturnUrl;}
 const terminalStates=new Set(['SUCCESS','FAILED','EXPIRED','CANCELLED','BLOCKED']);
@@ -17,7 +17,7 @@ function statusLine(title,description,kind=''){
  const box=document.querySelector('.status-box');box.className='status-box'+(kind?' '+kind:'');
  display('status-title',title);display('status-description',description);
 }
-function stop(){if(events){events.close();events=null;}if(polling){clearInterval(polling);polling=null;}pollingStartTime=null;if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}}
+function stop(){if(events){events.close();events=null;}if(polling){clearInterval(polling);polling=null;}pollingStartTime=null;if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}reconnectAttempts=0;}
 function externalReturn(url){
  const a=$('merchant-return');a.hidden=true;a.removeAttribute('href');
  try{const u=new URL(url);if(u.protocol==='https:'&&!u.username&&!u.password){a.href=u.href;a.hidden=false;}}catch{}
@@ -233,11 +233,15 @@ async function refresh(){
 }
 function connect(){
  if(terminal||!paymentId)return;
+ if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}
+ if(events){events.close();events=null;}
  try{
+  const backoffMs=Math.min(1000*Math.pow(2,reconnectAttempts),30000);
   events=new EventSource('/api/v1/checkout/'+encodeURIComponent(paymentId)+'/events');
-  for(const name of ['initial_state','status_change','payment_update','connected'])events.addEventListener(name,()=>void refresh());
-  events.onerror=()=>{if(events){events.close();events=null;}if(!terminal)retryTimer=setTimeout(connect,6000);};
- }catch{retryTimer=setTimeout(connect,6000);}
+  events.addEventListener('connected',()=>{reconnectAttempts=0;});
+  for(const name of ['initial_state','status_change','payment_update'])events.addEventListener(name,()=>void refresh());
+  events.onerror=()=>{if(events){events.close();events=null;}if(!terminal){reconnectAttempts++;retryTimer=setTimeout(connect,backoffMs);}};
+ }catch{if(!terminal){reconnectAttempts++;retryTimer=setTimeout(connect,Math.min(1000*Math.pow(2,reconnectAttempts),30000));}};
 }
 // App-button clicks launch an external app; they never authorize settlement.
 $('qr-open-upi').addEventListener('click',()=>{
@@ -258,6 +262,7 @@ function refreshAfterAppReturn(){
   showReturnControls();
   statusLine('Welcome back to checkout','Checking the latest status from your backend; app return alone does not confirm payment.');
   void refresh();
+  connect();
  }
 }
 document.addEventListener('visibilitychange',refreshAfterAppReturn);

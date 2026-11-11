@@ -2,6 +2,21 @@
 
 # Configuration & Secret Management Guide
 
+## Network Binding
+
+The Payment API binds to `0.0.0.0` (all network interfaces) by default so Android phones on the same WiFi can reach the checkout page via the PC's LAN IP (e.g. `192.168.1.100:7000`). To restrict to loopback-only (local development), set `YOUPI_BIND_HOST=127.0.0.1`.
+
+| Environment | `YOUPI_BIND_HOST` | Reachability |
+| :--- | :--- | :--- |
+| Local development | `127.0.0.1` | Only the machine itself can reach the API |
+| Same-WiFi mobile testing | `0.0.0.0` | Any device on the LAN can reach the API via its IP |
+| Production (behind reverse proxy) | `0.0.0.0` | The proxy forwards traffic; bind to all interfaces |
+
+> **Health check**: `GET /api/v1/checkout/server-health` returns the UPI server health state. Use it to verify the API is reachable after changing the bind host.
+
+---
+
+
 ## 1. Environment Parameters Reference
 
 | Variable | Default Value | Description |
@@ -30,6 +45,7 @@
 | `YOUPI_ALLOW_DEV_TOOLS` | unset | Developer test-mode / simulator endpoints (`/admin/dev/*`, `simulate-observation`) are refused when `NODE_ENV=production` unless this is `true` |
 | `GMAIL_REDIRECT_URI` | derived | Gmail OAuth redirect URI. Defaults to `<gmail host from your configured domain>/oauth/callback` |
 | `ANDROID_HEARTBEAT_TIMEOUT_MS` | `180000` | Inactivity window before Android device is marked DISCONNECTED |
+| `YOUPI_BIND_HOST` | `0.0.0.0` | Network interface the Payment API binds to. `0.0.0.0` (all interfaces) lets Android phones on the same WiFi reach checkout via the PC's LAN IP. `127.0.0.1` restricts to loopback (local dev only). |
 
 ---
 

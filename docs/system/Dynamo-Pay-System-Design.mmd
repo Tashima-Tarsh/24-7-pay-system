@@ -5,6 +5,9 @@ flowchart TB
   UI --> GW
   GW --> API[Payment API / identity / policies]
   GW --> CO[Hosted checkout: QR / UPI intent]
+  CO --> RM[Router / Mode Selector]
+  RM -->|MERCHANT account| MI[Direct UPI intent buttons<br/>Google Pay · PhonePe · Paytm · BHIM]
+  RM -->|PERSONAL account| PC[QR code rendering<br/>Generic UPI app chooser<br/>No branded intent buttons]
   U == pays outside Dynamo ==> BANK[Assigned receiving UPI / bank account]
   BANK -. receiving alert .-> PHONE[Paired Android observer]
   BANK -. bank email .-> GM[Gmail observer: OAuth / polling]

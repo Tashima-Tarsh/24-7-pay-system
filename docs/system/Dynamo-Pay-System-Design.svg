@@ -2,13 +2,13 @@
 <!DOCTYPE svg
   PUBLIC '-//W3C//DTD SVG 1.0//EN'
   'http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd'>
-<svg width="480" height="500" preserveAspectRatio="xMinYMin meet" viewBox="0 0 480 500" xmlns="http://www.w3.org/2000/svg" version="1.0" fill-rule="evenodd" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="480" height="640" preserveAspectRatio="xMinYMin meet" viewBox="0 0 480 640" xmlns="http://www.w3.org/2000/svg" version="1.0" fill-rule="evenodd" xmlns:xlink="http://www.w3.org/1999/xlink">
 	<title>...</title>
 	<desc>...</desc>
 	<clipPath id="clip">
-		<rect x="0" y="0" width="480" height="500"/>
+		<rect x="0" y="0" width="480" height="640"/>
 	</clipPath>
-	<g id="group" transform="scale(1,-1) translate(0,-500)" style="clip-path: url(#clip)">
+	<g id="group" transform="scale(1,-1) translate(0,-640)" style="clip-path: url(#clip)">
 		<g transform="">
 			<rect x="0" y="430" width="145" height="60" rx="7" ry="7" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(93%,96%,94%); fill-rule: evenodd;"/>
 			<text x="22.6806640625" y="472" style="font-family: Bold; font-size: 10px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,944) scale(1,-1)">Super Admin / portal</text>
@@ -47,6 +47,19 @@
 			<text x="363.65087890625" y="164" style="font-family: Bold; font-size: 10px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,328) scale(1,-1)">Merchant callback</text>
 			<text x="353.99794921875" y="149" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,298) scale(1,-1)">Signed SUCCESS, delivery ID</text>
 			<text x="359.63759765625" y="137" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,274) scale(1,-1)">Game credits player once</text>
+			<rect x="167" y="500" width="145" height="60" rx="7" ry="7" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(93%,96%,94%); fill-rule: evenodd;"/>
+			<text x="185.087890625" y="542" style="font-family: Bold; font-size: 10px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1084) scale(1,-1)">Router / Mode Selector</text>
+			<text x="183.9095458984375" y="527" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,1054) scale(1,-1)">MERCHANT vs PERSONAL</text>
+			<rect x="0" y="570" width="145" height="60" rx="7" ry="7" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(93%,96%,94%); fill-rule: evenodd;"/>
+			<text x="12.3515625" y="612" style="font-family: Bold; font-size: 10px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1224) scale(1,-1)">MERCHANT</text>
+			<text x="6.8658447265625" y="597" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,1194) scale(1,-1)">Direct UPI intent buttons</text>
+			<text x="16.51318359375" y="585" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,1170) scale(1,-1)">Google Pay · PhonePe ·</text>
+			<text x="25.2593994140625" y="573" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,1146) scale(1,-1)">Paytm · BHIM</text>
+			<rect x="334" y="570" width="145" height="60" rx="7" ry="7" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(93%,96%,94%); fill-rule: evenodd;"/>
+			<text x="349.8565673828125" y="612" style="font-family: Bold; font-size: 10px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1224) scale(1,-1)">PERSONAL</text>
+			<text x="340.88427734375" y="597" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,1194) scale(1,-1)">QR code rendering</text>
+			<text x="339.5205078125" y="585" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,1170) scale(1,-1)">Generic UPI app chooser</text>
+			<text x="337.61474609375" y="573" style="font-family: Regular; font-size: 8.4px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,1146) scale(1,-1)">No branded intent buttons</text>
 			<path d="M 73,430 L 185,395 Z" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1;"/>
 			<polygon points="185 395, 179.892 399.7862, 178.0756 393.9739" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,40%,30%); fill-rule: evenodd;"/>
 			<path d="M 240,430 L 240,395 Z" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1;"/>
@@ -66,6 +79,14 @@
 			<polygon points="240 182, 243.0448 188.3031, 236.9552 188.3031" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,40%,30%); fill-rule: evenodd;"/>
 			<path d="M 314,145 L 334,145 Z" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1;"/>
 			<polygon points="334 145, 327.6969 148.0448, 327.6969 141.9552" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,40%,30%); fill-rule: evenodd;"/>
+			<path d="M 334,490 L 239,455 Z" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1;"/>
+			<polygon points="239 455, 246.0547 453.8262, 244.4448 459.0205" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,40%,30%); fill-rule: evenodd;"/>
+			<path d="M 239,500 L 239,455 Z" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1;"/>
+			<polygon points="239 455, 242.0448 461.3031, 235.9552 461.3031" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,40%,30%); fill-rule: evenodd;"/>
+			<path d="M 239,560 L 73,595 Z" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1;"/>
+			<polygon points="73 595, 80.1719 593.6523, 78.3296 599.0391" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,40%,30%); fill-rule: evenodd;"/>
+			<path d="M 239,560 L 405,595 Z" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1;"/>
+			<polygon points="405 595, 397.8281 593.6523, 399.6704 599.0391" style="stroke: rgb(9%,40%,30%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,40%,30%); fill-rule: evenodd;"/>
 			<text x="0" y="66" style="font-family: Bold; font-size: 9px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,132) scale(1,-1)">Money: player -&gt; receiving UPI. Messages: observers -&gt; API -&gt; merchant.</text>
 			<text x="0" y="49" style="font-family: Regular; font-size: 9px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,98) scale(1,-1)">Notification SUCCESS is platform acceptance; bankVerified=false.</text>
 			<text x="0" y="32" style="font-family: Regular; font-size: 8.3px;fill: rgb(32%,39%,36%); stroke:none;" transform="translate(0,64) scale(1,-1)">Render Free, current phone APK and real-payment acceptance remain operational gates.</text>

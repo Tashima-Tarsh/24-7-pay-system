@@ -11,6 +11,9 @@ import { CustomerRepository } from './repositories/customer.repository.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Current schema version. Increment on every breaking or additive schema change.
+export const SCHEMA_VERSION = '2026.11.12-01';
+
 /**
  * Runs database migrations and applies base seeds.
  * @param {import('./database.js').Database} [targetDb]
@@ -65,6 +68,23 @@ export function runMigrations(targetDb) {
 
   // Execute schema DDL
   db.exec(db.dialect==='postgres'?db.prepareSchema(schemaSql):schemaSql);
+
+  // schema_migrations — version tracking table for applied schema changes
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now')),
+      description TEXT
+    );
+  `); } catch {}
+
+  // Record the current schema version (idempotent)
+  try {
+    const existing = db.queryOne("SELECT version FROM schema_migrations WHERE version = ?", [SCHEMA_VERSION]);
+    if (!existing) {
+      db.execute('INSERT INTO schema_migrations (version, description) VALUES (?, ?)', [SCHEMA_VERSION, 'Initial schema version tracking']);
+    }
+  } catch {}
 
   // Existing databases predate the amount columns used by payment creation.
   db.transaction(() => {
@@ -779,7 +799,8 @@ export function runMigrations(targetDb) {
 
   return {
     db,
-    defaultMerchant
+    defaultMerchant,
+    schemaVersion: SCHEMA_VERSION
   };
 }
 

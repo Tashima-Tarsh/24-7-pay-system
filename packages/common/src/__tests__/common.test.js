@@ -115,8 +115,9 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('am'), '200.00');
       assert.equal(parsed.searchParams.get('tn'), 'Order payment');
       assert.equal(parsed.searchParams.get('tr'), 'ORDER99');
+      assert.equal(parsed.searchParams.get('tid'), 'ORDER99');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'tid', 'cu']);
     });
 
     test('includes the required Google Pay currency and unique transaction reference', () => {
@@ -136,7 +137,8 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('tn'), 'Payment');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
       assert.equal(parsed.searchParams.get('tr'), 'ORDER123');
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
+      assert.equal(parsed.searchParams.get('tid'), 'ORDER123');
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'tid', 'cu']);
     });
 
     test('includes the Google Pay transaction URL when the server provides one', () => {
@@ -178,7 +180,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(queryParams.get('tn'), 'Payment');
       // MCC is only present when the merchant profile assigns one; never invented.
       assert.ok(!queryParams.get('mc') || /^\d{4}$/.test(queryParams.get('mc')));
-      const expectedKeys = ['am', 'cu', 'pa', 'pn', 'tn', 'tr'];
+      const expectedKeys = ['am', 'cu', 'pa', 'pn', 'tid', 'tn', 'tr'];
       if (queryParams.get('mc')) expectedKeys.push('mc');
       assert.deepEqual([...queryParams.keys()].sort(), expectedKeys.sort());
     });

@@ -40,7 +40,8 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
   if (orderId) {
     const safeRef = String(orderId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);
     params.set('tr', safeRef);
-    if (hasMerchantCode) params.set('tid', safeRef);
+    // tid is mandatory for all UPI intents; GPay rejects intents without it.
+    params.set('tid', safeRef);
   }
   if (note) {
     const safeNote = String(note)

@@ -81,10 +81,8 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   }
   params.push('cu=INR');
   params.push(`tr=${encodeURIComponent(trRef(paymentId))}`);
-  // Only merchant-configured transactions carry the extra merchant reference.
-  if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
-    params.push(`tid=${encodeURIComponent(trRef(paymentId))}`);
-  }
+  // tid is mandatory for all UPI intents; GPay rejects intents without it.
+  params.push(`tid=${encodeURIComponent(trRef(paymentId))}`);
   params.push(`tn=${encodeURIComponent(tnNote(note))}`);
   if (checkoutUrl && profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
     params.push(`url=${encodeURIComponent(String(checkoutUrl))}`);
