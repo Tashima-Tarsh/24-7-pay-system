@@ -101,7 +101,8 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
    })
   }));
   await page.goto(base+'/checkout/e2e-checkout-id-123',{waitUntil:'domcontentloaded'});
-  await page.locator('#qr').waitFor({state:'visible',timeout:15000});
+  await page.locator('#gpay-open').waitFor({state:'visible',timeout:15000});
+  assert.equal(await page.locator('#qr-panel').isHidden(),true,'merchant mobile uses app intents, not the QR route');
   assert.ok((await page.locator('#qr').getAttribute('src')).startsWith('data:image/svg+xml;base64,'));
   for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open','bhim-open']){
    const button=page.locator('#'+id);
@@ -125,8 +126,8 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
   await page.reload({waitUntil:'domcontentloaded'});
   await page.locator('#qr-open-upi[href^="upi://pay?"]').waitFor({state:'visible',timeout:15000});
   assert.equal(new URL(await page.locator('#qr-open-upi').getAttribute('href')).searchParams.get('pa'),'qaexample@okbank');
-  assert.equal(await page.locator('#branded-app-grid').isHidden(),true);
-  assert.equal(await page.locator('#upi-open').isVisible(),true);
+  assert.equal(await page.locator('#app-actions').isHidden(),true,'personal VPA must show only QR');
+  assert.equal(await page.locator('#qr-panel').isVisible(),true,'personal QR must be visible');
   await page.evaluate(()=>{
     const qr=document.querySelector('#qr-open-upi');
     qr.addEventListener('click',event=>event.preventDefault(),{capture:true,once:true});
@@ -145,7 +146,8 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
    })
   }));
   await iosPage.goto(base+'/checkout/e2e-checkout-id-123',{waitUntil:'domcontentloaded'});
-  await iosPage.locator('#qr').waitFor({state:'visible',timeout:15000});
+  await iosPage.locator('#gpay-open').waitFor({state:'visible',timeout:15000});
+  assert.equal(await iosPage.locator('#qr-panel').isHidden(),true);
   assert.match(await iosPage.locator('#gpay-open').getAttribute('href')||'',/^gpay:\/\/upi\/pay\?/);
   assert.match(await iosPage.locator('#phonepe-open').getAttribute('href')||'',/^phonepe:\/\/upi\/pay\?/);
   assert.match(await iosPage.locator('#paytm-open').getAttribute('href')||'',/^paytmmp:\/\/pay\?/);
@@ -183,7 +185,8 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
 
    const checkout=await context.newPage();
    await checkout.goto(base+'/checkout/'+encodeURIComponent(created.paymentId),{waitUntil:'domcontentloaded'});
-   await checkout.locator('#qr:not([hidden])').waitFor({timeout:15000});
+   await checkout.locator('#gpay-open[href]').waitFor({timeout:15000});
+   assert.equal(await checkout.locator('#qr-panel').isHidden(),true);
    assert.match(await checkout.locator('#upi-open').getAttribute('href')||'',/^upi:\/\/pay\?/);
    assert.match(await checkout.locator('#gpay-open').getAttribute('href')||'',/^intent:\/\/pay\?/);
    assert.match(await checkout.locator('#phonepe-open').getAttribute('href')||'',/^intent:\/\/pay\?/);
