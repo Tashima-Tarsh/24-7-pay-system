@@ -948,10 +948,18 @@ export function registerAdminRoutes(server, ctx) {
 
     const routes = deriveCloudflareRoutes({ domain: cloudflareDomain, prefix: deploymentPrefix });
     let runtimeUrls = {};
-    try {
-      runtimeUrls = resolveRuntimeUrls({ envMode, domain: cloudflareDomain, prefix: deploymentPrefix });
-    } catch {
-      runtimeUrls = resolveRuntimeUrls({ envMode: 'localhost', domain: cloudflareDomain, prefix: deploymentPrefix });
+    const hostedOrigin = ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL;
+    const isHosted = process.env.NODE_ENV === 'production' &&
+      !cloudflareDomain && /^https:\/\//i.test(hostedOrigin || '');
+    if (isHosted) {
+      runtimeUrls = resolveRuntimeUrls({ envMode: 'hosted', publicOrigin: hostedOrigin });
+    } else {
+      try {
+        runtimeUrls = resolveRuntimeUrls({ envMode, domain: cloudflareDomain, prefix: deploymentPrefix });
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        runtimeUrls = resolveRuntimeUrls({ envMode: 'localhost', domain: cloudflareDomain, prefix: deploymentPrefix });
+      }
     }
 
     const codEnabled = branding.codEnabled !== undefined ? Boolean(branding.codEnabled) : enabledPaymentMethods.includes('COD');
