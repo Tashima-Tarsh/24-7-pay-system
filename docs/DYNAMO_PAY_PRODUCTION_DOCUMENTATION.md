@@ -118,9 +118,9 @@ Body:
   "amount": 499,
   "currency": "INR",
   "status": "PENDING",
-  "intent": "upi://pay?pa=9082843142@slc&pn=Dynamo+Pay&am=499&tn=ORD-001",
+  "intent": "upi://pay?pa=fixture-payee@upi&pn=Dynamo+Pay&am=499&tn=ORD-001",
   "checkoutUrl": "http://127.0.0.1:7000/checkout/uuid",
-  "payeeVpa": "9082843142@slc",
+  "payeeVpa": "fixture-payee@upi",
   "payeeName": "Dynamo Pay",
   "platform": "dynamo-pay"
 }
@@ -151,7 +151,7 @@ Body: {"transaction": "uuid" OR "uniquetransactionid": "ORD-001"}
   "bankReferenceNumber": "SBK1793360826XXX",
   "senderVpa": "9876543210@oksbi",
   "senderName": "John Doe",
-  "payeeVpa": "9082843142@slc",
+  "payeeVpa": "fixture-payee@upi",
   "payeeName": "Dynamo Pay",
   "datetime": "2026-10-30T18:10:45.XXXZ",
   "platform": "dynamo-pay"
