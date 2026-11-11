@@ -255,3 +255,27 @@ test('RBL receiving VPA is the same in checkout, QR and Android app intents desp
     db.close();
   }
 });
+
+test('personal RBL receiving account renders QR mode with the exact order VPA',async()=>{
+ const vpa='reportid4705.arthpay@rbl';
+ const db=new Database({inMemory:true});runMigrations(db);
+ const merchants=new MerchantRepository(db),accounts=new ReceivingAccountRepository(db),sessions=new PaymentSessionRepository(db);
+ const merchant=merchants.getDefault();
+ const receiver=accounts.create({merchantId:merchant.id,upiId:vpa,payeeName:'Arthpay',isActive:true,isMerchantEnabled:false});
+ const session=sessions.create({
+  merchantId:merchant.id,receivingAccountId:receiver.id,orderId:'RBL-PERSONAL-QR',
+  amountPaise:100n,currency:'INR',method:'UPI',status:PaymentStatus.ACTIVE,
+  metadata:{receivingAccountSnapshot:{id:receiver.id,upiId:vpa,payeeName:'Arthpay',isMerchantEnabled:false}}
+ });
+ const server=await startServer(0,db);
+ try{
+  const state=await request('http://localhost:'+server.port,'/api/v1/checkout/'+session.id+'/state');
+  assert.equal(state.status,200);
+  assert.equal(state.body.isMerchantEnabled,false);
+  assert.equal(state.body.upiMode,'NON_MERCHANT');
+  assert.equal(state.body.payeeVpa,vpa);
+  assert.equal(new URL(state.body.upiUri).searchParams.get('pa'),vpa);
+  assert.equal(new URL(state.body.upiUri).searchParams.get('am'),'1.00');
+  assert.match(state.body.upiQr,/^data:image\/svg\+xml;base64,/);
+ }finally{await server.close();db.close();}
+});
