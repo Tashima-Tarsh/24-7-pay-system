@@ -24,14 +24,14 @@ export function registerRefundsRoutes(server, ctx) {
     if (merchant) return merchant.id;
     const cred = db.queryOne(`SELECT merchant_id FROM merchant_credentials WHERE api_key = $1 AND status = 'ACTIVE'`, [key]);
     if (cred) return cred.merchant_id;
-    const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-    return firstMerchant ? firstMerchant.id : null;
+    // A missing or unknown key must not silently resolve to an arbitrary merchant.
+    return null;
   }
 
   // 1. POST /api/v1/refunds — Initiate a refund
   server.post('/api/v1/refunds', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     let body;
     try {
@@ -112,7 +112,7 @@ export function registerRefundsRoutes(server, ctx) {
   // 2. GET /api/v1/refunds/:id — Get refund details
   server.get('/api/v1/refunds/:id', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const refund = refundRepo.findById(params.id) || refundRepo.findByRefundId(params.id);
     if (!refund || refund.merchant_id !== merchantId) {
@@ -136,7 +136,7 @@ export function registerRefundsRoutes(server, ctx) {
   // 3. GET /api/v1/refunds — List refunds
   server.get('/api/v1/refunds', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const list = refundRepo.listByMerchant(merchantId);
     return HttpServer.json(res, 200, {

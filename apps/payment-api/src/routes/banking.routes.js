@@ -21,14 +21,14 @@ export function registerBankingRoutes(server, ctx) {
     if (merchant) return merchant.id;
     const cred = db.queryOne(`SELECT merchant_id FROM merchant_credentials WHERE api_key = $1 AND status = 'ACTIVE'`, [key]);
     if (cred) return cred.merchant_id;
-    const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-    return firstMerchant ? firstMerchant.id : null;
+    // A missing or unknown key must not silently resolve to an arbitrary merchant.
+    return null;
   }
 
   // 1. GET /api/v1/banking/connections — List configured bank/provider connections
   server.get('/api/v1/banking/connections', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const connections = connRepo.findByMerchantId(merchantId);
 
@@ -63,7 +63,7 @@ export function registerBankingRoutes(server, ctx) {
   // 2. POST /api/v1/banking/connections — Save connection (Create or Update)
   server.post('/api/v1/banking/connections', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     let body;
     try {
@@ -140,7 +140,7 @@ export function registerBankingRoutes(server, ctx) {
   // 3. POST /api/v1/banking/connections/:id/test — Test authenticated connection
   server.post('/api/v1/banking/connections/:id/test', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const conn = connRepo.findById(params.id);
     if (!conn || conn.merchant_id !== merchantId) {
@@ -181,7 +181,7 @@ export function registerBankingRoutes(server, ctx) {
   // 4. GET /api/v1/banking/connections/:id/capabilities — Check available capabilities
   server.get('/api/v1/banking/connections/:id/capabilities', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const conn = connRepo.findById(params.id);
     if (!conn || conn.merchant_id !== merchantId) {
@@ -204,7 +204,7 @@ export function registerBankingRoutes(server, ctx) {
   // 5. POST /api/v1/banking/connections/:id/activate-collections
   server.post('/api/v1/banking/connections/:id/activate-collections', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const conn = connRepo.findById(params.id);
     if (!conn || conn.merchant_id !== merchantId) return HttpServer.json(res, 404, { error: 'Connection not found' });
@@ -226,7 +226,7 @@ export function registerBankingRoutes(server, ctx) {
   // 6. POST /api/v1/banking/connections/:id/activate-payouts
   server.post('/api/v1/banking/connections/:id/activate-payouts', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const conn = connRepo.findById(params.id);
     if (!conn || conn.merchant_id !== merchantId) return HttpServer.json(res, 404, { error: 'Connection not found' });
@@ -248,7 +248,7 @@ export function registerBankingRoutes(server, ctx) {
   // 7. GET /api/v1/banking/connections/:id/webhook-check
   server.get('/api/v1/banking/connections/:id/webhook-check', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const conn = connRepo.findById(params.id);
     if (!conn) return HttpServer.json(res, 404, { error: 'Connection not found' });
@@ -267,7 +267,7 @@ export function registerBankingRoutes(server, ctx) {
   // 8. POST /api/v1/banking/connections/:id/disconnect
   server.post('/api/v1/banking/connections/:id/disconnect', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const conn = connRepo.findById(params.id);
     if (!conn || conn.merchant_id !== merchantId) return HttpServer.json(res, 404, { error: 'Connection not found' });
@@ -281,7 +281,7 @@ export function registerBankingRoutes(server, ctx) {
   // 9. GET /api/v1/banking/balance — Query real available balance
   server.get('/api/v1/banking/balance', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     try {
       const provider = providerRegistry.getProvider(merchantId, 'CASHFREE');

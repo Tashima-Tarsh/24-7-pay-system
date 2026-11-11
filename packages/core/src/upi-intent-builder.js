@@ -4,9 +4,14 @@ import crypto from 'node:crypto';
  * UPI intent URI builder.
  *
  * Builds a canonical upi://pay query with parameters in a fixed order:
- *   pa, pn, am (2dp), cu=INR, tr, tn, mc, mode=02, orgid (only if set)
+ *   pa, pn, am (2dp), cu=INR, tr, tid, tn, url (only if set),
+ *   mc (only when the profile carries a real 4-digit MCC), mode=02, orgid (only if set)
  * All values are URL-encoded. Optionally appends `sign=` (RSA-SHA256 over the
  * query bytes, base64, URL-encoded) when the profile carries a signing key.
+ *
+ * The canonical URI is also the QR payload, so it keeps the full NPCI vocabulary.
+ * Android hand-off is different: buildPackageIntent() strips it to the P2P-safe
+ * parameter set unless the URI is PSP-signed.
  *
  * Never fails a payment: if signing throws, the unsigned URI is returned and a
  * warning is logged.
@@ -81,6 +86,8 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   if (checkoutUrl) {
     params.push(`url=${encodeURIComponent(String(checkoutUrl))}`);
   }
+  // Never invent a merchant category code. `mc` declares a PSP-registered merchant;
+  // emitting a fake one for a personal VPA is what gets the intent rejected in-app.
   if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
     params.push(`mc=${encodeURIComponent(String(profile.mcc))}`);
   }
@@ -110,14 +117,50 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
 }
 
 /**
+ * Parameters that are valid on a payment *request* to a personal (P2P) UPI ID.
+ *
+ * `mc`, `tid`, `url`, `orgid`, `mode`, `sign`, `mid` and `mam` all describe a
+ * transaction a PSP has registered on behalf of a merchant. A personal VPA has no
+ * such registration, so GPay/PhonePe accept the intent, show the payee and then
+ * fail the payment. The identical URI scanned as a QR succeeds because the scanner
+ * path does not apply those merchant declarations.
+ */
+const P2P_INTENT_KEYS = Object.freeze(['pa', 'pn', 'am', 'cu', 'tr', 'tn']);
+
+/**
+ * Reduce a canonical query to the P2P-safe parameter set.
+ * Values are re-encoded with encodeURIComponent, which emits %20 for spaces —
+ * Android's intent parser decodes percent escapes but not the form-encoded '+'
+ * that URLSearchParams.toString() produces (a name would arrive as "Demo+Store").
+ * @param {string} query
+ * @returns {string}
+ */
+function toP2pQuery(query) {
+  const source = new URLSearchParams(query);
+  const parts = [];
+  for (const key of P2P_INTENT_KEYS) {
+    const value = source.get(key);
+    if (value !== null && value !== '') parts.push(`${key}=${encodeURIComponent(value)}`);
+  }
+  return parts.join('&');
+}
+
+/**
  * Wrap a canonical upi://pay URI into an Android package-specific intent URI.
+ *
+ * A PSP-registered merchant URI carries `sign=` over its full parameter set and
+ * must be passed through untouched. Every other URI is a personal VPA: it is
+ * reduced to the P2P-safe parameters so the payment app does not reject it as an
+ * unregistered merchant transaction.
+ *
  * @param {string} uri - upi://pay URI
  * @param {string} pkg - Android package name (e.g. com.google.android.apps.nbu.paisa.user)
  * @param {string} [fallbackUrl] - S.browser_fallback_url (MANDATORY for GPay/PhonePe callbacks)
  * @returns {string}
  */
 export function buildPackageIntent(uri, pkg, fallbackUrl = null) {
-  const query = uri.split('?')[1] || '';
+  const rawQuery = uri.split('?')[1] || '';
+  const query = /(?:^|&)sign=/.test(rawQuery) ? rawQuery : toP2pQuery(rawQuery);
   let intentUri = `intent://pay?${query}#Intent;scheme=upi;package=${pkg}`;
 
   // S.browser_fallback_url is MANDATORY for GPay/PhonePe to return to checkout after payment.

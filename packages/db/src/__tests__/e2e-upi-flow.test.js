@@ -115,7 +115,7 @@ describe('E2E: UPI Real-Time Payment Flow (QR → Payment → SSE Callback)', ()
     // @ gets URL-encoded to %40 by URLSearchParams
     assert.ok(upiUri.includes(`pa=${account.upiId}`) || upiUri.includes(`pa=${encodeURIComponent(account.upiId)}`), 'Should contain payee VPA');
     assert.ok(upiUri.includes('am=149.00'), 'Should contain fixed amount');
-    assert.ok(upiUri.includes('tr=ORD-E2E-001'), 'Should contain order reference');
+    assert.ok(upiUri.includes('tr=ORDE2E001'), 'Should contain sanitized order reference');
 
     // Generate QR code data URI (for <img src>)
     const qrDataUri = generateQrDataUri(upiUri);
@@ -123,9 +123,10 @@ describe('E2E: UPI Real-Time Payment Flow (QR → Payment → SSE Callback)', ()
 
     // Generate deep links for all UPI apps
     const deepLinks = buildUpiPaymentIntentLinks(upiUri);
-    assert.ok(deepLinks.phonepe.startsWith('phonepe://pay?'), 'PhonePe deep link');
-    assert.equal(deepLinks.gpay, `intent://pay?${upiUri.slice('upi://pay?'.length)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`, 'Google Pay receives the complete canonical query');
-    assert.ok(deepLinks.paytm.startsWith('paytmmp://pay?'), 'Paytm deep link');
+    assert.ok(deepLinks.phonepe.startsWith('intent://pay?'), 'PhonePe Android intent');
+    assert.ok(deepLinks.gpay.startsWith('intent://pay?'), 'Google Pay Android intent');
+    assert.ok(!/[?&](?:mc|tid|url|mode)=/.test(deepLinks.gpay), 'P2P intent has no merchant-only declarations');
+    assert.ok(deepLinks.paytm.startsWith('intent://pay?'), 'Paytm Android intent');
     assert.ok(deepLinks.bhim.startsWith('upi://pay?'), 'BHIM deep link');
 
     console.log('✅ UPI URI:', upiUri);

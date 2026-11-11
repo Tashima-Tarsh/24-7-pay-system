@@ -381,7 +381,8 @@ export function registerCheckoutRoutes(server, ctx) {
         ...publicCheckoutBranding(merchant?.branding)
       };
 
-      // Resolve UPI transaction details for SUCCESS (where payment was sent, UTR, payee VPA)
+      // Resolve UPI transaction details for SUCCESS (where payment was sent, UTR).
+      // Payer identity (senderVpa/senderName) is bank-derived PII and stays merchant-only.
       let upiDetails = null;
       if (session.status === PaymentStatus.SUCCESS && session.attributedObservationId && ctx.obsRepo) {
         const obs = ctx.obsRepo.findById(session.attributedObservationId);
@@ -389,8 +390,6 @@ export function registerCheckoutRoutes(server, ctx) {
           upiDetails = {
             upiTransactionId: obs.bankReferenceNumber || null,
             utr: obs.bankReferenceNumber || null,
-            senderVpa: obs.senderVpa || null,
-            senderName: obs.senderVpa ? obs.senderVpa.split('@')[0] : null,
             observedAt: obs.observedAt || null,
             verifiedAt: session.completedAt ? session.completedAt.toISOString() : null
           };
@@ -430,8 +429,7 @@ export function registerCheckoutRoutes(server, ctx) {
         payeeName,
         upiTransactionId: upiDetails?.upiTransactionId || null,
         utr: upiDetails?.utr || null,
-        verifiedAt: upiDetails?.verifiedAt || null,
-        senderVpa: upiDetails?.senderVpa || null
+        verifiedAt: upiDetails?.verifiedAt || null
       });
       return;
     }
@@ -715,6 +713,12 @@ export function registerCheckoutRoutes(server, ctx) {
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {
       return HttpServer.json(res, 404, { error: 'Session not found' });
+    }
+
+    // Same device binding as every other session-scoped route: a payment id is not a credential.
+    const deviceAccess = checkSessionDeviceAccess(session, req, null, ctx);
+    if (!deviceAccess.allowed) {
+      return HttpServer.json(res, deviceAccess.statusCode || 409, deviceAccess.body);
     }
 
     // Initialize SSE connection (topic = session UUID)
@@ -1214,10 +1218,11 @@ export function registerCheckoutRoutes(server, ctx) {
     const payerVpa = claim.payerVpa || null;
 
     // Persist UTR + payer fields on the session (column + metadata for engine compatibility).
-    const metadata = { ...(session.metadata || {}) };
+    let metadata = session.metadata;
     if (typeof metadata === 'string') {
       try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
     }
+    metadata = { ...(metadata || {}) };
     if (utr) {
       metadata.reportedUtr = utr;
       metadata.reportedUtrSource = 'CUSTOMER_REPORTED';
@@ -1676,22 +1681,9 @@ export function registerCheckoutRoutes(server, ctx) {
       return HttpServer.json(res, 401, { error: 'Invalid merchant credentials for COD confirmation.' });
     }
 
-    // Require explicit confirmation code — never auto-mark SUCCESS.
-    // In test mode, skip code verification (no cod_confirmations table seeded).
-    const body = await HttpServer.parseBody(req).catch(() => ({}));
-    if (process.env.NODE_ENV !== 'test') {
-      const confirmationCode = body.confirmation_code || body.confirmationCode;
-      if (!confirmationCode) {
-        return HttpServer.json(res, 400, {
-          error: 'COD requires manual confirmation',
-          message: 'Provide confirmation_code to verify delivery before marking as paid.'
-        });
-      }
-      const valid = await verifyCodConfirmation(paymentId, confirmationCode);
-      if (!valid) {
-        return HttpServer.json(res, 401, { error: 'Invalid confirmation code' });
-      }
-    }
+    // The authenticated merchant call above IS the manual confirmation: only the merchant
+    // receives the cash, so only the merchant may mark the order paid. There is no separate
+    // confirmation-code store; requiring one here previously called a function that does not exist.
 
     const branding = merchant?.branding || {};
     const sellingMode = branding.sellingMode || (branding.enabledPaymentMethods?.some(m => m === 'CASH_COUNTER' || m === 'CARD_COUNTER') ? 'OFFLINE' : 'ONLINE');
@@ -2123,9 +2115,15 @@ export function registerCheckoutRoutes(server, ctx) {
   });
 
   // POST /api/v1/checkout/:id/trigger-hook (Merchant Action & Telemetry Trigger)
+  // Customer telemetry only. Anonymous callers must not be able to write arbitrary rows into
+  // the audit trail, so the action is constrained to a known vocabulary and the detail blob capped.
+  const TRIGGER_HOOK_ACTIONS = new Set([
+    'CANCEL_CLICKED', 'PAY_BUTTON_CLICKED', 'UPI_APP_LAUNCH_REQUESTED',
+    'QR_SCAN_REQUESTED', 'COPY_UPI_CLICKED', 'PAGE_VISIBLE', 'PAGE_HIDDEN'
+  ]);
   server.post('/api/v1/checkout/:id/trigger-hook', async (req, res, params) => {
-    const body = await HttpServer.parseBody(req);
-    const { action, details } = body;
+    const body = await HttpServer.parseBody(req).catch(() => ({}));
+    const { action, details } = body || {};
 
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {
@@ -2133,14 +2131,29 @@ export function registerCheckoutRoutes(server, ctx) {
       return;
     }
 
+    const deviceAccess = checkSessionDeviceAccess(session, req, body, ctx);
+    if (!deviceAccess.allowed) {
+      HttpServer.json(res, deviceAccess.statusCode || 409, deviceAccess.body);
+      return;
+    }
+
+    if (!TRIGGER_HOOK_ACTIONS.has(action)) {
+      HttpServer.json(res, 400, { error: 'Unknown action.', code: 'INVALID_ACTION' });
+      return;
+    }
+
+    const safeDetails = details && typeof details === 'object' && JSON.stringify(details).length <= 2048
+      ? details
+      : {};
+
     if (ctx.auditRepo) {
       ctx.auditRepo.log({
         merchantId: session.merchantId,
         entityType: 'PAYMENT_SESSION',
         entityId: session.id,
-        action: `HOOK_${action || 'USER_ACTION'}`,
+        action: `HOOK_${action}`,
         actorType: 'CUSTOMER',
-        details: details || {}
+        details: safeDetails
       });
     }
 
@@ -2149,8 +2162,8 @@ export function registerCheckoutRoutes(server, ctx) {
         paymentId: session.id,
         orderId: session.orderId,
         merchantId: session.merchantId,
-        action: action || 'ACTION',
-        details: details || {}
+        action,
+        details: safeDetails
       });
     }
 
@@ -2469,22 +2482,8 @@ export function registerCheckoutRoutes(server, ctx) {
   server.post('/api/v1/checkout/:id/end-and-restart-payment', handleEndAndRestartPayment);
   server.post('/api/v1/checkout/:id/end-session-and-create-new', handleEndAndRestartPayment);
 
-  // GET /api/v1/checkout/:id/stream and /events (SSE)
+  // GET /api/v1/checkout/:id/stream (SSE). `/events` is registered earlier — one handler only.
   server.get('/api/v1/checkout/:id/stream', async (req, res, params) => {
-    const session = ctx.sessionRepo.findById(params.id);
-    if (!session) {
-      HttpServer.json(res, 404, { error: 'Session not found' });
-      return;
-    }
-    const deviceAccess = checkSessionDeviceAccess(session, req, null, ctx);
-    if (!deviceAccess.allowed) {
-      HttpServer.json(res, deviceAccess.statusCode || 409, deviceAccess.body);
-      return;
-    }
-    server.initSse(params.id, res, req);
-  });
-
-  server.get('/api/v1/checkout/:id/events', async (req, res, params) => {
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {
       HttpServer.json(res, 404, { error: 'Session not found' });

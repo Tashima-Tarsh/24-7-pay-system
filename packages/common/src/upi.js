@@ -46,6 +46,49 @@ export function isValidVpa(vpa) {
 }
 
 /**
+ * Parameters that are safe on a payment request to a personal (P2P) UPI ID.
+ *
+ * Everything else in the NPCI intent vocabulary (`mc`, `tid`, `url`, `orgid`, `mode`,
+ * `sign`, `mid`, `mam`) describes a transaction that a PSP has registered on behalf of
+ * a merchant. A personal VPA has no such registration, so GPay/PhonePe accept the intent,
+ * open the confirm screen and then fail the payment. Scanning the identical URI as a QR
+ * works because the scanner path does not apply those merchant declarations.
+ */
+export const P2P_INTENT_PARAMS = Object.freeze(['pa', 'pn', 'am', 'cu', 'tr', 'tn']);
+
+/**
+ * Reduces any upi://pay URI to the parameters that are valid for a personal payee, so the
+ * same order can be handed to a UPI app as an intent without declaring a merchant it is not.
+ *
+ * The returned query is single-encoded and uses %20 for spaces: Android hands the intent's
+ * data URI to the payment app, which decodes percent escapes but not the form-encoded '+' —
+ * a payee name would otherwise arrive as "Demo+Store".
+ *
+ * @param {string} upiUri
+ * @returns {string} query string without the leading '?'
+ */
+export function toP2pIntentQuery(upiUri) {
+  if (typeof upiUri !== 'string' || !upiUri.startsWith('upi://pay?')) {
+    throw new Error('Invalid UPI URI');
+  }
+  const source = new URLSearchParams(upiUri.slice('upi://pay?'.length));
+  const params = new URLSearchParams();
+  for (const key of P2P_INTENT_PARAMS) {
+    const value = source.get(key);
+    if (value !== null && value !== '') params.set(key, value);
+  }
+  return params.toString().replace(/\+/g, '%20');
+}
+
+/**
+ * @param {string} upiUri
+ * @returns {string} upi://pay URI restricted to P2P-safe parameters
+ */
+export function toP2pIntentUri(upiUri) {
+  return `upi://pay?${toP2pIntentQuery(upiUri)}`;
+}
+
+/**
  * Builds a canonical upi://pay URI dynamically from server-validated parameters.
  * Amount is derived exclusively from server-side integer paise.
  * @param {{
@@ -76,7 +119,6 @@ export function buildUpiUri(options) {
   const trRaw = String(options.transactionRef || '').trim();
   const tr = trRaw.replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);
   if (tr) params.set('tr', tr);
-  if (tr) params.set('tid', tr); // Transaction ID — mandatory per NPCI
 
   // Transaction Note: max 30 chars per NPCI, strip emojis.
   const tnRaw = String(options.transactionNote || 'Payment').trim();
@@ -85,6 +127,7 @@ export function buildUpiUri(options) {
     .substring(0, 30);
   if (tn) params.set('tn', tn);
   if (/^\d{4}$/.test(String(options.merchantCategoryCode || ''))) {
+    if (tr) params.set('tid', tr);
     params.set('mc', options.merchantCategoryCode);
   }
   if (options.transactionUrl) {
@@ -151,9 +194,13 @@ export function buildUpiIntentUri(options) {
   if (am) params.set('am', am);
   params.set('cu', 'INR'); // Mandatory for GPay
   params.set('tr', tr);   // Transaction Reference (merchant ref)
-  params.set('tid', tr);  // Transaction ID (mandatory per NPCI; GPay enforces this)
   params.set('tn', tn);
+  // `tid` and `mc` declare a merchant transaction that NPCI/PSP has registered for an
+  // acquirer. Sending them for a personal VPA makes GPay/PhonePe treat the intent as a
+  // merchant payment for an unknown merchant and fail it. Only a caller that really has
+  // a merchant category code may declare them.
   if (options.merchantCategoryCode && /^\d{4}$/.test(String(options.merchantCategoryCode))) {
+    params.set('tid', tr);
     params.set('mc', String(options.merchantCategoryCode));
   }
 

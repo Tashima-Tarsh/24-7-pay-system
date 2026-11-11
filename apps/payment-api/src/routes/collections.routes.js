@@ -24,16 +24,13 @@ export function registerCollectionsRoutes(server, ctx) {
       const merchant = db.queryOne(`SELECT id FROM merchants WHERE id = $1`, [directId]);
       if (merchant) return merchant.id;
     }
-    if (!key) {
-      const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-      return firstMerchant ? firstMerchant.id : null;
-    }
+    if (!key) return null; // no key is not authorization
     const merchant = db.queryOne(`SELECT id FROM merchants WHERE id = $1`, [key]);
     if (merchant) return merchant.id;
     const cred = db.queryOne(`SELECT merchant_id FROM merchant_credentials WHERE api_key = $1 AND status = 'ACTIVE'`, [key]);
     if (cred) return cred.merchant_id;
-    const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-    return firstMerchant ? firstMerchant.id : null;
+    // A missing or unknown key must not silently resolve to an arbitrary merchant.
+    return null;
   }
 
   server.get('/api/v1/provider-checkout/:id',(req,res,p)=>{
@@ -52,7 +49,7 @@ export function registerCollectionsRoutes(server, ctx) {
     if(process.env.NODE_ENV==='production')return HttpServer.json(res,410,{error:'Create provider orders through the scoped /v1/payments API. Existing collection inquiry and historical records remain available.',code:'USE_CANONICAL_PAYMENT_API'});
     const merchantId = getMerchantId(req);
     if (!merchantId) {
-      return HttpServer.json(res, 401, { error: 'Unauthorized: Invalid or missing API key' });
+      return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
     }
 
     let body;
@@ -163,7 +160,7 @@ export function registerCollectionsRoutes(server, ctx) {
   server.get('/api/v1/collections', async (req, res) => {
     const merchantId = getMerchantId(req);
     if (!merchantId) {
-      return HttpServer.json(res, 401, { error: 'Unauthorized: Invalid or missing API key' });
+      return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
     }
 
     const parsedUrl = new URL(req.url, 'http://localhost');
@@ -193,7 +190,7 @@ export function registerCollectionsRoutes(server, ctx) {
   server.get('/api/v1/collections/:id', async (req, res, params) => {
     const merchantId = getMerchantId(req);
     if (!merchantId) {
-      return HttpServer.json(res, 401, { error: 'Unauthorized: Invalid or missing API key' });
+      return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
     }
 
     const id = params.id;

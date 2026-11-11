@@ -23,16 +23,13 @@ export function registerSettlementsRoutes(server, ctx) {
       const merchant = db.queryOne(`SELECT id FROM merchants WHERE id = $1`, [directId]);
       if (merchant) return merchant.id;
     }
-    if (!key) {
-      const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-      return firstMerchant ? firstMerchant.id : null;
-    }
+    if (!key) return null; // no key is not authorization
     const merchant = db.queryOne(`SELECT id FROM merchants WHERE id = $1`, [key]);
     if (merchant) return merchant.id;
     const cred = db.queryOne(`SELECT merchant_id FROM merchant_credentials WHERE api_key = $1 AND status = 'ACTIVE'`, [key]);
     if (cred) return cred.merchant_id;
-    const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-    return firstMerchant ? firstMerchant.id : null;
+    // A missing or unknown key must not silently resolve to an arbitrary merchant.
+    return null;
   }
 
   // --- SETTLEMENTS ---
@@ -40,7 +37,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 1. GET /api/v1/settlements/overview — Summary statistics
   server.get('/api/v1/settlements/overview', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const summary = settlementRepo.getOverview(merchantId);
     return HttpServer.json(res, 200, {
@@ -56,7 +53,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 2. GET /api/v1/settlements — List settlement batches
   server.get('/api/v1/settlements', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const parsedUrl = new URL(req.url, 'http://localhost');
     const limit = parseInt(parsedUrl.searchParams.get('limit') || '50', 10);
@@ -90,7 +87,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 3. GET /api/v1/settlements/:id — Details with individual transactions
   server.get('/api/v1/settlements/:id', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const id = params.id;
     const s = settlementRepo.findById(id) || settlementRepo.findBySettlementId(id);
@@ -125,7 +122,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 4. GET /api/v1/ledger/accounts — Chart of accounts
   server.get('/api/v1/ledger/accounts', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const accounts = ledgerRepo.listAccounts(merchantId);
     return HttpServer.json(res, 200, {
@@ -143,7 +140,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 5. GET /api/v1/ledger/journal — General journal entries
   server.get('/api/v1/ledger/journal', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const parsedUrl = new URL(req.url, 'http://localhost');
     const limit = parseInt(parsedUrl.searchParams.get('limit') || '50', 10);
@@ -156,7 +153,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 6. GET /api/v1/ledger/trial-balance — Trial balance
   server.get('/api/v1/ledger/trial-balance', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const tb = ledgerRepo.getTrialBalance(merchantId);
     return HttpServer.json(res, 200, {
@@ -180,7 +177,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 7. GET /api/v1/reconciliation/runs — List runs
   server.get('/api/v1/reconciliation/runs', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const runs = reconRepo.listRuns(merchantId);
     return HttpServer.json(res, 200, { runs });
@@ -189,7 +186,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 8. GET /api/v1/reconciliation/exceptions — List discrepancies
   server.get('/api/v1/reconciliation/exceptions', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const parsedUrl = new URL(req.url, 'http://localhost');
     const status = parsedUrl.searchParams.get('status') || null;
@@ -201,7 +198,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 9. POST /api/v1/reconciliation/run — Trigger automated reconciliation
   server.post('/api/v1/reconciliation/run', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     // Audit successful orders against settlements
     const orders = poRepo.listByMerchant(merchantId, { limit: 100, status: 'SUCCESS' });
@@ -251,7 +248,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 10. POST /api/v1/reconciliation/exceptions/:id/resolve
   server.post('/api/v1/reconciliation/exceptions/:id/resolve', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     let body;
     try {
@@ -269,7 +266,7 @@ export function registerSettlementsRoutes(server, ctx) {
   // 11. GET /api/v1/reports/:type (collections, payouts, settlements, audit)
   server.get('/api/v1/reports/:type', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const type = params.type.toLowerCase();
     const parsedUrl = new URL(req.url, 'http://localhost');

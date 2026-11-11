@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { getInternalServiceToken } from '@youpi/common';
 
 const __filename = fileURLToPath(import.meta.url);
 const rootDir = path.dirname(__filename);
@@ -62,6 +63,19 @@ if (!USES_POSTGRES) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 }
 
+// The payment API only trusts a forwarded client IP from a caller holding this token, so the
+// gateway must present it on every proxied request. Resolved before the API boots: if it is
+// missing in production the process should fail here, not on the first request.
+let GATEWAY_TOKEN = '';
+try {
+  GATEWAY_TOKEN = getInternalServiceToken();
+} catch (err) {
+  if (IS_PRODUCTION) {
+    console.error('[FATAL] Cannot resolve INTERNAL_SERVICE_TOKEN:', err.message);
+    process.exit(1);
+  }
+}
+
 // Start backend payment API directly in-process
 let apiServer = null;
 try {
@@ -100,13 +114,32 @@ function mimeType(filePath) {
   return map[ext] || 'application/octet-stream';
 }
 
+/**
+ * Real client IP for the upstream API. Behind an additional reverse proxy/CDN set TRUST_PROXY=true
+ * so its forwarded header is honoured; otherwise any client-supplied header is overwritten with
+ * the socket address, because a spoofable IP defeats every per-IP rate limit.
+ */
+function resolveForwardedIp(req) {
+  if (process.env.TRUST_PROXY === 'true') {
+    const cf = req.headers['cf-connecting-ip'];
+    if (typeof cf === 'string' && cf) return cf;
+    const xff = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim();
+    if (xff) return xff;
+  }
+  return (req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+}
+
 function streamPipe(req, res, targetHost, targetPort, targetPath) {
   const options = {
     hostname: targetHost,
     port: targetPort,
     path: targetPath,
     method: req.method,
-    headers: { ...req.headers },
+    headers: {
+      ...req.headers,
+      'x-gateway-token': GATEWAY_TOKEN,
+      'cf-connecting-ip': resolveForwardedIp(req),
+    },
     rejectUnauthorized: false,
   };
   delete options.headers.host;

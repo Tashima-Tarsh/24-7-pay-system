@@ -6,7 +6,12 @@ import { WebSocketServer } from 'ws';
 
 export function resolveClientIp(req){
   const remote=(req.socket?.remoteAddress||'unknown').replace(/^::ffff:/,'');
-  const trusted=['127.0.0.1','::1'].includes(remote)&&safeEqual(String(req.headers['x-gateway-token']||''),getInternalServiceToken());
+  // Never let a secret-resolution failure hang the request: an untrusted token simply means
+  // "do not trust forwarded IP headers" (fail closed, keep the socket address).
+  let trusted=false;
+  try{
+    trusted=['127.0.0.1','::1'].includes(remote)&&safeEqual(String(req.headers['x-gateway-token']||''),getInternalServiceToken());
+  }catch{trusted=false;}
   const forwarded=req.headers['cf-connecting-ip'];
   return trusted&&typeof forwarded==='string'&&isIP(forwarded)?forwarded:remote;
 }
@@ -41,7 +46,18 @@ function resolveCorsOrigin(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) {
     return origin;
   }
-  return 'null'; // not allowed — no origin is reflected
+  return null; // not allowed — omit the header entirely
+}
+
+/**
+ * Access-Control-Allow-Origin as a spreadable fragment. A disallowed origin must produce NO
+ * header: the literal string 'null' is itself a grantable origin (sandboxed frames, file://).
+ */
+function corsHeaders(origin) {
+  const resolved = resolveCorsOrigin(origin);
+  return resolved
+    ? { 'Access-Control-Allow-Origin': resolved, 'Vary': 'Origin' }
+    : { 'Vary': 'Origin' };
 }
 
 /**
@@ -177,7 +193,7 @@ export class HttpServer {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': resolveCorsOrigin(req?.headers?.origin),
+      ...corsHeaders(req?.headers?.origin),
       ...BASE_SECURITY_HEADERS
     });
 
@@ -216,7 +232,7 @@ export class HttpServer {
     );
     res.writeHead(statusCode, {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': resolveCorsOrigin(req?.headers?.origin),
+      ...corsHeaders(req?.headers?.origin),
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, Idempotency-Key, X-Device-Id, X-Timestamp, X-Signature',
       ...BASE_SECURITY_HEADERS
@@ -290,7 +306,7 @@ export class HttpServer {
       // Handle CORS preflight
       if (req.method === 'OPTIONS') {
         res.writeHead(204, {
-          'Access-Control-Allow-Origin': resolveCorsOrigin(req.headers.origin),
+          ...corsHeaders(req.headers.origin),
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization, Idempotency-Key, X-Device-Id, X-Timestamp, X-Signature',
           ...BASE_SECURITY_HEADERS
@@ -324,7 +340,7 @@ export class HttpServer {
         if (!rateLimit.allowed) {
           res.writeHead(429, {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': resolveCorsOrigin(req.headers.origin),
+            ...corsHeaders(req.headers.origin),
             'Retry-After': Math.ceil((rateLimit.resetAt - Date.now()) / 1000) || '1',
             ...BASE_SECURITY_HEADERS
           });
@@ -552,7 +568,7 @@ export class PaymentGateway {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': resolveCorsOrigin(req?.headers?.origin),
+      ...corsHeaders(req?.headers?.origin),
     });
 
     res.write('event: connected\ndata: {"status":"connected"}\n\n');

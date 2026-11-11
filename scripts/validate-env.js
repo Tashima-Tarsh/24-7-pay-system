@@ -80,6 +80,23 @@ export default function validateEnv() {
     }
   }
 
+  // Production-only: these were previously auto-generated into data/.secrets, which gives every
+  // instance its own value. Require them explicitly so a multi-instance deployment fails at boot
+  // instead of failing intermittently on auth and blind-index lookups.
+  if (isProduction && !isTest) {
+    for (const key of ['ADMIN_API_TOKEN', 'INTERNAL_SERVICE_TOKEN', 'OBSERVER_API_TOKEN']) {
+      const value = process.env[key];
+      if (!value) {
+        errors.push(
+          `Missing ${key} in production. Secrets are no longer auto-generated per instance; ` +
+          'copy the existing value from data/.secrets into the environment.'
+        );
+      } else if (value.length < 32) {
+        errors.push(`${key} must be at least 32 characters`);
+      }
+    }
+  }
+
   // Optional-but-recommended for production
   const recommended = [
     'CASHFREE_CLIENT_ID',

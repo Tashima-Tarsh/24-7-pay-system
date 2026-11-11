@@ -21,16 +21,13 @@ export function registerSplitSettlementRoutes(server, ctx) {
       const merchant = db.queryOne(`SELECT id FROM merchants WHERE id = $1`, [directId]);
       if (merchant) return merchant.id;
     }
-    if (!key) {
-      const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-      return firstMerchant ? firstMerchant.id : null;
-    }
+    if (!key) return null; // no key is not authorization
     const merchant = db.queryOne(`SELECT id FROM merchants WHERE id = $1`, [key]);
     if (merchant) return merchant.id;
     const cred = db.queryOne(`SELECT merchant_id FROM merchant_credentials WHERE api_key = $1 AND status = 'ACTIVE'`, [key]);
     if (cred) return cred.merchant_id;
-    const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-    return firstMerchant ? firstMerchant.id : null;
+    // A missing or unknown key must not silently resolve to an arbitrary merchant.
+    return null;
   }
 
   // ========================================================================
@@ -40,7 +37,7 @@ export function registerSplitSettlementRoutes(server, ctx) {
   // POST /api/v1/split-settlements/configure — Set platform fee split for merchant
   server.post('/api/v1/split-settlements/configure', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     let body;
     try {
@@ -91,7 +88,7 @@ export function registerSplitSettlementRoutes(server, ctx) {
   // GET /api/v1/split-settlements/rules — Get split rules for merchant
   server.get('/api/v1/split-settlements/rules', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const rule = splitRepo.getRule(merchantId);
     if (!rule) {
@@ -120,7 +117,7 @@ export function registerSplitSettlementRoutes(server, ctx) {
   // GET /api/v1/split-settlements/entries — List split entries
   server.get('/api/v1/split-settlements/entries', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const parsedUrl = new URL(req.url, 'http://localhost');
     const status = parsedUrl.searchParams.get('status') || null;
@@ -149,7 +146,7 @@ export function registerSplitSettlementRoutes(server, ctx) {
   // GET /api/v1/split-settlements/overview — Split settlement overview
   server.get('/api/v1/split-settlements/overview', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const overview = splitRepo.getOverview(merchantId);
     const rule = splitRepo.getRule(merchantId);
@@ -183,7 +180,7 @@ export function registerSplitSettlementRoutes(server, ctx) {
   // POST /api/v1/checkout/:id/auto-refund — Instant refund for failed/expired UPI payments
   server.post('/api/v1/checkout/:id/auto-refund', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {

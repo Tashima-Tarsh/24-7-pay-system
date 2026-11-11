@@ -17,14 +17,14 @@ export function registerOperationsRoutes(server, ctx) {
     if (merchant) return merchant.id;
     const cred = db.queryOne(`SELECT merchant_id FROM merchant_credentials WHERE api_key = $1 AND status = 'ACTIVE'`, [key]);
     if (cred) return cred.merchant_id;
-    const firstMerchant = db.queryOne(`SELECT id FROM merchants LIMIT 1`);
-    return firstMerchant ? firstMerchant.id : null;
+    // A missing or unknown key must not silently resolve to an arbitrary merchant.
+    return null;
   }
 
   // 1. GET /api/v1/operations/metrics — 60-Second Engine Latency Metrics
   server.get('/api/v1/operations/metrics', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const rawOrders = db.query(
       `SELECT confirmation_time_ms, initiation_time_ms, webhook_delivery_time_ms, status 
@@ -85,7 +85,7 @@ export function registerOperationsRoutes(server, ctx) {
   // 2. GET /api/v1/operations/alerts — Active system alerts
   server.get('/api/v1/operations/alerts', async (req, res) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     const alerts = alertRepo.listActive();
     return HttpServer.json(res, 200, { alerts });
@@ -94,7 +94,7 @@ export function registerOperationsRoutes(server, ctx) {
   // 3. POST /api/v1/operations/alerts/:id/ack — Acknowledge alert
   server.post('/api/v1/operations/alerts/:id/ack', async (req, res, params) => {
     const merchantId = getMerchantId(req);
-    if (!merchantId) return HttpServer.json(res, 401, { error: 'Unauthorized' });
+    if (!merchantId) return HttpServer.json(res, 400, { error: 'merchantId required: send X-Merchant-Id or a valid merchant API key', code: 'MERCHANT_SCOPE_REQUIRED' });
 
     alertRepo.acknowledge(params.id);
     return HttpServer.json(res, 200, { acknowledged: true });

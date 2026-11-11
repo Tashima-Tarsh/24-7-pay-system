@@ -140,7 +140,7 @@ export function registerManualVerificationRoutes(server, ctx) {
       }
 
       // Start background verification job (checks bank observer every 30s for 15 min)
-      startVerificationJob(paymentId, utr, session.amountPaise, session.receivingAccountId, db, obsRepo, sessionRepo, webhookEngine);
+      startVerificationJob(server, paymentId, utr, session.amountPaise, session.receivingAccountId, db, obsRepo, sessionRepo, webhookEngine);
 
       return HttpServer.json(res, 200, {
         paymentId,
@@ -156,7 +156,7 @@ export function registerManualVerificationRoutes(server, ctx) {
   });
 
   // Background verification job
-  function startVerificationJob(paymentId, utr, amountPaise, receivingAccountId, db, obsRepo, sessionRepo, webhookEngine) {
+  function startVerificationJob(server, paymentId, utr, amountPaise, receivingAccountId, db, obsRepo, sessionRepo, webhookEngine) {
     const MAX_ATTEMPTS = 30; // 30 attempts × 30s = 15 minutes
     const INTERVAL_MS = 30000;
     let attempts = 0;
@@ -165,13 +165,17 @@ export function registerManualVerificationRoutes(server, ctx) {
       attempts++;
 
       try {
-        // Check if bank observer (Gmail/SMS) has confirmed this UTR
+        // Check if bank observer (Gmail/SMS) has confirmed this UTR for THIS payment's receiving
+        // account and amount. A UTR alone is not enough: UTRs are short and can collide across
+        // merchants, so matching on the reference only would settle the wrong payment.
         const bankConfirmation = db.queryOne(
           `SELECT id FROM payment_observations
            WHERE bank_reference_number = ?
+             AND receiving_account_id = ?
+             AND amount_paise = ?
              AND source IN ('GMAIL', 'SMS_GATEWAY', 'PROVIDER_WEBHOOK', 'BANK_H2H_POLL')
            LIMIT 1`,
-          [utr]
+          [utr, receivingAccountId, Number(amountPaise)]
         );
 
         if (bankConfirmation) {
@@ -190,14 +194,14 @@ export function registerManualVerificationRoutes(server, ctx) {
 
           // Broadcast SSE for real-time frontend update
           try {
-            if (server && typeof server.broadcastSse === 'function') {
-              server.broadcastSse(paymentId, 'status_change', {
-                status: PaymentStatus.SUCCESS,
-                verificationTag: `Bank-verified UTR ${utr}`,
-                upiTransactionReference: utr
-              });
-            }
-          } catch {}
+            server.broadcastSse(paymentId, 'status_change', {
+              status: PaymentStatus.SUCCESS,
+              verificationTag: `Bank-verified UTR ${utr}`,
+              upiTransactionReference: utr
+            });
+          } catch (sseErr) {
+            console.warn('[manual-verify] SSE broadcast failed:', sseErr.message);
+          }
 
           if (webhookEngine) {
             const updated = sessionRepo.findById(paymentId);
@@ -221,13 +225,13 @@ export function registerManualVerificationRoutes(server, ctx) {
 
           // Broadcast SSE for failed verification
           try {
-            if (server && typeof server.broadcastSse === 'function') {
-              server.broadcastSse(paymentId, 'status_change', {
-                status: PaymentStatus.FAILED,
-                verificationTag: `Manual UTR ${utr} not confirmed by bank within 15 min`
-              });
-            }
-          } catch {}
+            server.broadcastSse(paymentId, 'status_change', {
+              status: PaymentStatus.FAILED,
+              verificationTag: `Manual UTR ${utr} not confirmed by bank within 15 min`
+            });
+          } catch (sseErr) {
+            console.warn('[manual-verify] SSE broadcast failed:', sseErr.message);
+          }
 
           if (webhookEngine) {
             const updated = sessionRepo.findById(paymentId);

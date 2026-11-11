@@ -69,7 +69,9 @@ export function authGuard(req, res, pathname, url) {
     presented = url.searchParams.get('token') || '';
   }
 
-  const ok = presented && safeEqual(presented, getAdminToken());
+  const ok = presented && (() => {
+    try { return safeEqual(presented, getAdminToken()); } catch { return false; }
+  })();
   if (ok) return false;
 
   HttpServer.json(res, 401, { error: 'Unauthorized', code: 'AUTH_REQUIRED' });
@@ -79,5 +81,10 @@ export function authGuard(req, res, pathname, url) {
 /** True only when the request carries the admin token. */
 export function isAdminRequest(req) {
   const presented = bearerToken(req);
-  return Boolean(presented) && safeEqual(presented, getAdminToken());
+  if (!presented) return false;
+  try {
+    return safeEqual(presented, getAdminToken());
+  } catch {
+    return false;
+  }
 }

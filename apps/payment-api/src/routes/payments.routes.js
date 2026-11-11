@@ -1,13 +1,15 @@
 import rateLimit from 'express-rate-limit';
 import {enforcePaymentControls} from '../payment-controls.js';
-import { HttpServer } from '../server.js';
+import { HttpServer, resolveClientIp } from '../server.js';
 import { toPaise, toRupeesString, resolveRuntimeUrls, PaymentStatus, safeEqual, maskPhone, maskEmail, generateCustomerId, isValidVpa } from '@youpi/common';
 import { isTerminalStatus, toPublicOutcome, PaiseOffsetAllocator } from '@youpi/core';
 import { isAdminRequest } from '../auth-guard.js';
 
 const DEFAULT_MERCHANT_ID = '00000000-0000-0000-0000-000000000001';
 
-const clientIp = (req) => (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1').toString().replace(/^::ffff:/, '') || '127.0.0.1';
+// Per-IP key for limiter runs through the trusted resolver: a client-supplied X-Forwarded-For
+// must not be able to mint a fresh rate-limit bucket per request.
+const clientIp = (req) => resolveClientIp(req) || '127.0.0.1';
 
 const paymentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -517,6 +519,20 @@ export function registerPaymentRoutes(server, ctx) {
     const session = ctx.sessionRepo.findById(params.id);
     if (!session) {
       HttpServer.json(res, 404, { error: `Payment session not found: ${params.id}` });
+      return;
+    }
+
+    // A payment id is not a credential. Merchant/admin callers (or the bound device that owns an
+    // already-bound session) only; an unbound session stays readable so the checkout page can stream.
+    const requestingDeviceId = req.headers['x-device-id'] || req.query?.deviceId || null;
+    const allowed = isPaymentOwner(req, session, ctx)
+      || !session.deviceId
+      || requestingDeviceId === session.deviceId;
+    if (!allowed) {
+      HttpServer.json(res, 409, {
+        error: 'DUPLICATE_SESSION_DETECTED',
+        message: 'This payment session is bound to another device.'
+      });
       return;
     }
 

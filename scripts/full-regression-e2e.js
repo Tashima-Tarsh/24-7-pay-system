@@ -148,7 +148,7 @@ async function runFullRegression() {
     });
     assert.equal(
       intentP1,
-      'intent://pay?pa=9876543210%40axl&pn=Demo%20Store%20Merchant&am=100.00&cu=INR&tr=REG-ORD-001&tn=Payment&mc=5411#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;S.browser_fallback_url=https%3A%2F%2Fyourdomain.com%2Fstatus%3Fref%3DREG-ORD-001;end'
+      'intent://pay?pa=9876543210%40axl&pn=Demo%20Store%20Merchant&am=100.00&cu=INR&tr=REG-ORD-001&tn=Payment#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;S.browser_fallback_url=https%3A%2F%2Fyourdomain.com%2Fstatus%3Fref%3DREG-ORD-001;end'
     );
     console.log('  [✓] Payment 1 Intent URI:', intentP1);
 

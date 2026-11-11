@@ -92,54 +92,42 @@ export function verifyHmac(data, secret, expectedSignature) {
 }
 
 /**
- * Verifies a Svix-style webhook payload with timestamp-based replay protection.
- * Expected headers: X-Gateway-Delivery-Id, X-Gateway-Timestamp, X-Gateway-Signature.
- * Signature = HMAC-SHA256(secret, deliveryId + "." + timestamp + "." + rawBody).
+ * Verifies a webhook payload produced by signWebhookPayload / WebhookEngine.
+ *
+ * The signature covers the raw body ONLY — that is what every signer in this repo emits
+ * (WebhookEngine, upi-intent, webhooks.routes, upi-simple, merchant SDK). This function used to
+ * verify a Svix-style `id.timestamp.body` string, which no signer produced, so it rejected every
+ * genuine delivery. Authenticity therefore comes from the body HMAC; replay protection comes from
+ * deduplicating the delivery id (pass `seenIds`).
+ *
  * @param {string} rawBody - Raw request body string
  * @param {string} secret - Merchant webhook secret
- * @param {Object} headers - { 'x-gateway-delivery-id': string, 'x-gateway-timestamp': string, 'x-gateway-signature': string }
- * @param {Object} [opts] - { toleranceSeconds?: number, seenIds?: Set<string> }
- * @returns {{ valid: boolean, reason?: string, deliveryId?: string, timestamp?: number }}
+ * @param {Object} headers - { 'x-gateway-delivery-id': string, 'x-gateway-signature': string }
+ * @param {Object} [opts] - { seenIds?: Set<string> }
+ * @returns {{ valid: boolean, reason?: string, deliveryId?: string }}
  */
 export function verifyWebhookPayload(rawBody, secret, headers, opts = {}) {
-  const toleranceSeconds = opts.toleranceSeconds !== undefined ? opts.toleranceSeconds : 300; // 5 minutes
-  const now = Math.floor(Date.now() / 1000);
-
   const deliveryId = headers['x-gateway-delivery-id'] || headers['X-Gateway-Delivery-Id'];
-  const timestampStr = headers['x-gateway-timestamp'] || headers['X-Gateway-Timestamp'];
   const signature = headers['x-gateway-signature'] || headers['X-Gateway-Signature'];
 
-  if (!deliveryId || !timestampStr || !signature) {
-    return { valid: false, reason: 'Missing required webhook headers' };
+  if (!signature || typeof signature !== 'string') {
+    return { valid: false, reason: 'Missing X-Gateway-Signature header' };
   }
-
-  const timestamp = Number(timestampStr);
-  if (!Number.isFinite(timestamp)) {
-    return { valid: false, reason: 'Invalid timestamp' };
+  if (!signature.startsWith('sha256=')) {
+    return { valid: false, reason: 'Unsupported signature scheme' };
   }
-
-  // Replay protection: reject timestamps outside tolerance window
-  const ageSeconds = Math.abs(now - timestamp);
-  if (ageSeconds > toleranceSeconds) {
-    return { valid: false, reason: 'Timestamp outside tolerance window' };
-  }
-
-  // Idempotency: reject duplicate delivery IDs
-  if (opts.seenIds && opts.seenIds.has(deliveryId)) {
-    return { valid: false, reason: 'Duplicate delivery ID' };
-  }
-
-  // Signature verification: Svix-style signed content = id.timestamp.body
-  const signedContent = `${deliveryId}.${timestampStr}.${rawBody}`;
-  if (!verifyHmac(signedContent, secret, signature)) {
+  if (!verifyHmac(rawBody, secret, signature.slice('sha256='.length))) {
     return { valid: false, reason: 'Invalid signature' };
   }
 
+  // Replay protection is delivery-id idempotency: a duplicated id must be rejected by the caller.
   if (opts.seenIds) {
+    if (!deliveryId) return { valid: false, reason: 'Missing X-Gateway-Delivery-Id header' };
+    if (opts.seenIds.has(deliveryId)) return { valid: false, reason: 'Duplicate delivery ID' };
     opts.seenIds.add(deliveryId);
   }
 
-  return { valid: true, deliveryId, timestamp };
+  return { valid: true, deliveryId };
 }
 
 /**

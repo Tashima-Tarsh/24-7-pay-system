@@ -4,6 +4,7 @@ import {
   toRupeesString,
   buildUpiPaymentUri,
   buildUpiIntentUri,
+  toP2pIntentUri,
   PaymentStatus,
   PaymentMethod,
   generateHmac,
@@ -279,7 +280,8 @@ export function registerUpiIntentRoutes(server, ctx) {
         {
           payeeVpa,
           payeeName,
-          mcc: profile ? profile.mcc : '5411',
+          // Only declare a merchant category when the profile really has one.
+          mcc: profile ? profile.mcc : undefined,
           orgid: profile ? profile.orgid : undefined,
           intentSignKeyPem: profile ? profile.intentSignKeyPem : undefined
         },
@@ -526,7 +528,7 @@ export function registerUpiIntentRoutes(server, ctx) {
         `24/7 Pay ${upiReference}`,
         checkoutUrl
       );
-      const deepLinkUniversal = built.uri;
+      const deepLinkUniversal = built.signed ? built.uri : toP2pIntentUri(built.uri);
 
       // Build the intent_android (intent://) — forces Android OS to handle return URL.
       const intentAndroid = buildUpiIntentUri({

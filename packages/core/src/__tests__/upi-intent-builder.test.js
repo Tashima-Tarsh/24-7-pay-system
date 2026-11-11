@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUpiUri, buildPackageIntents } from '../upi-intent-builder.js';
+import { buildUpiUri, buildPackageIntent, buildPackageIntents } from '../upi-intent-builder.js';
 
 const baseProfile = {
   payeeVpa: 'merchant@hdfcbank',
@@ -72,8 +72,15 @@ test('AC-2 / AC-17: intent contains url= with the checkout URL encoded (before m
 test('package intents: four packages wrap the canonical URI', () => {
   const { uri } = buildUpiUri(baseProfile, 5000n, 'PAY-9', 'note');
   const intents = buildPackageIntents(uri);
-  assert.equal(intents.gpay, `intent://pay?${uri.split('?')[1]}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`);
-  assert.equal(intents.phonepe, `intent://pay?${uri.split('?')[1]}#Intent;scheme=upi;package=com.phonepe.app;end`);
-  assert.equal(intents.paytm, `intent://pay?${uri.split('?')[1]}#Intent;scheme=upi;package=net.one97.paytm;end`);
-  assert.equal(intents.bhim, `intent://pay?${uri.split('?')[1]}#Intent;scheme=upi;package=in.org.npci.upiapp;end`);
+  for (const intent of Object.values(intents)) {
+    assert.match(intent, /^intent:\/\/pay\?/);
+    assert.doesNotMatch(intent, /[?&](?:mc|tid|url|mode)=/);
+    assert.match(intent, /;end$/);
+  }
+});
+
+test('P2P package intent has exact safe shape, %20 spacing and fallback', () => {
+  const uri = 'upi://pay?pa=user%40okaxis&pn=Demo+Store&am=10.00&cu=INR&tr=ORDER1&tid=ORDER1&tn=Order+payment&mc=5411&mode=02&url=https%3A%2F%2Fpay.example';
+  const intent = buildPackageIntent(uri, 'com.google.android.apps.nbu.paisa.user', 'https://pay.example/checkout/ORDER1');
+  assert.equal(intent, 'intent://pay?pa=user%40okaxis&pn=Demo%20Store&am=10.00&cu=INR&tr=ORDER1&tn=Order%20payment#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;S.browser_fallback_url=https%3A%2F%2Fpay.example%2Fcheckout%2FORDER1;end');
 });

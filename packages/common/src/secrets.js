@@ -25,16 +25,28 @@ export function resolveSecret(name, envVar) {
   const file = path.join(SECRETS_DIR, name);
   let value = '';
   try { value = fs.readFileSync(file, 'utf8').trim(); } catch {}
-  if (!value) {
-    fs.mkdirSync(SECRETS_DIR, { recursive: true });
-    const fresh = crypto.randomBytes(32).toString('hex');
-    try {
-      fs.writeFileSync(file, fresh, { flag: 'wx', mode: 0o600 });
-      value = fresh;
-    } catch {
-      // Another process created it first: use theirs.
-      value = fs.readFileSync(file, 'utf8').trim();
-    }
+  if (value) {
+    cache.set(name, value);
+    return value;
+  }
+
+  // Production must never mint an instance-local secret: a second replica, or a restart on fresh
+  // storage, would get a different value and silently break auth and blind indexes across nodes.
+  // An already-provisioned file is fine (that is shared state); generating one is not.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `[secrets] ${envVar || name} must be set in production; refusing to generate an instance-local secret.`
+    );
+  }
+
+  fs.mkdirSync(SECRETS_DIR, { recursive: true });
+  const fresh = crypto.randomBytes(32).toString('hex');
+  try {
+    fs.writeFileSync(file, fresh, { flag: 'wx', mode: 0o600 });
+    value = fresh;
+  } catch {
+    // Another process created it first: use theirs.
+    value = fs.readFileSync(file, 'utf8').trim();
   }
   cache.set(name, value);
   return value;
@@ -63,7 +75,12 @@ export const getInternalServiceToken = () => resolveSecret('internal_service_tok
 export function isInternalServiceRequest(req) {
   const match = /^Bearer\s+(.+)$/i.exec(req?.headers?.['authorization'] || '');
   const presented = (match ? match[1].trim() : '') || (req?.headers?.['x-internal-token'] || '');
-  return Boolean(presented) && safeEqual(presented, getInternalServiceToken());
+  if (!presented) return false;
+  try {
+    return safeEqual(presented, getInternalServiceToken());
+  } catch {
+    return false; // no resolvable token means nothing can prove itself internal
+  }
 }
 
 /** Literal that older builds seeded into databases; must never be trusted. */

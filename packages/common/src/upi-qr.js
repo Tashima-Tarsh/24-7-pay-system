@@ -5,7 +5,7 @@
  * All features are 100% free (Government of India mandates 0% MDR on UPI since 2020).
  */
 import { generateQrSvg } from '@youpi/core';
-import { normalizePayeeName } from './upi.js';
+import { normalizePayeeName, toP2pIntentQuery } from './upi.js';
 
 /**
  * Builds a standard NPCI UPI payment URI.
@@ -58,6 +58,13 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
  * Builds app-specific UPI deep links from a UPI URI.
  * These links open the payment directly in the respective UPI app.
  *
+ * The handoff uses the P2P-safe parameter set. A merchant VPA is fine too, because the
+ * P2P-safe set is a strict subset: `pa`, `pn`, `am`, `cu`, `tr`, `tn`. Declaring `mc`,
+ * `tid` or `url` for a personal UPI ID is what makes GPay/PhonePe open the app, show the
+ * payee and then fail the payment ("payment failed", "receiver's account is inactive",
+ * "exceeds the limit set by your bank"). The QR keeps its full payload because scanning
+ * does not apply the merchant checks; the intent must not claim to be a merchant.
+ *
  * @param {string} upiUri - Full upi://pay URI from buildUpiPaymentUri()
  * @param {string} [fallbackUrl] - HTTPS URL where the UPI app redirects after payment.
  *                                 Without this, GPay/PhonePe cannot return to checkout
@@ -78,20 +85,16 @@ export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
     }
   }
 
-  // Build query params, stripping mode (optional UPI param that may cause GPay/PhonePe rejection).
-  // QR codes keep their mode; intent links don't need it.
-  const queryParams = new URLSearchParams(upiUri.slice('upi://pay?'.length));
-  queryParams.delete('mode');
-  const query = queryParams.toString();
-
+  const query = toP2pIntentQuery(upiUri);
   const intentBase = `intent://pay?${query}#Intent;scheme=upi;`;
+  const p2pUri = `upi://pay?${query}`;
 
   const links = {
     phonepe: `${intentBase}package=com.phonepe.app;end`,
     gpay: `${intentBase}package=com.google.android.apps.nbu.paisa.user;end`,
     paytm: `${intentBase}package=net.one97.paytm;end`,
-    bhim: upiUri, // BHIM uses upi:// directly
-    upi: upiUri // Generic fallback
+    bhim: p2pUri, // BHIM uses upi:// directly
+    upi: p2pUri // Generic fallback
   };
 
   // S.browser_fallback_url is MANDATORY for GPay/PhonePe intent callbacks.

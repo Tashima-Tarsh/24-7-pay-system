@@ -22,6 +22,25 @@ function hidePayment(){
   for(const id of ['upi-open','gpay-open','phonepe-open','paytm-open','bhim-open']){const el=$(id);if(el){el.removeAttribute('href');el.onclick=null;}}
   $('app-actions').hidden=true;$('timer').hidden=true;
 }
+async function saveQr(){
+  const image=$('qr');
+  if(!image||!image.src||image.hidden)return;
+  try{
+    const loaded=new Image();
+    loaded.src=image.src;
+    await loaded.decode();
+    const canvas=document.createElement('canvas');
+    canvas.width=800;canvas.height=800;
+    const context=canvas.getContext('2d');
+    if(!context)throw Error('Canvas unavailable');
+    context.fillStyle='#fff';context.fillRect(0,0,800,800);context.drawImage(loaded,0,0,800,800);
+    const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(Error('Could not create QR image')),'image/png'));
+    const href=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=href;link.download='upi-payment-'+String(paymentId||'qr').replace(/[^A-Za-z0-9_-]/g,'-')+'.png';
+    document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(href);
+    $('save-qr').textContent='QR saved';setTimeout(()=>$('save-qr').textContent='Save QR to phone',1800);
+  }catch{$('save-qr').textContent='Could not save — take a screenshot';}
+}
 function sessionDescription(data){
  const status=String(data.status||'UNKNOWN').toUpperCase();
  if(status==='QUEUED'||status==='INITIATED')return['Your payment is being prepared','A payment slot is not ready yet. Please wait for the correct receiving details.',''];
@@ -95,9 +114,18 @@ function render(data){
     }).catch(()=>{});
   }
   const links=data.upiDeepLinks||{};
-  const queryParams=new URLSearchParams(verifiedUpi.slice('upi://pay?'.length));
-  queryParams.delete('mode'); // mode is optional UPI param; omit for intent links
-  const query=queryParams.toString();
+  // Android hand-off must not claim to be a merchant payment. mc/tid/url/mode are
+  // merchant declarations; a personal VPA has no PSP registration for them, so the
+  // app opens, shows the payee and then fails the payment. Keep only the P2P-safe set.
+  // Spaces are %20 (not the form-encoded '+' URLSearchParams emits) because the app
+  // decodes percent escapes, not form encoding.
+  const intentParams=new URLSearchParams();
+  const sourceParams=new URLSearchParams(verifiedUpi.slice('upi://pay?'.length));
+  for(const key of ['pa','pn','am','cu','tr','tn']){
+    const value=sourceParams.get(key);
+    if(value)intentParams.set(key,value);
+  }
+  const query=intentParams.toString().replace(/\+/g,'%20');
   // Fallback URL: GPay/PhonePe redirect here after payment so checkout can poll status.
   // Use /checkout/<paymentId> so the fallback always lands on the current order,
   // even when the page was loaded via /checkout?id=... query form.
@@ -106,7 +134,7 @@ function render(data){
   const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';S.browser_fallback_url='+fallbackUrl+';end';
   const iosUri=scheme=>scheme+query;
   const sources=[
-    ['upi-open',verifiedUpi,'upi://pay?'],
+    ['upi-open','upi://pay?'+query,'upi://pay?'],
     ['gpay-open',android?(safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
     ['phonepe-open',android?(safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
     ['paytm-open',android?(safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
@@ -140,7 +168,7 @@ function render(data){
         const uri=intentById[this.id];
         if(uri){
           appHandoff=true;
-          display('app-handoff-note','Complete the payment in your UPI app, then return here. Awaiting verified bank/provider confirmation; do not pay twice.');
+           display('app-handoff-note','If the app rejects this personal UPI ID, save the QR and use Scan QR → gallery. Return here after payment; do not pay twice.');
           location.href=uri;
         }
       };
@@ -197,6 +225,7 @@ document.addEventListener('visibilitychange',refreshAfterAppReturn);
 window.addEventListener('pageshow',refreshAfterAppReturn);
 window.addEventListener('focus',refreshAfterAppReturn);
 $('copy-vpa').addEventListener('click',async()=>{if(!current?.payeeVpa)return;try{await navigator.clipboard.writeText(current.payeeVpa);$('copy-vpa').textContent='Copied';setTimeout(()=>$('copy-vpa').textContent='Copy UPI ID',1800);}catch{$('copy-vpa').textContent='Select and copy';}});
+$('save-qr').addEventListener('click',saveQr);
 $('retry').addEventListener('click',refresh);
 if(!paymentId){$('loading').hidden=true;$('checkout-content').hidden=false;hidePayment();statusLine('Payment link missing','Please use the payment link shared by your merchant.','failed');}
 else{

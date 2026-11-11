@@ -32,6 +32,11 @@ export function toPaise(rupees) {
   if (totalPaise <= 0n) {
     throw new Error(`Monetary amount must be strictly greater than 0: ${rupees}`);
   }
+  // Everything downstream stores paise as a JS number in places; beyond 2^53 that silently loses
+  // precision. Reject it at the boundary instead of writing a rounded amount to the ledger.
+  if (totalPaise > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`Monetary amount is too large: ${rupees}`);
+  }
 
   return totalPaise;
 }
