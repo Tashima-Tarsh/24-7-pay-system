@@ -69,7 +69,7 @@ test('Platform and merchant receive distinct premium studio navigation and merch
  assert.match(app,/canCreate=Boolean\(!data\.user\?\.platform/);
  assert.match(app,/canManageVpa=Boolean\(!data\.user\?\.platform/);
  assert.match(upi,/get<\{accounts:ReceivingAccount\[\]\}>\('\/receiving-accounts'/);
- assert.match(upi,/addReceivingUpi\(vpa,name,confirmOwnership\)/);
+ assert.match(upi,/addReceivingUpi\(vpa,name,confirmOwnership,accountType\)/);
  assert.match(upi,/setReceivingUpiActive\(account\.id,next\)/);
  assert.match(upi,/window\.confirm/);
  assert.match(upi,/merchant OWNER or ADMIN/);
