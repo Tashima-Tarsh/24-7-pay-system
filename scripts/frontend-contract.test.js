@@ -86,3 +86,17 @@ test('Render-served checkout keeps a stable return URL and refreshes on browser 
   assert.doesNotMatch(js, /location\.href=uri/);
   assert.doesNotMatch(js, /\/payment-done['"]/);
 });
+
+test('personal checkout has tappable generic UPI QR, merchant checkout has branded app intents',()=>{
+ const html=fs.readFileSync('public/checkout-next.html','utf8');
+ const js=fs.readFileSync('public/assets/247-checkout.js','utf8');
+ assert.match(html,/id="qr-open-upi"/);
+ assert.match(html,/id="branded-app-grid"/);
+ assert.match(html,/id="qr-mode-instructions"/);
+ assert.match(js,/data\.upiMode==='NON_MERCHANT'/);
+ assert.match(js,/personalUpi&&mobile/);
+ assert.match(js,/qrTap\.href=genericUpi/);
+ assert.match(js,/\$\('branded-app-grid'\)\.hidden=personalUpi/);
+ assert.match(js,/\['upi-open',genericUpi,'upi:\/\/pay\?'\]/);
+ assert.doesNotMatch(js,/qrTap\.onclick\s*=.*location/);
+});
