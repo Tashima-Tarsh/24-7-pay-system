@@ -17,7 +17,7 @@ import {enforcePaymentControls} from '../payment-controls.js';
 import { HttpServer, resolveClientIp } from '../server.js';
 import { PaymentStatus } from '@youpi/common';
 import crypto from 'node:crypto';
-import { resolveSecret, safeEqual, toPaise, toRupeesString, buildUpiUri, validateOutboundWebhookUrl } from '@youpi/common';
+import { resolveSecret, safeEqual, toPaise, toRupeesString, buildUpiUri, validateOutboundWebhookUrl, isRetiredReceivingVpa } from '@youpi/common';
 import { isIP } from 'node:net';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -112,7 +112,7 @@ export function registerDynamoPayRoutes(server, ctx) {
   }
   function collectionResponse(session){
     const account=session.metadata?.receivingAccountSnapshot||{};
-    const intent=session.status===PaymentStatus.ACTIVE?buildUpiUri({payeeVpa:account.upiId,payeeName:account.payeeName||'Dynamo Pay',amountPaise:session.amountPaise,transactionRef:session.orderId}):null;
+    const intent=session.status===PaymentStatus.ACTIVE&&!isRetiredReceivingVpa(account.upiId)?buildUpiUri({payeeVpa:account.upiId,payeeName:account.payeeName||'Dynamo Pay',amountPaise:session.amountPaise,transactionRef:session.orderId}):null;
     return {transaction:session.id,uniquetransactionid:session.orderId,amount:toRupeesString(session.amountPaise),currency:'INR',status:session.status==='SUCCESS'?'SUCCESS':session.status==='FAILED'||session.status==='EXPIRED'||session.status==='CANCELLED'?'FAILED':'PENDING',internalStatus:session.status,intent,qr:intent?publicOrigin()+'/checkout/'+session.id+'/qr.svg':null,checkoutUrl:publicOrigin()+'/checkout/'+session.id,datetime:session.createdAt,expiresAt:session.expiresAt||null,payeeVpa:account.upiId||null,payeeName:account.payeeName||null,platform:'dynamo-pay'};
   }
   const aliases={'/v1/dynamo/collect/upi':'/v1.0/collect/upi','/v1/dynamo/checkstatus':'/v1.0/payin/checkstatus','/v1/dynamo/ifsc/:ifsc':'/v1.0/ifsc/:ifsc','/v1/dynamo/wallet':'/v1.0/wallet','/v1/dynamo/merchant/webhook':'/v1.0/merchant/webhook'};
