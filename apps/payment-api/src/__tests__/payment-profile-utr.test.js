@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { Database, runMigrations, MerchantRepository, ReceivingAccountRepository, PpMerchantPaymentProfileRepository, PaymentSessionRepository } from '@youpi/db';
 import { startServer } from '../index.js';
-import { PaymentStatus } from '@youpi/common';
+import { PaymentStatus, isValidVpa } from '@youpi/common';
 
 function request(baseUrl, path, options = {}) {
   return new Promise((resolve, reject) => {
@@ -204,4 +204,54 @@ test('platform payment checkout keeps the VPA captured when the order was create
   assert.equal(state.body.payeeVpa,receiver.upiId);
   assert.equal(new URL(state.body.upiUri).searchParams.get('pa'),receiver.upiId);
  }finally{await server.close();db.close();}
+});
+
+test('RBL receiving VPA is the same in checkout, QR and Android app intents despite stale profile', async () => {
+  const vpa = 'reportid4705.arthpay@rbl';
+  assert.equal(isValidVpa(vpa), true, 'RBL merchant VPA must pass syntax validation');
+  const db = new Database({ inMemory: true });
+  runMigrations(db);
+  const merchants = new MerchantRepository(db);
+  const accounts = new ReceivingAccountRepository(db);
+  const profiles = new PpMerchantPaymentProfileRepository(db);
+  const sessions = new PaymentSessionRepository(db);
+  const merchant = merchants.getDefault();
+  const account = accounts.create({
+    merchantId: merchant.id, upiId: vpa, payeeName: 'Arthpay',
+    isActive: true, isMerchantEnabled: true
+  });
+  profiles.upsert(merchant.id, {
+    payeeVpa: 'obsolete-payee@okbank', payeeName: 'Old Payee',
+    payeeEmail: 'billing@example.test', mcc: '5411', isActive: 1
+  });
+  const session = sessions.create({
+    merchantId: merchant.id, receivingAccountId: account.id,
+    orderId: 'RBL-CHECKOUT-CONSISTENCY', amountPaise: 100n, currency: 'INR',
+    method: 'UPI', status: PaymentStatus.ACTIVE,
+    metadata: { receivingAccountSnapshot: {
+      id: account.id, upiId: vpa, payeeName: 'Arthpay', isMerchantEnabled: true
+    }}
+  });
+  const server = await startServer(6198, db);
+  try {
+    const base = 'http://localhost:' + server.port;
+    const state = await request(base, '/api/v1/checkout/' + session.id + '/state');
+    assert.equal(state.status, 200);
+    assert.equal(state.body.payeeVpa, vpa);
+    assert.equal(state.body.copyVpa, vpa);
+    assert.equal(state.body.payeeName, 'Arthpay');
+    const qrParams = new URL(state.body.upiUri).searchParams;
+    assert.equal(qrParams.get('pa'), vpa);
+    assert.equal(qrParams.get('am'), '1.00');
+    for (const app of ['gpay', 'phonepe']) {
+      const link = state.body.upiDeepLinks[app];
+      assert.ok(link?.startsWith('intent://pay?'), app + ' intent is missing');
+      const params = new URLSearchParams(link.split('?')[1].split('#Intent')[0]);
+      assert.equal(params.get('pa'), vpa, app + ' destination differs from QR');
+      assert.equal(params.get('am'), qrParams.get('am'), app + ' amount differs from QR');
+    }
+  } finally {
+    await server.close();
+    db.close();
+  }
 });
