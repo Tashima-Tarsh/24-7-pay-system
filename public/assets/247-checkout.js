@@ -154,37 +154,19 @@ function render(data){
   ];
   if(mobile){
     $('app-actions').hidden=false;
-    const intentById={};
     for(const [id,url,prefix] of sources){
       const el=$(id),allowed=safeUri(url,prefix);
       if(allowed){
         el.href=allowed;
-        intentById[id]=allowed;
         el.hidden=false;
       } else {
         el.hidden=true;
         el.removeAttribute('href');
       }
     }
-    // One assignable onclick handler per element guarantees a user-gesture
-    // navigation to the intent URI. Android Chrome does not always honor
-    // intent:// in plain <a href> on its own; an explicit location.href
-    // inside a click handler (triggered by the user's tap) works reliably.
-    // Assigning onclick (not addEventListener) prevents duplicate handlers
-    // from stacking when the checkout re-renders on poll/SSE updates.
-    for(const [id] of sources){
-      const el=$(id);
-      if(!el||!intentById[id])continue;
-      el.onclick=function(ev){
-        ev.preventDefault();
-        const uri=intentById[this.id];
-        if(uri){
-          appHandoff=true;
-           display('app-handoff-note','If the app rejects this personal UPI ID, save the QR and use Scan QR → gallery. Return here after payment; do not pay twice.');
-          location.href=uri;
-        }
-      };
-    }
+    // Keep native <a href="intent://..."> navigation on a synchronous user tap.
+    // Chrome documents link gestures as the supported app-launch route.
+    // The delegated handler below records the attempt only; it never settles an order.
     if(appHandoff){
       display('app-handoff-note','UPI app opened or selected. Return here after payment; waiting for trusted confirmation. Do not pay twice.');
     }
@@ -228,7 +210,7 @@ $('app-actions').addEventListener('click',event=>{
  const target=event.target instanceof Element?event.target.closest('a[href]'):null;
  if(!target||!$('app-actions').contains(target)||!current||terminal)return;
  appHandoff=true;
- display('app-handoff-note','Complete the payment in your UPI app, then return here. Awaiting verified bank/provider confirmation; do not pay twice.');
+ display('app-handoff-note','If the selected app does not open, use Any UPI App or copy the payee UPI ID. QR images imported from a phone gallery may be limited to ₹2,000; live camera scan is a different flow. Do not pay twice.');
 });
 function refreshAfterAppReturn(){
  if(appHandoff&&!terminal&&document.visibilityState==='visible')void refresh();
