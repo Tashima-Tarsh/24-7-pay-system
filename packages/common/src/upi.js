@@ -1,5 +1,11 @@
 import { toRupeesString } from './money.js';
 
+// A previously bundled, real-world VPA is explicitly retired from this product.
+// This is a revocation guard, never a default payee or a test payment destination.
+export function isRetiredReceivingVpa(value) {
+  return typeof value === 'string' && value.trim().toLowerCase() === '9082843142@slc';
+}
+
 /**
  * Normalizes a payee name for UPI: NFC normalization, strips control chars,
  * collapses whitespace, enforces 1–50 character limit. Preserves Indian
