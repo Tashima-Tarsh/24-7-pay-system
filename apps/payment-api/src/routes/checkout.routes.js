@@ -728,7 +728,7 @@ export function registerCheckoutRoutes(server, ctx) {
 
     // Send current state immediately so the client renders without waiting
     const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa || session.payeeVpa;
-    const upiUri = session.status === PaymentStatus.ACTIVE && payeeVpa
+    const upiUri = session.status === PaymentStatus.ACTIVE && payeeVpa && !isRetiredReceivingVpa(payeeVpa)
       ? buildUpiPaymentUri({
           vpa:payeeVpa,name:session.metadata?.receivingAccountSnapshot?.payeeName||'Merchant',
           amount:Number(toRupeesString(session.amountPaise)),
