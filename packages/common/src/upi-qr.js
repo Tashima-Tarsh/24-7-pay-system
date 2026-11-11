@@ -30,13 +30,17 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
   // Sanitize payee name: NFC-normalized, capped at 50 chars. URLSearchParams handles encoding.
   const safeName = normalizePayeeName(name);
   params.set('pn', safeName);
-  if (merchantCode) params.set('mc', merchantCode.trim());
-  // mode: 04 = fixed amount (user cannot edit), 02 = editable amount
-  params.set('mode', mode === 'fixed' ? '04' : '02');
+  // A personal P2P VPA must not receive merchant-only request hints.
+  // Retain the existing merchant-specific fields only for an explicit MCC.
+  const hasMerchantCode = /^\d{4}$/.test(String(merchantCode || ''));
+  if (hasMerchantCode) {
+    params.set('mc', String(merchantCode).trim());
+    params.set('mode', mode === 'fixed' ? '04' : '02');
+  }
   if (orderId) {
     const safeRef = String(orderId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);
     params.set('tr', safeRef);
-    params.set('tid', safeRef);
+    if (hasMerchantCode) params.set('tid', safeRef);
   }
   if (note) {
     const safeNote = String(note)
@@ -66,9 +70,8 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
  * does not apply the merchant checks; the intent must not claim to be a merchant.
  *
  * @param {string} upiUri - Full upi://pay URI from buildUpiPaymentUri()
- * @param {string} [fallbackUrl] - HTTPS URL where the UPI app redirects after payment.
- *                                 Without this, GPay/PhonePe cannot return to checkout
- *                                 and the intent is rejected or shows "server error".
+ * @param {string} [fallbackUrl] - Chrome fallback if the target app cannot be launched.
+ *                                 This is NOT a payment-status callback.
  * @returns {Object} Map of app name → deep link URL
  */
 export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
@@ -97,8 +100,8 @@ export function buildUpiPaymentIntentLinks(upiUri, fallbackUrl = null) {
     upi: p2pUri // Generic fallback
   };
 
-  // S.browser_fallback_url is MANDATORY for GPay/PhonePe intent callbacks.
-  // Without it, the app cannot redirect back to checkout after payment.
+  // Chrome's browser_fallback_url is for an unsuccessful app launch,
+  // not confirmation of payment success or failure.
   if (resolvedFallback) {
     const encodedFallback = encodeURIComponent(resolvedFallback);
     for (const app of ['phonepe', 'gpay', 'paytm']) {

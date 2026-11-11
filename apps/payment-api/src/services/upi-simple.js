@@ -159,7 +159,16 @@ export function createUpiSimpleService(ctx) {
             webhookSecret: secret,
             accessToken,
             accessLink: `/merchant/${id}`,
-            apiBaseUrl: process.env.DYNAMO_PUBLIC_URL || 'http://localhost:6100',
+            apiBaseUrl: (() => {
+              const origin = ctx.checkoutBaseUrl || process.env.DYNAMO_PUBLIC_URL ||
+                process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL;
+              if (process.env.NODE_ENV !== 'production') return origin || 'http://localhost:6100';
+              const parsed = new URL(origin);
+              if (parsed.protocol !== 'https:' || /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)) {
+                throw new Error('Hosted UPI API requires a public HTTPS origin');
+              }
+              return parsed.origin;
+            })(),
             createdAt: now()
           };
         });

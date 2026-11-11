@@ -469,7 +469,11 @@ export function registerPollerRoutes(server, ctx) {
     const merchantId = merchant ? merchant.id : (req.query.merchantId || '00000000-0000-0000-0000-000000000001');
 
     // Canonical runtime URL derivation (Part C2)
-    const runtime = resolveRuntimeUrls(merchant?.branding || {});
+    const hostedOrigin = ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL;
+    const runtime = process.env.NODE_ENV === 'production' &&
+      !merchant?.branding?.cloudflareDomain && /^https:\/\//i.test(hostedOrigin || '')
+        ? resolveRuntimeUrls({ envMode: 'hosted', publicOrigin: hostedOrigin })
+        : resolveRuntimeUrls(merchant?.branding || {});
     let baseUrl = runtime.apiUrl;
     if(req.query.gatewayUrl){
       try{

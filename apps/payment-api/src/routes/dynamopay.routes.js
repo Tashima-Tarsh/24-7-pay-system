@@ -92,11 +92,23 @@ export function registerDynamoPayRoutes(server, ctx) {
     return {merchantId:current.id,webhookUrl:current.webhookUrl,ipWhitelist:current.branding?.apiIpWhitelist||[],isActive:true};
   }
   function publicOrigin(){
+    if(process.env.NODE_ENV==='production'){
+      const candidates=[ctx.checkoutBaseUrl,process.env.BASE_CHECKOUT_URL,
+        process.env.PUBLIC_CHECKOUT_URL,process.env.RENDER_EXTERNAL_URL,process.env.DYNAMO_PUBLIC_URL];
+      for(const candidate of candidates){
+        try {
+          const url=new URL(candidate);
+          if(url.protocol==='https:'&&!url.username&&!url.password&&
+              !/^(localhost|127\.0\.0\.1)$/i.test(url.hostname))return url.origin;
+        }catch{}
+      }
+      throw new Error('Hosted Dynamo Pay checkout requires a public HTTPS origin');
+    }
     if(process.env.DYNAMO_PUBLIC_URL)return process.env.DYNAMO_PUBLIC_URL.replace(/\/+$/,'');
     if(process.env.DYNAMO_UNIFIED_GATEWAY==='true'){
       try{const value=fs.readFileSync(new URL('../../../../data/.secrets/quick_tunnel_url',import.meta.url),'utf8').trim();if(/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(value))return value;}catch{}
     }
-    return (process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000').replace(/\/+$/,'');
+    return (ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000').replace(/\/+$/,'');
   }
   function collectionResponse(session){
     const account=session.metadata?.receivingAccountSnapshot||{};

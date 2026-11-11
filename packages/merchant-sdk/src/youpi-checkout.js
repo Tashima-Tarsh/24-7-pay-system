@@ -38,7 +38,7 @@
       scriptUrl = new URL(script.src, window.location.href);
     } catch (e) { }
 
-    const origin = scriptUrl ? scriptUrl.origin : (window.location.protocol + '//' + window.location.hostname + ':7000');
+    const origin = scriptUrl ? scriptUrl.origin : window.location.origin;
 
     return {
       key: script.getAttribute('data-youpi-key') || script.getAttribute('data-key') || script.getAttribute('data-merchant-id') || '',
@@ -94,7 +94,7 @@
      */
     constructor(options = {}) {
       const defaultPortal = isBrowser
-        ? (scriptConfig.portalUrl || (window.location.protocol + '//' + window.location.hostname + ':7000'))
+        ? (scriptConfig.portalUrl || window.location.origin)
         : 'http://localhost:7000';
 
       const defaultApi = isBrowser

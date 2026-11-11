@@ -3,7 +3,12 @@ const found=location.pathname.match(/^\/checkout\/([^/]+)\/?$/);
 const paymentId=found?decodeURIComponent(found[1]):new URLSearchParams(location.search).get('id');
 const android=/Android/i.test(navigator.userAgent);
 const mobile=android||/iPhone|iPad|iPod/i.test(navigator.userAgent);
-let current=null,events=null,polling=null,pollingStartTime=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=false;
+const checkoutReturnUrl=paymentId?new URL('/checkout/'+encodeURIComponent(paymentId),location.origin).href:null;
+const handoffStorageKey=paymentId?'upi-checkout-handoff:'+paymentId:null;
+function getSavedHandoff(){try{return Boolean(handoffStorageKey&&sessionStorage.getItem(handoffStorageKey)==='1');}catch{return false;}}
+let current=null,events=null,polling=null,pollingStartTime=null,loading=false,terminal=false,deadline=0,retryTimer=null,appHandoff=getSavedHandoff();
+function setHandoff(value){appHandoff=Boolean(value);try{if(handoffStorageKey){if(value)sessionStorage.setItem(handoffStorageKey,'1');else sessionStorage.removeItem(handoffStorageKey);}}catch{}}
+function showReturnControls(){const c=$('checkout-return-controls');if(c)c.hidden=!appHandoff;const link=$('checkout-return-link');if(link&&checkoutReturnUrl)link.href=checkoutReturnUrl;}
 const terminalStates=new Set(['SUCCESS','FAILED','EXPIRED','CANCELLED','BLOCKED']);
 const safeUri=(url,prefix)=>typeof url==='string'&&url.startsWith(prefix)&&!(/[\s\u0000-\u001f]/.test(url))?url:null;
 const rupees=value=>{const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n):'—';};
@@ -82,7 +87,7 @@ function render(data){
   const support=String(data.supportEmails[0]);
   if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(support))display('support','Questions? Contact '+support);
  }
- if(terminal){appHandoff=false;showResult({...data,status},title,description,kind);stop();return;}
+ if(terminal){setHandoff(false);showResult({...data,status},title,description,kind);stop();return;}
  const verifiedUpi=safeUri(data.upiUri,'upi://pay?');
  const uriPayee=verifiedUpi?new URL(verifiedUpi).searchParams.get('pa'):null;
  const payeeVpa=typeof data.payeeVpa==='string'&&data.payeeVpa?data.payeeVpa:uriPayee;
@@ -126,55 +131,50 @@ function render(data){
     if(value)intentParams.set(key,value);
   }
   const query=intentParams.toString().replace(/\+/g,'%20');
-  // Fallback URL: GPay/PhonePe redirect here after payment so checkout can poll status.
+  // Chrome fallback URL applies to an unsuccessful app launch, not payment completion.
   // Use /checkout/<paymentId> so the fallback always lands on the current order,
   // even when the page was loaded via /checkout?id=... query form.
   const checkoutPath='/checkout/'+encodeURIComponent(paymentId);
   const fallbackUrl=encodeURIComponent(new URL(checkoutPath,location.origin).href);
   const androidIntent=pkg=>'intent://pay?'+query+'#Intent;scheme=upi;package='+pkg+';S.browser_fallback_url='+fallbackUrl+';end';
   const iosUri=scheme=>scheme+query;
+  // Never trust independently-built deep links that disagree with this order's
+  // canonical P2P query. A stale backend route may still send merchant fields.
+  const consistentAndroidLink=(candidate,pkg)=>{
+    const candidateUri=safeUri(candidate,'intent://pay?');
+    if(!candidateUri)return androidIntent(pkg);
+    const marker='#Intent;';
+    const end=candidateUri.indexOf(marker);
+    if(end<0)return androidIntent(pkg);
+    const candidateQuery=candidateUri.slice('intent://pay?'.length,end);
+    const target='package='+pkg+';';
+    return candidateQuery===query&&candidateUri.includes(target)?candidateUri:androidIntent(pkg);
+  };
   const sources=[
     ['upi-open','upi://pay?'+query,'upi://pay?'],
-    ['gpay-open',android?(safeUri(links.gpay,'intent://pay?')||androidIntent('com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
-    ['phonepe-open',android?(safeUri(links.phonepe,'intent://pay?')||androidIntent('com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
-    ['paytm-open',android?(safeUri(links.paytm,'intent://pay?')||androidIntent('net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
+    ['gpay-open',android?(consistentAndroidLink(links.gpay,'com.google.android.apps.nbu.paisa.user')):iosUri('gpay://upi/pay?'),android?'intent://pay?':'gpay://upi/pay?'],
+    ['phonepe-open',android?(consistentAndroidLink(links.phonepe,'com.phonepe.app')):iosUri('phonepe://upi/pay?'),android?'intent://pay?':'phonepe://upi/pay?'],
+    ['paytm-open',android?(consistentAndroidLink(links.paytm,'net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
     ['bhim-open',android?androidIntent('in.org.npci.upiapp'):iosUri('bhim://upi/pay?'),android?'intent://pay?':'bhim://upi/pay?']
   ];
   if(mobile){
     $('app-actions').hidden=false;
-    const intentById={};
     for(const [id,url,prefix] of sources){
       const el=$(id),allowed=safeUri(url,prefix);
       if(allowed){
         el.href=allowed;
-        intentById[id]=allowed;
         el.hidden=false;
       } else {
         el.hidden=true;
         el.removeAttribute('href');
       }
     }
-    // One assignable onclick handler per element guarantees a user-gesture
-    // navigation to the intent URI. Android Chrome does not always honor
-    // intent:// in plain <a href> on its own; an explicit location.href
-    // inside a click handler (triggered by the user's tap) works reliably.
-    // Assigning onclick (not addEventListener) prevents duplicate handlers
-    // from stacking when the checkout re-renders on poll/SSE updates.
-    for(const [id] of sources){
-      const el=$(id);
-      if(!el||!intentById[id])continue;
-      el.onclick=function(ev){
-        ev.preventDefault();
-        const uri=intentById[this.id];
-        if(uri){
-          appHandoff=true;
-           display('app-handoff-note','If the app rejects this personal UPI ID, save the QR and use Scan QR → gallery. Return here after payment; do not pay twice.');
-          location.href=uri;
-        }
-      };
-    }
+    // Keep native <a href="intent://..."> navigation on a synchronous user tap.
+    // Chrome documents link gestures as the supported app-launch route.
+    // The delegated handler below records the attempt only; it never settles an order.
+    showReturnControls();
     if(appHandoff){
-      display('app-handoff-note','UPI app opened or selected. Return here after payment; waiting for trusted confirmation. Do not pay twice.');
+      display('app-handoff-note','You are back on your checkout URL. Your server is checking for confirmation. Opening the payment app or returning here is not proof of payment.');
     }
   }
   if(data.timeRemainingSeconds>0){
@@ -215,15 +215,23 @@ function connect(){
 $('app-actions').addEventListener('click',event=>{
  const target=event.target instanceof Element?event.target.closest('a[href]'):null;
  if(!target||!$('app-actions').contains(target)||!current||terminal)return;
- appHandoff=true;
- display('app-handoff-note','Complete the payment in your UPI app, then return here. Awaiting verified bank/provider confirmation; do not pay twice.');
+ setHandoff(true);
+ showReturnControls();
+ display('app-handoff-note','After completing or cancelling in the UPI app, use Android Back or Recent Apps to return here. Then check your status. Your checkout URL stays the same.');
 });
 function refreshAfterAppReturn(){
- if(appHandoff&&!terminal&&document.visibilityState==='visible')void refresh();
+ if((appHandoff||getSavedHandoff())&&!terminal&&document.visibilityState==='visible'){
+  setHandoff(true);
+  showReturnControls();
+  statusLine('Welcome back to checkout','Checking the latest status from your backend; app return alone does not confirm payment.');
+  void refresh();
+ }
 }
 document.addEventListener('visibilitychange',refreshAfterAppReturn);
 window.addEventListener('pageshow',refreshAfterAppReturn);
 window.addEventListener('focus',refreshAfterAppReturn);
+$('check-after-upi').addEventListener('click',()=>{if(!terminal)void refresh();});
+$('checkout-return-link').addEventListener('click',()=>{setHandoff(true);});
 $('copy-vpa').addEventListener('click',async()=>{if(!current?.payeeVpa)return;try{await navigator.clipboard.writeText(current.payeeVpa);$('copy-vpa').textContent='Copied';setTimeout(()=>$('copy-vpa').textContent='Copy UPI ID',1800);}catch{$('copy-vpa').textContent='Select and copy';}});
 $('save-qr').addEventListener('click',saveQr);
 $('retry').addEventListener('click',refresh);

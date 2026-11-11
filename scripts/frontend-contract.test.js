@@ -52,3 +52,37 @@ test('mobile premium workspace source contains the full-width navigation contrac
  assert.match(deployed,/studio-sidebar/);
  assert.match(deployed,/sidebar-tabs/);
 });
+
+test('dedicated checkout uses native intent anchors and warns about QR-gallery limit',()=>{
+  const source=fs.readFileSync('public/assets/247-checkout.js','utf8');
+  assert.match(source,/el\.href=allowed/);
+  assert.doesNotMatch(source,/location\.href=uri/);
+  assert.match(fs.readFileSync('public/checkout-next.html','utf8'),/gallery can have additional limits/);
+  assert.match(source,/setHandoff\(true\)/);
+});
+
+
+test('browser merchant SDK never invents port 7000 for hosted checkout', () => {
+  for (const path of ['packages/merchant-sdk/src/youpi.js', 'packages/merchant-sdk/src/youpi-checkout.js']) {
+    const source = fs.readFileSync(path, 'utf8');
+    assert.match(source, /scriptUrl \? scriptUrl\.origin : window\.location\.origin/);
+    assert.match(source, /scriptConfig\.portalUrl \|\| window\.location\.origin/);
+    assert.doesNotMatch(source, /window\.location\.hostname\s*\+\s*['"]:7000['"]/);
+  }
+});
+
+
+test('Render-served checkout keeps a stable return URL and refreshes on browser return without declaring success',()=>{
+  const server=fs.readFileSync('server.mjs','utf8');
+  const html=fs.readFileSync('public/checkout-next.html','utf8');
+  const js=fs.readFileSync('public/assets/247-checkout.js','utf8');
+  assert.match(server, /readFile\(path\.join\(PUBLIC_DIR, 'checkout-next\.html'\)\)/);
+  assert.match(html, /id="checkout-return-link"/);
+  assert.match(html, /id="check-after-upi"/);
+  assert.match(js, /checkoutReturnUrl=paymentId\?new URL\('\/checkout\/'\+encodeURIComponent\(paymentId\),location\.origin\)\.href/);
+  assert.match(js, /sessionStorage\.setItem\(handoffStorageKey,'1'\)/);
+  assert.match(js, /document\.addEventListener\('visibilitychange',refreshAfterAppReturn\)/);
+  assert.match(js, /window\.addEventListener\('pageshow',refreshAfterAppReturn\)/);
+  assert.doesNotMatch(js, /location\.href=uri/);
+  assert.doesNotMatch(js, /\/payment-done['"]/);
+});
