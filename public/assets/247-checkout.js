@@ -29,6 +29,8 @@ function hidePayment(){
   const qrTap=$('qr-open-upi');
   if(qrTap){qrTap.removeAttribute('href');qrTap.setAttribute('aria-disabled','true');qrTap.removeAttribute('tabindex');}
   $('branded-app-grid').hidden=false;
+  $('qr-panel').hidden=false;
+  $('qr-open-upi').setAttribute('aria-label','Payment QR code; on your phone tap to open a UPI app');
 }
 async function saveQr(){
   const image=$('qr');
@@ -97,6 +99,7 @@ function render(data){
  const payable=(status==='ACTIVE'||status==='INTENT_ISSUED')&&Boolean(verifiedUpi)&&Boolean(payeeVpa);
  // Account type is explicitly saved by the merchant; never infer it from the @bank suffix.
  const personalUpi=data.upiMode==='NON_MERCHANT'||data.isMerchantEnabled===false;
+ const merchantUpi=!personalUpi;
  if(!payable&&(status==='ACTIVE'||status==='INTENT_ISSUED')){
   statusLine('UPI details unavailable','The receiving UPI ID is not ready for this order. Ask your merchant to verify the assigned account.','warning');
   $('retry-area').hidden=false;
@@ -105,6 +108,9 @@ function render(data){
  if(payable){
   $('retry-area').hidden=true;
   $('payment-instructions').hidden=false;
+  // Payment router: merchant on mobile = direct app intents; personal = QR only.
+  // Merchant desktop retains a scannable QR, since it cannot open a phone UPI app.
+  $('qr-panel').hidden=merchantUpi&&mobile;
   display('payee-name',data.payeeName||data.merchantName||'Merchant');
   display('payee-vpa',payeeVpa);
   const qr=data.upiQr;
@@ -149,8 +155,8 @@ function render(data){
     qrTap.removeAttribute('aria-disabled');
   }
   $('qr-mode-instructions').textContent=personalUpi
-    ? (mobile?'Tap the QR to open a UPI app, or scan it from another phone.':'Scan this QR using any UPI app on your phone.')
-    : 'Scan with a UPI app or use a payment-app button below. Check payee and amount.';
+    ? (mobile?'Tap this QR to open the same payment request in any compatible UPI app, or scan it from another phone.':'Scan this QR using any UPI app on your phone.')
+    : 'Scan this QR from a phone to pay. Check the payee and amount.';
   // Chrome fallback URL applies to an unsuccessful app launch, not payment completion.
   // Use /checkout/<paymentId> so the fallback always lands on the current order,
   // even when the page was loaded via /checkout?id=... query form.
@@ -177,10 +183,10 @@ function render(data){
     ['paytm-open',android?(consistentAndroidLink(links.paytm,'net.one97.paytm')):iosUri('paytmmp://pay?'),android?'intent://pay?':'paytmmp://pay?'],
     ['bhim-open',android?androidIntent('in.org.npci.upiapp'):iosUri('bhim://upi/pay?'),android?'intent://pay?':'bhim://upi/pay?']
   ];
-  if(mobile){
+  if(mobile && merchantUpi){
     $('app-actions').hidden=false;
-    // Personal VPA: QR + generic app chooser. Merchant-type VPA: explicit PSP buttons.
-    $('branded-app-grid').hidden=personalUpi;
+    // Merchant-only UPI deep links; personal accounts use the tappable QR instead.
+    $('branded-app-grid').hidden=false;
     for(const [id,url,prefix] of sources){
       const el=$(id),allowed=safeUri(url,prefix);
       if(allowed){
