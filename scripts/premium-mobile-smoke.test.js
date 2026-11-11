@@ -133,7 +133,7 @@ test('premium merchant workspace renders on a real mobile viewport with accessib
     qr.addEventListener('click',event=>event.preventDefault(),{capture:true,once:true});
     qr.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
   });
-  await page.getByText(/Return to checkout after the UPI app/).waitFor({timeout:15000});
+  assert.equal(await page.evaluate(()=>sessionStorage.getItem('upi-checkout-handoff:e2e-checkout-id-123')),'1','QR tap must record handoff even with merchant-only action panel hidden');
 
   const ios=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,
    userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'});
