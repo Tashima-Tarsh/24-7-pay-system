@@ -52,3 +52,11 @@ test('mobile premium workspace source contains the full-width navigation contrac
  assert.match(deployed,/studio-sidebar/);
  assert.match(deployed,/sidebar-tabs/);
 });
+
+test('dedicated checkout uses native intent anchors and warns about QR-gallery limit',()=>{
+  const source=fs.readFileSync('public/assets/247-checkout.js','utf8');
+  assert.match(source,/el\.href=allowed/);
+  assert.doesNotMatch(source,/location\.href=uri/);
+  assert.match(source,/gallery may be limited to ₹2,000/);
+  assert.match(source,/appHandoff=true/);
+});
