@@ -78,6 +78,21 @@ function isPaymentOwner(req, session, ctx) {
  */
 export function registerPaymentRoutes(server, ctx) {
   function resolveCheckoutBaseUrl(merchant) {
+    if (process.env.NODE_ENV === 'production') {
+      // The public origin has already been validated by payment-api/src/index.js.
+      // A stale merchant branding setting must never override it with localhost.
+      const candidates = [ctx.checkoutBaseUrl, process.env.BASE_CHECKOUT_URL,
+        process.env.PUBLIC_CHECKOUT_URL, process.env.RENDER_EXTERNAL_URL, process.env.DYNAMO_PUBLIC_URL];
+      const selected = candidates.find(value => {
+        try {
+          const url = new URL(value);
+          return url.protocol === 'https:' && !url.username && !url.password &&
+            !/^(localhost|127\.0\.0\.1)$/i.test(url.hostname);
+        } catch { return false; }
+      });
+      if (!selected) throw new Error('Hosted checkout requires a public HTTPS origin');
+      return new URL(selected).origin;
+    }
     if (process.env.DYNAMO_PUBLIC_URL) return process.env.DYNAMO_PUBLIC_URL.replace(/\/+$/, '');
     if (process.env.DYNAMO_UNIFIED_GATEWAY === 'true') return '';
     if (merchant?.branding) {
