@@ -114,7 +114,11 @@ test('First merchant-owned UPI ID can be enabled once with explicit acknowledgem
  assert.match(payments,/const firstReceivingAccount=accountRepo\.findByMerchantId\(mid\)\.length===0/);
  assert.match(payments,/b\.confirmVpaOwnership===true/);
  assert.match(payments,/isActive:initialActivation/);
+ assert.match(payments,/accountType/);
+ assert.match(payments,/isMerchantEnabled/);
  assert.match(upi,/confirmOwnership/);
+ assert.match(upi,/setReceivingUpiType/);
+ assert.match(upi,/accountType/);
  assert.match(upi,/setReceivingUpiActive/);
  assert.doesNotMatch(payments,/autoMarkPaid|forceSettlementSuccess/);
 });
