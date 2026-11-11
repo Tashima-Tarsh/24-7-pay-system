@@ -383,3 +383,32 @@ test('Android download requires a matching APK and current source manifest',()=>
   fs.rmSync(absolute,{recursive:true,force:true});
  }
 });
+
+
+test('Render-hosted runtime resolves public checkout/API URL instead of localhost', () => {
+  const variables = ['NODE_ENV', 'YOUPI_MODE', 'CLOUDFLARE_DOMAIN', 'BASE_CHECKOUT_URL', 'PUBLIC_CHECKOUT_URL', 'RENDER_EXTERNAL_URL'];
+  const original = Object.fromEntries(variables.map(key => [key, process.env[key]]));
+  try {
+    process.env.NODE_ENV = 'production';
+    delete process.env.YOUPI_MODE;
+    delete process.env.CLOUDFLARE_DOMAIN;
+    delete process.env.BASE_CHECKOUT_URL;
+    delete process.env.PUBLIC_CHECKOUT_URL;
+    process.env.RENDER_EXTERNAL_URL = 'https://two4-7-pay-live.onrender.com';
+    const urls = resolveRuntimeUrls();
+    assert.equal(urls.mode, 'hosted');
+    assert.equal(urls.isProduction, true);
+    assert.equal(urls.checkoutUrl, 'https://two4-7-pay-live.onrender.com');
+    assert.equal(urls.apiUrl, urls.checkoutUrl);
+    assert.ok(!urls.checkoutUrl.includes('localhost'));
+    assert.throws(
+      () => resolveRuntimeUrls({ envMode: 'hosted', publicOrigin: 'http://localhost:7000' }),
+      /Invalid hosted checkout origin/
+    );
+  } finally {
+    for (const key of variables) {
+      if (original[key] === undefined) delete process.env[key];
+      else process.env[key] = original[key];
+    }
+  }
+});
