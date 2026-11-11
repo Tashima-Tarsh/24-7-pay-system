@@ -45,7 +45,7 @@ function createPaymentIntent() {
     amount: 100, // ₹100.00 in rupees
     currency: 'INR',
     orderId: `ORD_${Date.now()}_${__VU}_${__ITER}`,
-    merchantVpa: '9082843142@slc',
+    merchantVpa: 'fixture-payee@upi',
     returnUrl: `${BASE_URL}/checkout/success`,
     expiryMinutes: 30,
     metadata: { testRun: 'k6-load-test', vu: __VU, iter: __ITER },
