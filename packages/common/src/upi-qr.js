@@ -35,7 +35,9 @@ export function buildUpiPaymentUri({ vpa, name, amount, orderId, note = '', mode
   const hasMerchantCode = /^\d{4}$/.test(String(merchantCode || ''));
   if (hasMerchantCode) {
     params.set('mc', String(merchantCode).trim());
-    params.set('mode', mode === 'fixed' ? '04' : '02');
+    // mode declares P2P vs P2M ('02'). Amount locking comes from the presence of `am`,
+    // not from mode; '04' is not a valid value and some parsers reject the QR outright.
+    params.set('mode', '02');
   }
   if (orderId) {
     const safeRef = String(orderId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);

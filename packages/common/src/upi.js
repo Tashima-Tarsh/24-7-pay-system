@@ -202,8 +202,12 @@ export function buildUpiIntentUri(options) {
     .substring(0, 30);
 
   // 6. Build Query String (URLSearchParams handles safe, single URL-encoding automatically)
-  // A 4-digit MCC is the only signal that this is a PSP-registered merchant transaction.
-  const hasMerchantCode = /^\d{4}$/.test(String(options.merchantCategoryCode || ''));
+  // A merchant declaration (mc/tid/mode) is only legal for a PSP-registered merchant.
+  // A signing key is the only proof of that registration we hold; a bare 4-digit MCC
+  // (or the seeded default '5411') is not. Emitting it makes GPay/PhonePe classify the
+  // payment as P2M and reject it BEFORE the PIN with "exceeds the limit set by your bank".
+  const hasMerchantCode = Boolean(options.intentSignKeyPem)
+    && /^\d{4}$/.test(String(options.merchantCategoryCode || ''));
   const params = new URLSearchParams();
   params.set('pa', pa);
   params.set('pn', pn);
@@ -218,6 +222,7 @@ export function buildUpiIntentUri(options) {
   // GPay/PhonePe treat the intent as an unknown merchant payment and fail it.
   if (hasMerchantCode) {
     params.set('mc', String(options.merchantCategoryCode));
+    params.set('mode', '02'); // mandatory whenever mc is declared (P2M)
   }
 
   // Replace '+' with '%20' for maximum compatibility with older UPI app parsers
@@ -238,13 +243,24 @@ export function buildUpiIntentUri(options) {
   // Format: intent://pay?{query}#Intent;scheme=upi;package={package};S.browser_fallback_url={url};end
   // checkoutUrl is optional but strongly recommended. Falls back to PUBLIC_CHECKOUT_URL env var
   // so UPI apps redirect to the public domain (not localhost) on production deployments.
-  const checkoutUrl = (options.checkoutUrl || process.env.PUBLIC_CHECKOUT_URL || 'http://localhost:7000').trim();
+  // Resolve the Chrome fallback URL without ever failing the payment. A merchant's own
+  // returnUrl (http://, localhost, LAN IP) used to throw here, turning a create request
+  // into a 500. An unusable value now degrades to "no fallback" instead.
+  const usableFallback = (value) => {
+    const candidate = String(value || '').trim();
+    if (!candidate) return null;
+    if (/localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]/i.test(candidate)) return null;
+    return /^https?:\/\//i.test(candidate) ? candidate : null;
+  };
+  const checkoutUrl = usableFallback(options.checkoutUrl)
+    || usableFallback(process.env.PUBLIC_CHECKOUT_URL)
+    || null;
 
-  // Production guard: refuse to emit intents with localhost/non-HTTPS fallback
-  if (process.env.NODE_ENV === 'production') {
-    if (!checkoutUrl || /localhost|127\.0\.0\.1/i.test(checkoutUrl) || !checkoutUrl.startsWith('https://')) {
-      throw new Error('PUBLIC_CHECKOUT_URL must be set to the production HTTPS origin in production');
-    }
+  // No package => return a plain upi:// link. Android resolves it to the native
+  // "open with" app chooser, which is what an un-branded button needs. An intent://
+  // URI with neither package nor component is unreliable across Android builds.
+  if (!targetPackage) {
+    return `upi://pay?${queryString}`;
   }
 
   let intentUri = `intent://pay?${queryString}#Intent;scheme=upi`;
@@ -253,8 +269,9 @@ export function buildUpiIntentUri(options) {
     intentUri += `;package=${targetPackage}`;
   }
 
-  const fallbackUrl = encodeURIComponent(checkoutUrl);
-  intentUri += `;S.browser_fallback_url=${fallbackUrl}`;
+  if (checkoutUrl) {
+    intentUri += `;S.browser_fallback_url=${encodeURIComponent(checkoutUrl)}`;
+  }
 
   intentUri += ';end';
 
