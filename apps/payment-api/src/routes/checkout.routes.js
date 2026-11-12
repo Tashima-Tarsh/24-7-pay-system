@@ -501,12 +501,15 @@ export function registerCheckoutRoutes(server, ctx) {
         // Build one standards-oriented URI for the QR and every app button.
         // Never double-encode the payee name, fabricate an MCC or use a relative
         // URL parameter. PSP/bank authorization still determines acceptance.
+        // Reuse the session's stored UPI reference so the hosted checkout and the
+        // intent issued by the merchant backend carry the same `tr`.
+        const upiReference = session.metadata?.upiReference || String(session.orderId).replace(/[^A-Za-z0-9]/g, '').slice(0, 35);
         upiUri = buildUpiPaymentUri({
           vpa: payeeVpa,
           name: payeeName || merchant?.businessName || 'Merchant',
           amount: Number(toRupeesString(session.amountPaise)),
-          orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g, '').slice(0,35),
-          note: `Payment ${session.orderId}`,
+          orderId: upiReference,
+          note: `Payment ${upiReference}`,
           mode: 'fixed'
         });
       } catch {
@@ -727,13 +730,17 @@ export function registerCheckoutRoutes(server, ctx) {
     server.initSse(session.id, res, req);
 
     // Send current state immediately so the client renders without waiting
-    const payeeVpa = session.metadata?.receivingAccountSnapshot?.upiId || session.metadata?.payeeVpa || session.payeeVpa;
+    const snapshot = session.metadata?.receivingAccountSnapshot;
+    const payeeVpa = snapshot?.upiId || session.metadata?.payeeVpa || session.payeeVpa;
+    const payeeName = snapshot?.payeeName || session.metadata?.payeeName || 'Merchant Store';
+    const upiReference = session.metadata?.upiReference || String(session.orderId).replace(/[^A-Za-z0-9]/g, '').slice(0, 35);
     const upiUri = session.status === PaymentStatus.ACTIVE && payeeVpa && !isRetiredReceivingVpa(payeeVpa)
       ? buildUpiPaymentUri({
-          vpa:payeeVpa,name:session.metadata?.receivingAccountSnapshot?.payeeName||'Merchant',
-          amount:Number(toRupeesString(session.amountPaise)),
-          orderId:String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
-          note:`Payment ${session.orderId}`,mode:'fixed'
+          vpa: payeeVpa,
+          name: payeeName,
+          amount: Number(toRupeesString(session.amountPaise)),
+          orderId: upiReference,
+          note: `Payment ${upiReference}`, mode: 'fixed'
         })
       : null;
 
@@ -743,7 +750,9 @@ export function registerCheckoutRoutes(server, ctx) {
       orderId: session.orderId,
       upiUri,
       payeeVpa,
-      payeeName: session.metadata?.receivingAccountSnapshot?.payeeName || 'Merchant Store',
+      payeeName: snapshot?.payeeName || session.metadata?.payeeName || 'Merchant Store',
+      upiMode: snapshot?.isMerchantEnabled !== undefined ? (snapshot.isMerchantEnabled ? 'MERCHANT' : 'NON_MERCHANT') : undefined,
+      isMerchantEnabled: snapshot?.isMerchantEnabled,
       timeRemainingSeconds: session.status === PaymentStatus.ACTIVE && session.expiresAt
         ? Math.max(0, Math.ceil((session.expiresAt.getTime() - Date.now()) / 1000))
         : 0
@@ -769,31 +778,30 @@ export function registerCheckoutRoutes(server, ctx) {
     const receivingAccount = session.receivingAccountId
       ? ctx.accountRepo.findById(session.receivingAccountId)
       : (snapshot?.id ? ctx.accountRepo.findById(snapshot.id) : null);
-    let payeeVpa = null;
-    let payeeName = null;
+    // The payee recorded when this payment session was created is authoritative.
+    // The active payment profile is only a display source when it belongs to that
+    // exact VPA, so a later account/profile rotation cannot make diagnostics
+    // disagree with the checkout page (and with the QR the customer scanned).
+    let payeeVpa = snapshot?.upiId || receivingAccount?.upiId || session.metadata?.payeeVpa || null;
+    let payeeName = snapshot?.payeeName || receivingAccount?.payeeName || session.metadata?.payeeName || merchant?.businessName || 'Merchant Store';
     try {
       const profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(session.merchantId);
-      if (profile) {
-        payeeVpa = profile.payeeVpa;
-        payeeName = profile.payeeName;
+      if (profile && (!payeeVpa || String(profile.payeeVpa || '').trim().toLowerCase() === String(payeeVpa).trim().toLowerCase())) {
+        payeeVpa = payeeVpa || profile.payeeVpa;
+        payeeName = profile.payeeName || payeeName;
       }
     } catch {}
-    if ((session.metadata?.platform || snapshot?.isTestOverride) && snapshot?.upiId) {
-      payeeVpa = snapshot.upiId;
-      payeeName = snapshot.payeeName || payeeName || merchant?.businessName || 'Merchant';
-    } else if (!payeeVpa) {
-      payeeVpa = receivingAccount?.upiId || snapshot?.upiId || null;
-      payeeName = payeeName || receivingAccount?.payeeName || snapshot?.payeeName || merchant?.businessName || 'Merchant Store';
-    }
+    if (isRetiredReceivingVpa(payeeVpa)) payeeVpa = null;
 
     let request = null;
     if (payeeVpa) {
       try {
+        const upiReference = session.metadata?.upiReference || String(session.orderId).replace(/[^A-Za-z0-9]/g, '').slice(0, 35);
         const uri = new URL(buildUpiPaymentUri({
           vpa: payeeVpa, name: payeeName || 'Merchant',
           amount: Number(toRupeesString(session.amountPaise)),
-          orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
-          note: `Payment ${session.orderId}`,mode:'fixed'
+          orderId: upiReference,
+          note: `Payment ${upiReference}`, mode: 'fixed'
         }));
         request = {
           payeeVpa: uri.searchParams.get('pa'),
@@ -839,12 +847,13 @@ export function registerCheckoutRoutes(server, ctx) {
     if (!payeeVpa) return HttpServer.json(res, 400, { error: 'No VPA configured for this session' });
     let upiUri;
     try {
+      const upiReference = session.metadata?.upiReference || String(session.orderId).replace(/[^A-Za-z0-9]/g, '').slice(0, 35);
       upiUri = buildUpiPaymentUri({
         vpa: payeeVpa,
         name: payeeName,
         amount: Number(toRupeesString(session.amountPaise)),
-        orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
-        note: `Payment ${session.orderId}`,
+        orderId: upiReference,
+        note: `Payment ${upiReference}`,
         mode: 'fixed'
       });
     } catch {
@@ -868,12 +877,13 @@ export function registerCheckoutRoutes(server, ctx) {
     if (!payeeVpa) return HttpServer.json(res, 400, { error: 'No VPA configured for this session' });
     let upiUri;
     try {
+      const upiReference = session.metadata?.upiReference || String(session.orderId).replace(/[^A-Za-z0-9]/g, '').slice(0, 35);
       upiUri = buildUpiPaymentUri({
         vpa: payeeVpa,
         name: payeeName,
         amount: Number(toRupeesString(session.amountPaise)),
-        orderId: String(session.orderId).replace(/[^A-Za-z0-9]/g,'').slice(0,35),
-        note: `Payment ${session.orderId}`,
+        orderId: upiReference,
+        note: `Payment ${upiReference}`,
         mode: 'fixed'
       });
     } catch {

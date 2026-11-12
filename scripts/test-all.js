@@ -45,6 +45,7 @@ const testFiles = [
   'packages/merchant-sdk/src/__tests__/youpi-universal-integration.test.js',
   'apps/payment-api/src/__tests__/payment-api.test.js',
   'apps/payment-api/src/__tests__/payment-profile-utr.test.js',
+  'apps/payment-api/src/__tests__/upi-intent-session-consistency.test.js',
   'apps/payment-api/src/__tests__/upi-mirror-pairing-auth.test.js',
   'apps/payment-api/src/__tests__/merchant-console.test.js',
   'apps/payment-api/src/__tests__/dynamo-public-api.test.js',

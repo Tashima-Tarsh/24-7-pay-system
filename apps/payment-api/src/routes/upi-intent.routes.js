@@ -10,6 +10,7 @@ import {
   generateHmac,
   safeEqual,
   isValidVpa,
+  isRetiredReceivingVpa,
   ObserverSource,
   PaymentEvidenceLevel,
   generateQrDataUri
@@ -84,6 +85,113 @@ export function registerUpiIntentRoutes(server, ctx) {
 
   function generateId(prefix) {
     return `${prefix}_${crypto.randomUUID()}`;
+  }
+
+  // Resolve the receiving payee for a new UPI intent.
+  //
+  // The merchant's active receiving account is the single authoritative payee for
+  // a new order. A caller-supplied merchantVpa is honored only when it is a live,
+  // syntactically valid VPA; a retired VPA can never be activated by a request.
+  // Merchant-only UPI fields (mc/tid/mode/orgid/sign) are taken from the payment
+  // profile only when that profile belongs to the exact payee VPA and the account
+  // is merchant-enabled, so a personal VPA always gets the P2P-safe payload.
+  function resolveReceivingPayee(merchant, requestedVpa) {
+    const requested = typeof requestedVpa === 'string' ? requestedVpa.trim() : '';
+    if (requested && isRetiredReceivingVpa(requested)) {
+      return {
+        error: {
+          status: 400,
+          body: { error: 'The supplied receiving VPA is retired and cannot be used.', code: 'RETIRED_RECEIVING_VPA' }
+        }
+      };
+    }
+    if (requested && !isValidVpa(requested)) {
+      return {
+        error: { status: 400, body: { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' } }
+      };
+    }
+
+    let account = null;
+    try {
+      account = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
+    } catch {}
+    if (account && isRetiredReceivingVpa(account.upiId)) account = null;
+
+    const upiId = requested || account?.upiId || null;
+    if (!upiId || !isValidVpa(upiId)) {
+      return {
+        error: { status: 400, body: { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' } }
+      };
+    }
+
+    const matchesAccount = Boolean(account && String(account.upiId || '').trim().toLowerCase() === upiId.toLowerCase());
+    const payeeName = matchesAccount && account.payeeName
+      ? account.payeeName
+      : (merchant.businessName || merchant.name || 'Merchant');
+    const isMerchantEnabled = matchesAccount ? account.isMerchantEnabled !== false : true;
+
+    let matchedProfile = null;
+    try {
+      const candidate = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id) || null;
+      if (candidate && String(candidate.payeeVpa || '').trim().toLowerCase() === upiId.toLowerCase()) {
+        matchedProfile = candidate;
+      }
+    } catch {}
+
+    return {
+      upiId,
+      accountId: matchesAccount ? account.id : null,
+      payeeName,
+      isMerchantEnabled,
+      profile: isMerchantEnabled ? matchedProfile : null,
+      snapshot: {
+        id: matchesAccount ? account.id : null,
+        upiId,
+        payeeName,
+        isMerchantEnabled
+      }
+    };
+  }
+
+  // Activate a newly created UPI session so the stable /checkout/<id> URL is
+  // payable immediately (instant QR). A session for a VPA that is not one of the
+  // merchant's own receiving accounts has no slot to queue against, so it is
+  // activated directly.
+  function activateNewSession(session, receivingAccountId) {
+    if (receivingAccountId && ctx.queueEngine?.enqueueOrActivate) {
+      const queueResult = ctx.queueEngine.enqueueOrActivate(session.id, receivingAccountId);
+      if (queueResult.expiresAt) ctx.timingEngine?.startActiveTimer?.(session.id, queueResult.expiresAt);
+      server.broadcastSse?.('admin_counter_events', 'status_change', {
+        status: queueResult.status,
+        sessionId: session.id,
+        orderId: session.orderId,
+        amountPaise: session.amountPaise ? session.amountPaise.toString() : '0'
+      });
+      return sessionRepo.findById(session.id) || session;
+    }
+
+    const activeUntil = new Date(Date.now() + 300000);
+    ctx.db.execute(
+      'UPDATE payment_sessions SET status = ?, expires_at = ?, updated_at = ? WHERE id = ?',
+      [PaymentStatus.ACTIVE, activeUntil.toISOString(), new Date().toISOString(), session.id]
+    );
+    ctx.timingEngine?.startActiveTimer?.(session.id, activeUntil);
+    return sessionRepo.findById(session.id) || session;
+  }
+
+  // One UPI transaction reference per session. It is persisted on the session so
+  // the intent, the QR payload and the hosted checkout rebuild all carry the same
+  // `tr` value for the same order.
+  function allocateUpiReference(merchant, orderId) {
+    const sanitized = orderId ? String(orderId).replace(/[^A-Za-z0-9]/g, '').slice(0, 35) : '';
+    let reference = sanitized || generateId('upi').replace(/[^A-Za-z0-9]/g, '').slice(0, 35);
+    let attempt = 0;
+    while (sessionRepo.findByOrderId && sessionRepo.findByOrderId(merchant.id, reference)) {
+      attempt++;
+      reference = `${(sanitized || 'UPI').slice(0, 31)}${String(attempt).padStart(3, '0')}`.slice(0, 35);
+      if (attempt > 100) throw new Error('Unable to generate unique UPI reference.');
+    }
+    return reference;
   }
 
   // Persist a payment event and publish a status update via SSE + event emitter.
@@ -195,56 +303,45 @@ export function registerUpiIntentRoutes(server, ctx) {
       const finalCurrency = 'INR';
       const finalAmountPaise = amountPaise;
 
-      // Resolve receiving VPA and receiving account for correlation with bank observations.
-      // The receiving account is needed so Gmail/SMS/Android bank observations can be matched
-      // to this payment (UTR + receiving account + amount). Never amount-only matching.
-      let receivingVpa = merchantVpa || null;
-      let receivingAccountId = null;
-      if (!receivingVpa) {
-        try {
-          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
-          if (acct && acct.upiId) {
-            receivingVpa = acct.upiId;
-            receivingAccountId = acct.id;
-          }
-        } catch {}
+      // Resolve the authoritative receiving payee and receiving account for
+      // correlation with bank observations. The receiving account is needed so
+      // Gmail/SMS/Android bank observations can be matched to this payment
+      // (UTR + receiving account + amount). Never amount-only matching.
+      const payee = resolveReceivingPayee(merchant, merchantVpa);
+      if (payee.error) {
+        return HttpServer.json(res, payee.error.status, payee.error.body);
       }
-      if (receivingVpa && !receivingAccountId) {
-        try {
-          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
-          if (acct && acct.upiId === receivingVpa) receivingAccountId = acct.id;
-        } catch {}
-      }
-      if (!receivingVpa || !isValidVpa(receivingVpa)) {
-        return HttpServer.json(res, 400, { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' });
-      }
-
-      // Validate UPI format only - any UPI ID is accepted for payment
-      if (!receivingVpa || !isValidVpa(receivingVpa)) {
-        return HttpServer.json(res, 400, { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' });
-      }
-
-      // Idempotency: if a payment with this idempotency key already exists, return it.
+      const receivingVpa = payee.upiId;
+      const receivingAccountId = payee.accountId;
+      const receivingAccountSnapshot = payee.snapshot;
+      const upiMode = payee.isMerchantEnabled ? 'MERCHANT' : 'NON_MERCHANT';
 
       // Idempotency: if a payment with this idempotency key already exists, return it.
       if (idempotencyKey) {
         try {
           const existing = ctx.sessionRepo.findByIdempotencyKey ? ctx.sessionRepo.findByIdempotencyKey(idempotencyKey) : null;
           if (existing) {
+            const existingMeta = existing.metadata || {};
             return HttpServer.json(res, 200, {
               paymentId: existing.id,
               orderId: existing.orderId,
-              attemptId: (existing.metadata && existing.metadata.attemptId) || null,
-              correlationId: (existing.metadata && existing.metadata.correlationId) || null,
+              attemptId: existingMeta.attemptId || null,
+              correlationId: existingMeta.correlationId || null,
               amount: toRupeesString(existing.amountPaise),
               amountPaise: existing.amountPaise.toString(),
               currency: existing.currency,
               status: existing.status,
-              upiUri: (existing.metadata && existing.metadata.upiUri) || null,
-              upiIntent: (existing.metadata && existing.metadata.upiIntent) || null,
-              upiQr: (existing.metadata && existing.metadata.upiQr) || null,
-              copyVpa: (existing.metadata && existing.metadata.copyVpa) || null,
-              signed: (existing.metadata && existing.metadata.signed) || false,
+              receivingVpa: existingMeta.receivingVpa || null,
+              payeeVpa: existingMeta.payeeVpa || null,
+              payeeName: existingMeta.payeeName || null,
+              upiReference: existingMeta.upiReference || null,
+              upiMode: existingMeta.upiMode || null,
+              isMerchantEnabled: existingMeta.isMerchantEnabled !== false,
+              upiUri: existingMeta.upiUri || null,
+              upiIntent: existingMeta.upiIntent || null,
+              upiQr: existingMeta.upiQr || null,
+              copyVpa: existingMeta.copyVpa || null,
+              signed: existingMeta.signed || false,
               checkoutUrl: `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${existing.id}`,
               expiresAt: existing.expiresAt ? existing.expiresAt.toISOString() : null,
               createdAt: existing.createdAt ? existing.createdAt.toISOString() : null
@@ -259,20 +356,22 @@ export function registerUpiIntentRoutes(server, ctx) {
       const attemptId = generateId('attempt');
       const correlationId = generateId('corr');
 
-      // Compute expiry.
+      // Auto-activate by default so the stable checkout URL is payable immediately
+      // (instant QR). Pass autoActivate:false to defer slot acquisition until the
+      // customer is authenticated.
+      const shouldActivateNow = body.autoActivate !== false && body.autoActivate !== 'false';
+
+      // Compute expiry for deferred (INITIATED) sessions.
       const expiryMs = expiryMinutes ? Number(expiryMinutes) * 60 * 1000 : 30 * 60 * 1000; // default 30 min
       const expiresAt = new Date(Date.now() + expiryMs);
 
-      // Build the UPI payment URI using the canonical builder + the merchant's
-      // active payment profile (payer-visible payee details). Fall back to the
-      // receiving VPA / merchant name when no profile is active yet.
-      let profile = null;
-      try {
-        profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id) || null;
-      } catch {}
-      const payeeVpa = profile ? profile.payeeVpa : receivingVpa;
-      const payeeName = profile ? profile.payeeName : (merchant.businessName || merchant.name || 'Merchant');
-      const note = `24/7 Pay ${generatedOrderId}`;
+      // Build the UPI payment URI from the authoritative payee resolved above.
+      // The same reference is stored on the session so the QR, app intents and
+      // checkout page always agree.
+      const upiReference = allocateUpiReference(merchant, generatedOrderId);
+      const payeeVpa = payee.upiId;
+      const payeeName = payee.payeeName;
+      const note = `24/7 Pay ${upiReference}`;
 
       const checkoutUrl = `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${paymentId}`;
 
@@ -280,13 +379,13 @@ export function registerUpiIntentRoutes(server, ctx) {
         {
           payeeVpa,
           payeeName,
-          // Only declare a merchant category when the profile really has one.
-          mcc: profile ? profile.mcc : undefined,
-          orgid: profile ? profile.orgid : undefined,
-          intentSignKeyPem: profile ? profile.intentSignKeyPem : undefined
+          // Only declare a merchant category when the matched profile really has one.
+          mcc: payee.profile ? payee.profile.mcc : undefined,
+          orgid: payee.profile ? payee.profile.orgid : undefined,
+          intentSignKeyPem: payee.profile ? payee.profile.intentSignKeyPem : undefined
         },
         finalAmountPaise,
-        attemptId,
+        upiReference,
         note,
         checkoutUrl
       );
@@ -301,10 +400,16 @@ export function registerUpiIntentRoutes(server, ctx) {
         attemptId,
         correlationId,
         upiUri,
+        upiReference,
         upiIntent,
         upiQr,
         copyVpa,
         receivingVpa,
+        payeeVpa,
+        payeeName,
+        upiMode,
+        isMerchantEnabled: payee.isMerchantEnabled,
+        receivingAccountSnapshot,
         merchantId: merchant.id,
         sourcePlatform: 'UPI_INTENT',
         createdVia: 'intents_api',
@@ -323,7 +428,7 @@ export function registerUpiIntentRoutes(server, ctx) {
           baseAmountPaise: finalAmountPaise,
           currency: finalCurrency,
           method: PaymentMethod.UPI,
-          status: PaymentStatus.INITIATED,
+          status: shouldActivateNow ? PaymentStatus.QUEUED : PaymentStatus.INITIATED,
           returnUrl: returnUrl || null,
           idempotencyKey,
           deviceId: null,
@@ -345,6 +450,10 @@ export function registerUpiIntentRoutes(server, ctx) {
         }
       }
 
+      if (shouldActivateNow && session.status === PaymentStatus.QUEUED) {
+        session = activateNewSession(session, receivingAccountId);
+      }
+
       // Persist creation event.
       try {
         persistAndPublishEvent(paymentId, {
@@ -354,13 +463,13 @@ export function registerUpiIntentRoutes(server, ctx) {
           status: PaymentStatus.INITIATED,
           amountPaise: finalAmountPaise,
           currency: finalCurrency,
-          reference: generatedOrderId,
+          reference: upiReference,
           reportedStatus: PaymentStatus.INITIATED,
           evidenceLevel: PaymentEvidenceLevel.REPORTED,
           observedAt: nowIso(),
           processedAt: nowIso(),
           correlationId,
-          rawPayload: { orderId: generatedOrderId, attemptId, upiUri, receivingVpa },
+          rawPayload: { orderId: generatedOrderId, upiReference, attemptId, upiUri, receivingVpa, upiMode },
           merchantId: merchant.id
         });
       } catch (err) {
@@ -385,13 +494,18 @@ export function registerUpiIntentRoutes(server, ctx) {
         status: session.status,
         merchantId: session.merchantId,
         receivingVpa,
+        payeeVpa,
+        payeeName,
+        upiReference,
+        upiMode,
+        isMerchantEnabled: payee.isMerchantEnabled,
         upiUri,
         upiIntent,
         upiQr,
         copyVpa,
         signed: built.signed,
         checkoutUrl: `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${session.id}`,
-        expiresAt: expiresAt.toISOString(),
+        expiresAt: session.expiresAt ? session.expiresAt.toISOString() : expiresAt.toISOString(),
         createdAt: session.createdAt ? session.createdAt.toISOString() : nowIso(),
         idempotencyKey
       });
@@ -447,40 +561,35 @@ export function registerUpiIntentRoutes(server, ctx) {
       const finalCurrency = 'INR';
       const finalAmountPaise = amountPaise;
 
-      let receivingVpa = merchantVpa || null;
-      let receivingAccountId = null;
-      if (!receivingVpa) {
-        try {
-          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
-          if (acct && acct.upiId) {
-            receivingVpa = acct.upiId;
-            receivingAccountId = acct.id;
-          }
-        } catch {}
+      // Resolve the authoritative receiving payee and receiving account for bank
+      // observation correlation. A retired VPA is never accepted from a request.
+      const payee = resolveReceivingPayee(merchant, merchantVpa);
+      if (payee.error) {
+        return HttpServer.json(res, payee.error.status, payee.error.body);
       }
-      if (receivingVpa && !receivingAccountId) {
-        try {
-          const acct = ctx.accountRepo?.findActiveForMerchant ? ctx.accountRepo.findActiveForMerchant(merchant.id) : null;
-          if (acct && acct.upiId === receivingVpa) receivingAccountId = acct.id;
-        } catch {}
-      }
-      if (!receivingVpa || !isValidVpa(receivingVpa)) {
-        return HttpServer.json(res, 400, { error: 'No valid merchant receiving VPA configured.', code: 'NO_RECEIVING_VPA' });
-      }
+      const receivingVpa = payee.upiId;
+      const receivingAccountId = payee.accountId;
+      const receivingAccountSnapshot = payee.snapshot;
+      const upiMode = payee.isMerchantEnabled ? 'MERCHANT' : 'NON_MERCHANT';
 
       // Idempotency: if a payment with this idempotency key already exists, return it.
       if (idempotencyKey) {
         try {
           const existing = ctx.sessionRepo.findByIdempotencyKey ? ctx.sessionRepo.findByIdempotencyKey(idempotencyKey) : null;
           if (existing) {
-            const existingUri = (existing.metadata && existing.metadata.upiUri) || null;
+            const existingMeta = existing.metadata || {};
+            const existingUri = existingMeta.upiUri || null;
             return HttpServer.json(res, 200, {
               success: true,
               order_id: existing.orderId,
               amount: toRupeesString(existing.amountPaise),
-              payee_vpa: (existing.metadata && existing.metadata.payeeVpa) || receivingVpa,
-              intent_android: (existing.metadata && existing.metadata.intentAndroid) || null,
-              deep_link_universal: existingUri || null
+              payee_vpa: existingMeta.payeeVpa || receivingVpa,
+              intent_android: existingMeta.intentAndroid || null,
+              deep_link_universal: existingUri || null,
+              payment_id: existing.id,
+              upi_reference: existingMeta.upiReference || null,
+              upi_mode: existingMeta.upiMode || null,
+              is_merchant_enabled: existingMeta.isMerchantEnabled !== false
             });
           }
         } catch {}
@@ -504,13 +613,11 @@ export function registerUpiIntentRoutes(server, ctx) {
         if (retryCounter > 100) throw new Error('Unable to generate unique UPI reference.');
       }
 
-      // Resolve receiving VPA and profile.
-      let profile = null;
-      try {
-        profile = ctx.ppMerchantPaymentProfileRepo?.findActiveByMerchantId(merchant.id) || null;
-      } catch {}
-      const payeeVpa = profile ? profile.payeeVpa : receivingVpa;
-      const payeeName = profile ? profile.payeeName : (merchant.businessName || merchant.name || 'Merchant');
+      const payeeVpa = payee.upiId;
+      const payeeName = payee.payeeName;
+
+      // Auto-activate by default so the returned checkout URL is payable now.
+      const shouldActivateNow = body.autoActivate !== false && body.autoActivate !== 'false';
 
       const checkoutUrl = returnUrl || `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${paymentId}`;
 
@@ -519,9 +626,9 @@ export function registerUpiIntentRoutes(server, ctx) {
         {
           payeeVpa,
           payeeName,
-          mcc: profile ? profile.mcc : undefined,
-          orgid: profile ? profile.orgid : undefined,
-          intentSignKeyPem: profile ? profile.intentSignKeyPem : undefined
+          mcc: payee.profile ? payee.profile.mcc : undefined,
+          orgid: payee.profile ? payee.profile.orgid : undefined,
+          intentSignKeyPem: payee.profile ? payee.profile.intentSignKeyPem : undefined
         },
         finalAmountPaise,
         upiReference,
@@ -539,7 +646,7 @@ export function registerUpiIntentRoutes(server, ctx) {
         transactionNote: `24/7 Pay ${upiReference}`,
         targetApp: 'generic', // Let Android OS show the chooser
         checkoutUrl,
-        merchantCategoryCode: profile ? profile.mcc : undefined
+        merchantCategoryCode: payee.profile ? payee.profile.mcc : undefined
       });
 
       const sessionMetadata = {
@@ -549,6 +656,10 @@ export function registerUpiIntentRoutes(server, ctx) {
         upiReference,
         merchantOrderId: orderId || null,
         payeeVpa,
+        payeeName,
+        upiMode,
+        isMerchantEnabled: payee.isMerchantEnabled,
+        receivingAccountSnapshot,
         upiUri: deepLinkUniversal,
         intentAndroid,
         deepLinkUniversal,
@@ -571,7 +682,7 @@ export function registerUpiIntentRoutes(server, ctx) {
           baseAmountPaise: finalAmountPaise,
           currency: finalCurrency,
           method: PaymentMethod.UPI,
-          status: PaymentStatus.INITIATED,
+          status: shouldActivateNow ? PaymentStatus.QUEUED : PaymentStatus.INITIATED,
           returnUrl: returnUrl || null,
           idempotencyKey,
           deviceId: null,
@@ -592,6 +703,10 @@ export function registerUpiIntentRoutes(server, ctx) {
         }
       }
 
+      if (shouldActivateNow && session.status === PaymentStatus.QUEUED) {
+        session = activateNewSession(session, receivingAccountId);
+      }
+
       // Persist creation event.
       try {
         persistAndPublishEvent(paymentId, {
@@ -607,7 +722,7 @@ export function registerUpiIntentRoutes(server, ctx) {
           observedAt: nowIso(),
           processedAt: nowIso(),
           correlationId: generateId('corr'),
-          rawPayload: { orderId: upiReference, paymentId, upiUri: deepLinkUniversal, receivingVpa },
+          rawPayload: { orderId: upiReference, paymentId, upiUri: deepLinkUniversal, receivingVpa, upiMode },
           merchantId: merchant.id
         });
       } catch (err) {
@@ -628,6 +743,10 @@ export function registerUpiIntentRoutes(server, ctx) {
         order_id: session.orderId,
         amount: toRupeesString(session.amountPaise),
         payee_vpa: payeeVpa,
+        payee_name: payeeName,
+        upi_reference: upiReference,
+        upi_mode: upiMode,
+        is_merchant_enabled: payee.isMerchantEnabled,
         intent_android: intentAndroid,
         deep_link_universal: deepLinkUniversal,
         payment_id: session.id,
@@ -635,7 +754,7 @@ export function registerUpiIntentRoutes(server, ctx) {
         status: session.status,
         merchant_id: session.merchantId,
         checkout_url: `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${session.id}`,
-        expires_at: expiresAt.toISOString(),
+        expires_at: session.expiresAt ? session.expiresAt.toISOString() : expiresAt.toISOString(),
         idempotency_key: idempotencyKey
       });
     } catch (err) {

@@ -54,7 +54,7 @@ test.describe('Complete 24/7 Pay E2E Scenarios (Local)', () => {
       expect(data.paymentId).toBeDefined();
       expect(data.upiUri).toContain('upi://pay');
       expect(data.checkoutUrl).toContain(BASE_URL);
-      expect(data.status).toBe('INITIATED');
+      expect(['ACTIVE', 'QUEUED']).toContain(data.status);
     });
   });
 

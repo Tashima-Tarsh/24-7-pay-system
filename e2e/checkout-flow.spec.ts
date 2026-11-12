@@ -35,7 +35,9 @@ test.describe('Pure UPI Intent Return E2E Flow', () => {
     checkoutUrl = data.checkoutUrl;
     expect(paymentId).toBeDefined();
     expect(checkoutUrl).toBeDefined();
-    expect(data.status).toBe('INITIATED');
+    // The intent session is auto-activated by default so the returned checkout
+    // URL is payable immediately; a busy receiving slot leaves it QUEUED.
+    expect(['ACTIVE', 'QUEUED']).toContain(data.status);
   });
 
   test('should simulate UPI app return and update backend to CLIENT_REPORTED_SUCCESS', async ({ request }) => {
