@@ -121,6 +121,10 @@ export function buildUpiUri(options) {
   params.set('pn', options.payeeName.trim());
   params.set('am', amountStr);
 
+  // A 4-digit MCC is the only signal that this is a PSP-registered merchant
+  // transaction. Personal VPAs must not receive merchant-only declarations.
+  const hasMerchantCode = /^\d{4}$/.test(String(options.merchantCategoryCode || ''));
+
   // Transaction Ref: alphanumeric only, max 35 chars (Paytm/PhonePe strict).
   const trRaw = String(options.transactionRef || '').trim();
   const tr = trRaw.replace(/[^a-zA-Z0-9]/g, '').substring(0, 35);
@@ -132,13 +136,13 @@ export function buildUpiUri(options) {
     .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
     .substring(0, 30);
   if (tn) params.set('tn', tn);
-  if (tr) params.set('tid', tr);
-  // tid is mandatory for all UPI intents; GPay rejects intents without it.
+  // tid is a merchant transaction identifier; only emit it with a real MCC.
+  if (tr && hasMerchantCode) params.set('tid', tr);
   // mc declares a registered merchant transaction; only emit when the merchant
   // profile actually carries a 4-digit MCC. Sending mc for a personal VPA makes
   // GPay/PhonePe treat the intent as an unknown merchant payment and fail it.
-  if (/^\d{4}$/.test(String(options.merchantCategoryCode || ''))) {
-    params.set('mc', options.merchantCategoryCode);
+  if (hasMerchantCode) {
+    params.set('mc', String(options.merchantCategoryCode).trim());
   }
   if (options.transactionUrl) {
     const transactionUrl = new URL(options.transactionUrl);
@@ -198,6 +202,8 @@ export function buildUpiIntentUri(options) {
     .substring(0, 30);
 
   // 6. Build Query String (URLSearchParams handles safe, single URL-encoding automatically)
+  // A 4-digit MCC is the only signal that this is a PSP-registered merchant transaction.
+  const hasMerchantCode = /^\d{4}$/.test(String(options.merchantCategoryCode || ''));
   const params = new URLSearchParams();
   params.set('pa', pa);
   params.set('pn', pn);
@@ -205,12 +211,12 @@ export function buildUpiIntentUri(options) {
   params.set('cu', 'INR'); // Mandatory for GPay
   params.set('tr', tr);   // Transaction Reference (merchant ref)
   params.set('tn', tn);
-  // tid is mandatory for all UPI intents; GPay rejects intents without it.
-  if (tr) params.set('tid', tr);
+  // tid is a merchant transaction identifier; only emit it with a real MCC.
+  if (hasMerchantCode) params.set('tid', tr);
   // mc declares a registered merchant transaction; only emit when the merchant
   // profile actually carries a 4-digit MCC. Sending mc for a personal VPA makes
   // GPay/PhonePe treat the intent as an unknown merchant payment and fail it.
-  if (options.merchantCategoryCode && /^\d{4}$/.test(String(options.merchantCategoryCode))) {
+  if (hasMerchantCode) {
     params.set('mc', String(options.merchantCategoryCode));
   }
 

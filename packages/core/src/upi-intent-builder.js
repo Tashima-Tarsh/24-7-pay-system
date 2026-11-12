@@ -4,8 +4,9 @@ import crypto from 'node:crypto';
  * UPI intent URI builder.
  *
  * Builds a canonical upi://pay query with parameters in a fixed order:
- *   pa, pn, am (2dp), cu=INR, tr, tid, tn, url (only if set),
- *   mc (only when the profile carries a real 4-digit MCC), mode=02, orgid (only if set)
+ *   pa, pn, am (2dp), cu=INR, tr, tn, url (only if set),
+ *   tid + mc + mode=02 (only when the profile carries a real 4-digit MCC),
+ *   orgid (only if set)
  * All values are URL-encoded. Optionally appends `sign=` (RSA-SHA256 over the
  * query bytes, base64, URL-encoded) when the profile carries a signing key.
  *
@@ -81,18 +82,21 @@ export function buildUpiUri(profile, amountPaise, paymentId, note, checkoutUrl) 
   }
   params.push('cu=INR');
   params.push(`tr=${encodeURIComponent(trRef(paymentId))}`);
-  // tid is mandatory for all UPI intents; GPay rejects intents without it.
-  params.push(`tid=${encodeURIComponent(trRef(paymentId))}`);
+  // tid is a merchant transaction identifier: only declare it together with a real
+  // MCC. Emitting it for a personal VPA makes GPay/PhonePe treat the intent as an
+  // unregistered merchant payment and fail it (the QR scan path still works).
+  const hasMcc = Boolean(profile.mcc && /^\d{4}$/.test(String(profile.mcc)));
+  if (hasMcc) params.push(`tid=${encodeURIComponent(trRef(paymentId))}`);
   params.push(`tn=${encodeURIComponent(tnNote(note))}`);
-  if (checkoutUrl && profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
+  if (checkoutUrl && hasMcc) {
     params.push(`url=${encodeURIComponent(String(checkoutUrl))}`);
   }
   // Never invent a merchant category code. `mc` declares a PSP-registered merchant;
   // emitting a fake one for a personal VPA is what gets the intent rejected in-app.
-  if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) {
+  if (hasMcc) {
     params.push(`mc=${encodeURIComponent(String(profile.mcc))}`);
   }
-  if (profile.mcc && /^\d{4}$/.test(String(profile.mcc))) params.push('mode=02');
+  if (hasMcc) params.push('mode=02');
   if (profile.orgid) {
     params.push(`orgid=${encodeURIComponent(String(profile.orgid))}`);
   }

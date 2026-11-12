@@ -115,9 +115,9 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('am'), '200.00');
       assert.equal(parsed.searchParams.get('tn'), 'Order payment');
       assert.equal(parsed.searchParams.get('tr'), 'ORDER99');
-      assert.equal(parsed.searchParams.get('tid'), 'ORDER99');
+      assert.equal(parsed.searchParams.get('tid'), null, 'a personal VPA must not declare tid');
       assert.equal(parsed.searchParams.get('cu'), 'INR');
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'tid', 'cu']);
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'cu']);
     });
 
     test('includes the required Google Pay currency and unique transaction reference', () => {
@@ -126,7 +126,8 @@ describe('@youpi/common Unit Tests', () => {
         payeeName: 'Demo Store Merchant',
         amountPaise: 100n,
         transactionRef: 'ORDER-123',
-        currency: 'INR'
+        currency: 'INR',
+        merchantCategoryCode: '5411'
       });
 
       assert.ok(uri.startsWith('upi://pay?'));
@@ -138,7 +139,8 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(parsed.searchParams.get('cu'), 'INR');
       assert.equal(parsed.searchParams.get('tr'), 'ORDER123');
       assert.equal(parsed.searchParams.get('tid'), 'ORDER123');
-      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'tid', 'cu']);
+      assert.equal(parsed.searchParams.get('mc'), '5411');
+      assert.deepEqual([...parsed.searchParams.keys()], ['pa', 'pn', 'am', 'tr', 'tn', 'tid', 'mc', 'cu']);
     });
 
     test('includes the Google Pay transaction URL when the server provides one', () => {
@@ -180,7 +182,7 @@ describe('@youpi/common Unit Tests', () => {
       assert.equal(queryParams.get('tn'), 'Payment');
       // MCC is only present when the merchant profile assigns one; never invented.
       assert.ok(!queryParams.get('mc') || /^\d{4}$/.test(queryParams.get('mc')));
-      const expectedKeys = ['am', 'cu', 'pa', 'pn', 'tid', 'tn', 'tr'];
+      const expectedKeys = ['am', 'cu', 'pa', 'pn', 'tn', 'tr'];
       if (queryParams.get('mc')) expectedKeys.push('mc');
       assert.deepEqual([...queryParams.keys()].sort(), expectedKeys.sort());
     });
