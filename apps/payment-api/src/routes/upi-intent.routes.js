@@ -380,8 +380,11 @@ export function registerUpiIntentRoutes(server, ctx) {
           payeeVpa,
           payeeName,
           // Only declare a merchant category when the matched profile really has one.
-          mcc: payee.profile ? payee.profile.mcc : undefined,
-          orgid: payee.profile ? payee.profile.orgid : undefined,
+          // mc/tid/mode are legal only for a PSP-registered merchant. Without a signing
+          // key the profile is not registered, and the seeded MCC default would make
+          // GPay reject the intent pre-PIN ("exceeds the limit set by your bank").
+          mcc: payee.profile && payee.profile.intentSignKeyPem ? payee.profile.mcc : undefined,
+          orgid: payee.profile && payee.profile.intentSignKeyPem ? payee.profile.orgid : undefined,
           intentSignKeyPem: payee.profile ? payee.profile.intentSignKeyPem : undefined
         },
         finalAmountPaise,
@@ -619,15 +622,22 @@ export function registerUpiIntentRoutes(server, ctx) {
       // Auto-activate by default so the returned checkout URL is payable now.
       const shouldActivateNow = body.autoActivate !== false && body.autoActivate !== 'false';
 
-      const checkoutUrl = returnUrl || `${(ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000')}/checkout/${paymentId}`;
+      // The UPI builder's fallback URL (Chrome S.browser_fallback_url) must be our own
+      // hosted checkout origin. A merchant-supplied returnUrl (http://, localhost, LAN IP)
+      // previously reached the production guard and turned create into a 500.
+      const checkoutOrigin = (ctx.checkoutBaseUrl || process.env.BASE_CHECKOUT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:7000').replace(/\/+$/, '');
+      const checkoutUrl = `${checkoutOrigin}/checkout/${paymentId}`;
 
       // Build the deep_link_universal (upi://) — works on iOS, desktop, native apps.
       const built = buildUpiUri(
         {
           payeeVpa,
           payeeName,
-          mcc: payee.profile ? payee.profile.mcc : undefined,
-          orgid: payee.profile ? payee.profile.orgid : undefined,
+          // mc/tid/mode are legal only for a PSP-registered merchant. Without a signing
+          // key the profile is not registered, and the seeded MCC default would make
+          // GPay reject the intent pre-PIN ("exceeds the limit set by your bank").
+          mcc: payee.profile && payee.profile.intentSignKeyPem ? payee.profile.mcc : undefined,
+          orgid: payee.profile && payee.profile.intentSignKeyPem ? payee.profile.orgid : undefined,
           intentSignKeyPem: payee.profile ? payee.profile.intentSignKeyPem : undefined
         },
         finalAmountPaise,
@@ -646,7 +656,8 @@ export function registerUpiIntentRoutes(server, ctx) {
         transactionNote: `24/7 Pay ${upiReference}`,
         targetApp: 'generic', // Let Android OS show the chooser
         checkoutUrl,
-        merchantCategoryCode: payee.profile ? payee.profile.mcc : undefined
+        merchantCategoryCode: payee.profile && payee.profile.intentSignKeyPem ? payee.profile.mcc : undefined,
+        intentSignKeyPem: payee.profile ? payee.profile.intentSignKeyPem : undefined
       });
 
       const sessionMetadata = {
