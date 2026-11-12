@@ -98,11 +98,8 @@ function render(data){
  const payeeVpa=typeof data.payeeVpa==='string'&&data.payeeVpa?data.payeeVpa:uriPayee;
  const payable=(status==='ACTIVE'||status==='INTENT_ISSUED')&&Boolean(verifiedUpi)&&Boolean(payeeVpa);
  // Account type is explicitly saved by the merchant; never infer it from the @bank suffix.
- // Default to personal unless the server positively declares a merchant account.
- // A session with no snapshot / unexpected upiMode used to be treated as merchant,
- // which hid the QR panel on mobile and left only the app buttons.
- const merchantUpi=data.upiMode==='MERCHANT'&&data.isMerchantEnabled===true;
- const personalUpi=!merchantUpi;
+ const personalUpi=data.upiMode==='NON_MERCHANT'||data.isMerchantEnabled===false;
+ const merchantUpi=!personalUpi;
  if(!payable&&(status==='ACTIVE'||status==='INTENT_ISSUED')){
   statusLine('UPI details unavailable','The receiving UPI ID is not ready for this order. Ask your merchant to verify the assigned account.','warning');
   $('retry-area').hidden=false;
