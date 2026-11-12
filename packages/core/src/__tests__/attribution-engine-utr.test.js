@@ -93,6 +93,40 @@ test('AC-10: email observation with a different UTR -> stays VERIFICATION_PENDIN
   engine.destroy(); db.close();
 });
 
+test('AC-13: PROVIDER_WEBHOOK observation with the reported UTR settles a VERIFICATION_PENDING session', () => {
+  const db = new Database({ inMemory: true });
+  runMigrations(db);
+  const { sessions, engine } = newEngine(db);
+  const s = sessions.create({ merchantId: MERCHANT, receivingAccountId: ACCOUNT, orderId: 'T13', amountPaise: 400, status: PaymentStatus.VERIFICATION_PENDING, metadata: { reportedUtr: '630414503470' } });
+  // A signature-verified provider callback is authoritative bank evidence, so it must be
+  // able to settle a session that is already awaiting its exact reference.
+  const obs = ObservationNormalizer.normalize({
+    source: 'PROVIDER_WEBHOOK', receivingAccountId: ACCOUNT, amount: '4.00',
+    bankReferenceNumber: '630414503470', observedAt: new Date(),
+    rawPayload: { text: 'credited with Rs 4.00 Ref 630414503470 to demo@okhdfcbank' }
+  });
+  const result = engine.processObservation(obs);
+  assert.equal(result.attributed, true, 'provider webhook must be able to settle a pending claim');
+  assert.equal(sessions.findById(s.id).status, PaymentStatus.SUCCESS);
+  engine.destroy(); db.close();
+});
+
+test('AC-14: PROVIDER_WEBHOOK observation with a different UTR never settles a pending session', () => {
+  const db = new Database({ inMemory: true });
+  runMigrations(db);
+  const { sessions, engine } = newEngine(db);
+  const s = sessions.create({ merchantId: MERCHANT, receivingAccountId: ACCOUNT, orderId: 'T14', amountPaise: 400, status: PaymentStatus.VERIFICATION_PENDING, metadata: { reportedUtr: '630414503470' } });
+  const obs = ObservationNormalizer.normalize({
+    source: 'PROVIDER_WEBHOOK', receivingAccountId: ACCOUNT, amount: '4.00',
+    bankReferenceNumber: '999999999999', observedAt: new Date(),
+    rawPayload: { text: 'credited with Rs 4.00 Ref 999999999999 to demo@okhdfcbank' }
+  });
+  const result = engine.processObservation(obs);
+  assert.equal(result.attributed, false, 'a different reference must not settle the claim');
+  assert.equal(sessions.findById(s.id).status, PaymentStatus.VERIFICATION_PENDING);
+  engine.destroy(); db.close();
+});
+
 test('AC-11: amount match with no reported UTR -> PROBABLE, not SUCCESS', () => {
   const db = new Database({ inMemory: true });
   runMigrations(db);

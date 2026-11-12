@@ -1,7 +1,12 @@
 import crypto from 'node:crypto';
 import { PaymentStatus, ObservationAttributionStatus, TicketStatus, SenderType } from '@youpi/common';
 import { assertValidTransition } from '@youpi/core';
-const BANK_SOURCES = ['GMAIL','GOOGLE_MESSAGES','ANDROID_OBSERVER','SMS_GATEWAY'];
+// Sources whose observation may settle a session that is already awaiting a reference.
+// PROVIDER_WEBHOOK is included because it has already passed raw-body signature
+// verification before reaching the pipeline, and the developer simulator delivers its
+// synthetic bank evidence through that same source. A pending session is still only
+// matched by its exact reported reference (never by amount alone).
+const BANK_SOURCES = ['GMAIL','GOOGLE_MESSAGES','ANDROID_OBSERVER','SMS_GATEWAY','PROVIDER_WEBHOOK'];
 const INTENT_SOURCE = 'INTENT_RETURN';
 
 export class AttributionEngine {
